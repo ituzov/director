@@ -1,0 +1,61 @@
+{
+  "Cover": {
+    "title": "<hl>Директ</hl>ор",
+    "tagline": "Пишут кодовое слово в комментах, получают ответ в директ.",
+    "cta": "Войти",
+    "opensource": "Open source · ставится на ваш сервер одной командой",
+    "inbox": "Директ",
+    "comments": [
+      {
+        "author": "vasya.pro",
+        "text": "гайд пожалуйста 🙏",
+        "match": true
+      },
+      {
+        "author": "masha_k",
+        "text": "огонь 🔥🔥",
+        "match": false
+      },
+      {
+        "author": "lena.design",
+        "text": "хочу гайд!",
+        "match": true
+      },
+      {
+        "author": "dimon",
+        "text": "а где купить?",
+        "match": false
+      },
+      {
+        "author": "kate.mood",
+        "text": "ГАЙД!",
+        "match": true
+      },
+      {
+        "author": "olya",
+        "text": "сохранила 😍",
+        "match": false
+      },
+      {
+        "author": "artem_dev",
+        "text": "скиньте гайд",
+        "match": true
+      },
+      {
+        "author": "nastya.fit",
+        "text": "круто!",
+        "match": false
+      },
+      {
+        "author": "igor.k",
+        "text": "гайд в студию",
+        "match": true
+      },
+      {
+        "author": "sveta",
+        "text": "😍😍😍",
+        "match": false
+      }
+    ]
+  }
+}

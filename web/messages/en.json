@@ -1,0 +1,61 @@
+{
+  "Cover": {
+    "title": "<hl>Direct</hl>or",
+    "tagline": "They drop a keyword in the comments and get a reply in DMs.",
+    "cta": "Sign in",
+    "opensource": "Open source · self-host with one command",
+    "inbox": "DMs",
+    "comments": [
+      {
+        "author": "jake.pro",
+        "text": "guide please 🙏",
+        "match": true
+      },
+      {
+        "author": "emma_k",
+        "text": "fire 🔥🔥",
+        "match": false
+      },
+      {
+        "author": "lena.design",
+        "text": "GUIDE!",
+        "match": true
+      },
+      {
+        "author": "mike",
+        "text": "where to buy?",
+        "match": false
+      },
+      {
+        "author": "kate.mood",
+        "text": "send the guide",
+        "match": true
+      },
+      {
+        "author": "olivia",
+        "text": "saved 😍",
+        "match": false
+      },
+      {
+        "author": "sam_dev",
+        "text": "guide pls",
+        "match": true
+      },
+      {
+        "author": "nora.fit",
+        "text": "love this!",
+        "match": false
+      },
+      {
+        "author": "alex.k",
+        "text": "need the guide",
+        "match": true
+      },
+      {
+        "author": "zoe",
+        "text": "😍😍😍",
+        "match": false
+      }
+    ]
+  }
+}
