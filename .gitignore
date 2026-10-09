@@ -2,3 +2,13 @@
 .DS_Store
 .claude/
 docs/
+
+# секреты (шаблоны .env.example в git)
+.env
+
+# python
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.import_linter_cache/

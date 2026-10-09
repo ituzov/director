@@ -1,0 +1,19 @@
+# Только инфраструктура для локальной разработки.
+# api и web запускаем руками, полный стек живёт в docker-compose.yml
+name: director-dev
+
+services:
+  db:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: director
+      POSTGRES_PASSWORD: director
+      POSTGRES_DB: director
+    ports:
+      - "5432:5432"
+    volumes:
+      # с 18-й версии образ ждёт том здесь, данные ложатся в 18/docker
+      - db-data:/var/lib/postgresql
+
+volumes:
+  db-data:

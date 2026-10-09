@@ -1,0 +1,92 @@
+[project]
+name = "director-api"
+version = "0.1.0"
+requires-python = ">=3.14"
+dependencies = [
+    "alembic>=1.20.0",
+    "fastapi>=0.143.0",
+    "httpx>=0.28.1",
+    "psycopg[binary]>=3.3.6",
+    "pydantic-settings>=2.15.0",
+    "sqlalchemy[asyncio]>=2.1.4",
+    "uvicorn[standard]>=0.54.0",
+]
+
+[dependency-groups]
+dev = [
+    "import-linter>=2.15",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "ruff>=0.16.10",
+]
+
+[tool.pytest.ini_options]
+# tests/ рядом с app/, а не внутри: тесты не часть пакета
+testpaths = ["tests"]
+# чтобы из тестов работал import app (запускаем из api/)
+pythonpath = ["."]
+# async def test_... работают без декоратора над каждым
+asyncio_mode = "auto"
+
+[tool.ruff]
+target-version = "py314"
+line-length = 100
+# Применённые миграции не трогаем, правка в них только шумит в истории
+extend-exclude = ["alembic/versions"]
+
+[tool.ruff.lint]
+# E/F pyflakes+pycodestyle, I сортировка импортов, UP апгрейд синтаксиса,
+# B bugbear (частые баги), SIM упрощения
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+# Границы модулей. Почему так и что куда можно: docs/api/modules.md
+[tool.importlinter]
+root_packages = ["app"]
+
+[[tool.importlinter.contracts]]
+name = "Модули зависят только вниз"
+type = "layers"
+layers = [
+    "app.main | app.worker",
+    "app.campaigns | app.updates",
+    "app.instagram | app.identity",
+    "app.core : app.config : app.db",
+]
+
+[[tool.importlinter.contracts]]
+name = "campaigns: только через публичный интерфейс"
+type = "protected"
+protected_modules = ["app.campaigns.*"]
+allowed_importers = ["app.campaigns", "app.campaigns.**", "app.db_models"]
+
+[[tool.importlinter.contracts]]
+name = "updates: только через публичный интерфейс"
+type = "protected"
+protected_modules = ["app.updates.*"]
+allowed_importers = ["app.updates", "app.updates.**", "app.db_models"]
+
+[[tool.importlinter.contracts]]
+name = "instagram: только через публичный интерфейс"
+type = "protected"
+protected_modules = ["app.instagram.*"]
+allowed_importers = ["app.instagram", "app.instagram.**", "app.db_models"]
+
+[[tool.importlinter.contracts]]
+name = "identity: только через публичный интерфейс"
+type = "protected"
+protected_modules = ["app.identity.*"]
+allowed_importers = ["app.identity", "app.identity.**", "app.db_models"]
+
+
+[tool.alembic]
+script_location = "%(here)s/alembic"
+prepend_sys_path = ["."]
+# дата в имени файла: миграции в папке идут по порядку создания
+file_template = "%%(year)d_%%(month).2d_%%(day).2d_%%(hour).2d%%(minute).2d-%%(rev)s_%%(slug)s"
+
+# сгенерированную миграцию сразу прогоняем через ruff
+[[tool.alembic.post_write_hooks]]
+name = "ruff"
+type = "module"
+module = "ruff"
+options = "format REVISION_SCRIPT_FILENAME"

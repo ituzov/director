@@ -1,0 +1,40 @@
+# Стек Директора. Запуск: docker compose up -d
+# Переменные из .env рядом с этим файлом (шаблон .env.example)
+
+# общее для всех, кто работает на образе api
+x-api: &api
+  build: ./api
+  image: director-api
+  environment:
+    DATABASE_URL: postgresql+psycopg://director:${POSTGRES_PASSWORD}@db:5432/director
+
+services:
+  db:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: director
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?задай POSTGRES_PASSWORD в .env}
+      POSTGRES_DB: director
+    volumes:
+      - db-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U director -d director"]
+      interval: 5s
+      retries: 10
+
+  # одноразовый: применил миграции и завершился
+  migrate:
+    <<: *api
+    command: ["alembic", "upgrade", "head"]
+    depends_on:
+      db: { condition: service_healthy }
+
+  api:
+    <<: *api
+    restart: unless-stopped
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
+volumes:
+  db-data:
