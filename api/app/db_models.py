@@ -4,4 +4,4 @@
 Единственное место снаружи модулей, которому можно в их models.
 """
 
-from app.identity.models import User  # noqa: F401
+from app.identity.models import LoginSession, User  # noqa: F401

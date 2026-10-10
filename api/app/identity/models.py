@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, Index, String, func, text
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, String, func, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
@@ -26,3 +26,19 @@ class User(Base):
     # участник с этим правом может подключать аккаунты Instagram
     can_connect_accounts: Mapped[bool] = mapped_column(default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class LoginSession(Base):
+    __tablename__ = "login_session"
+    __table_args__ = {"schema": "identity"}
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid7)
+    # индекс: «выйти везде» и каскадное удаление ищут сессии по пользователю
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("identity.user.id", ondelete="CASCADE"), index=True
+    )
+    # SHA-256 от токена в hex, сам токен есть только у клиента
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    # скользящий срок: при использовании продлевается, но не чаще раза в сутки
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
