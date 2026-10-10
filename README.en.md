@@ -2,6 +2,8 @@
 <p align="center">They drop a keyword in the comments and get a reply in DMs.</p>
 <p align="center"><a href="README.md">Русский</a></p>
 
+<p align="center"><img src=".github/assets/demo.en.gif" alt="Director" width="800"></p>
+
 > Under active development. One-command install is not ready yet.
 
 ## What it is
