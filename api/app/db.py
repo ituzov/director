@@ -8,6 +8,7 @@ from collections.abc import AsyncGenerator
 from typing import Annotated
 
 from fastapi import Depends
+from sqlalchemy import MetaData
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
@@ -24,6 +25,18 @@ SessionLocal = async_sessionmaker(bind=engine, autoflush=False, expire_on_commit
 
 class Base(DeclarativeBase):
     """Базовый класс всех ORM-моделей."""
+
+    # Предсказуемые имена ограничений: миграции находят их по имени.
+    # Задаётся до первой миграции, потом менять больно
+    metadata = MetaData(
+        naming_convention={
+            "ix": "ix_%(column_0_label)s",
+            "uq": "uq_%(table_name)s_%(column_0_name)s",
+            "ck": "ck_%(table_name)s_%(constraint_name)s",
+            "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
+            "pk": "pk_%(table_name)s",
+        }
+    )
 
 
 async def get_session() -> AsyncGenerator[AsyncSession]:
