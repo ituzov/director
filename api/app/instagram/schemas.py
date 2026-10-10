@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, StringConstraints
+from pydantic import BaseModel, StringConstraints
 
 # Формат строгий: вставленное не то (например, токен IGAA... вместо секрета)
 # ловим сразу, а не когда не сойдётся подпись вебхука
@@ -23,8 +23,10 @@ class MetaAppIn(BaseModel):
 class MetaAppOut(BaseModel):
     """Секрета здесь нет и не будет: наружу он не уходит даже зашифрованным."""
 
-    model_config = ConfigDict(from_attributes=True)
-
     app_id: str
     verify_token: str
     updated_at: datetime
+    # строки для кабинета Meta. None, пока не задан адрес сервера
+    webhook_url: str | None
+    redirect_uri: str | None
+    privacy_url: str | None

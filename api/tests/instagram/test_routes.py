@@ -2,6 +2,7 @@
 
 import pytest
 
+from app.config import settings
 from app.core import crypto
 from app.instagram import repository
 
@@ -31,7 +32,7 @@ async def test_first_save(client, session, owner):
     assert r.status_code == 200
     body = r.json()
     assert body["app_id"] == APP_ID
-    assert set(body) == {"app_id", "verify_token", "updated_at"}
+    assert "app_secret" not in body and "app_secret_encrypted" not in body
     assert len(body["verify_token"]) == 32
     assert await stored_secret(session) == SECRET
 
@@ -98,3 +99,23 @@ async def test_member_rejected(client, login_as, method):
 
 async def test_no_token(client):
     assert (await client.get("/instagram/app")).status_code == 401
+
+
+async def test_meta_urls(client, owner, monkeypatch):
+    monkeypatch.setattr(settings, "public_url", "https://1-2-3-4.sslip.io/")
+    r = await client.put(
+        "/instagram/app", headers=owner, json={"app_id": APP_ID, "app_secret": SECRET}
+    )
+    assert r.json()["webhook_url"] == "https://1-2-3-4.sslip.io/webhooks/instagram"
+    assert r.json()["redirect_uri"] == "https://1-2-3-4.sslip.io/instagram/callback"
+    assert r.json()["privacy_url"] == "https://1-2-3-4.sslip.io/privacy"
+
+
+@pytest.mark.parametrize("public_url", [None, ""])
+async def test_meta_urls_without_public_url(client, owner, monkeypatch, public_url):
+    # в compose незаданная переменная приходит пустой строкой
+    monkeypatch.setattr(settings, "public_url", public_url)
+    r = await client.put(
+        "/instagram/app", headers=owner, json={"app_id": APP_ID, "app_secret": SECRET}
+    )
+    assert r.json()["webhook_url"] is None

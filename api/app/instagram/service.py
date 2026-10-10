@@ -5,10 +5,24 @@ import secrets
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.core import crypto
 from app.instagram import repository
 from app.instagram.exceptions import AppSecretRequired
 from app.instagram.models import MetaApp
+
+# Пути, которые владелец прописывает в кабинете Meta. Поменять путь значит
+# заставить каждого владельца перенастроить приложение, поэтому они постоянные
+WEBHOOK_PATH = "/webhooks/instagram"
+OAUTH_CALLBACK_PATH = "/instagram/callback"
+PRIVACY_PATH = "/privacy"
+
+
+def public_url(path: str) -> str | None:
+    """Полный адрес на этом сервере. None, пока адрес сервера не задан."""
+    if not settings.public_url:
+        return None
+    return settings.public_url.rstrip("/") + path
 
 
 async def get_meta_app(session: AsyncSession) -> MetaApp | None:
