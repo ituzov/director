@@ -8,6 +8,10 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field
 MAX_PASSWORD_LENGTH = 1024
 
 
+class SetupStatusOut(BaseModel):
+    needed: bool
+
+
 class SetupIn(BaseModel):
     token: str
     email: EmailStr

@@ -26,6 +26,12 @@ async def test_setup_logs_owner_in(client):
     assert "password_hash" not in me.json()
 
 
+async def test_setup_needed_until_owner_exists(client):
+    assert (await client.get("/setup")).json() == {"needed": True}
+    await client.post("/setup", json=OWNER)
+    assert (await client.get("/setup")).json() == {"needed": False}
+
+
 async def test_setup_disabled_looks_absent(client, monkeypatch):
     monkeypatch.setattr(settings, "setup_token", None)
     r = await client.post("/setup", json=OWNER)

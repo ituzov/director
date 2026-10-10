@@ -14,7 +14,7 @@ from app.identity.exceptions import (
     SetupDisabled,
     WeakPassword,
 )
-from app.identity.schemas import LoginIn, SetupIn, TokenOut, UserOut
+from app.identity.schemas import LoginIn, SetupIn, SetupStatusOut, TokenOut, UserOut
 
 router = APIRouter(tags=["identity"])
 
@@ -30,6 +30,12 @@ _STATUS = {
 async def identity_error_handler(request: Request, exc: IdentityError) -> JSONResponse:
     # detail это имя ошибки: по нему Next выбирает текст для человека
     return JSONResponse({"detail": type(exc).__name__}, status_code=_STATUS[type(exc)])
+
+
+@router.get("/setup")
+async def setup_status(session: SessionDep) -> SetupStatusOut:
+    # публичная: по ней Next решает, показать вход или первую регистрацию
+    return SetupStatusOut(needed=await service.setup_needed(session))
 
 
 @router.post("/setup", status_code=status.HTTP_201_CREATED)

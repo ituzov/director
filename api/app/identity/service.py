@@ -37,6 +37,10 @@ def _check_setup_token(token: str) -> None:
         raise InvalidSetupToken
 
 
+async def setup_needed(session: AsyncSession) -> bool:
+    return not await repository.owner_exists(session)
+
+
 async def register_owner(session: AsyncSession, *, token: str, email: str, password: str) -> User:
     _check_setup_token(token)
     if await repository.owner_exists(session):
