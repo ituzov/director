@@ -1,5 +1,27 @@
 {
   "Home": {
     "title": "Director"
+  },
+  "Setup": {
+    "title": "First sign-in",
+    "description": "Create the owner of this installation. They can do everything and invite the rest.",
+    "token": "Setup code",
+    "tokenHint": "The installer printed it. It is also SETUP_TOKEN in the .env file on the server.",
+    "email": "Email",
+    "password": "Password",
+    "confirm": "Repeat password",
+    "submit": "Create and sign in",
+    "errors": {
+      "SetupDisabled": "Setup is disabled: SETUP_TOKEN is not set on the server.",
+      "InvalidSetupToken": "The setup code didn't match.",
+      "OwnerAlreadyExists": "The owner already exists, sign in with your email.",
+      "WeakPassword": "The password is shorter than 8 characters.",
+      "PasswordMismatch": "Passwords don't match.",
+      "InvalidEmail": "Looks like a typo in the email."
+    }
+  },
+  "Auth": {
+    "name": "Director",
+    "tagline": "<line>Someone <hl>comments</hl> on your post,</line> <line>Director replies in their <hl>DMs</hl>.</line>"
   }
 }
