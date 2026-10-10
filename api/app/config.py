@@ -4,11 +4,17 @@
 В docker compose приходят через environment.
 """
 
+from pathlib import Path
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    # api/.env рядом с проектом, а не в текущей папке: тесты и IDE запускают откуда угодно.
+    # В Docker файла нет, это не ошибка: значения приходят из окружения
+    model_config = SettingsConfigDict(
+        env_file=Path(__file__).parent.parent / ".env", extra="ignore"
+    )
 
     # postgresql+psycopg://user:pass@host:port/dbname
     database_url: str

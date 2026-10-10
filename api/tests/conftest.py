@@ -12,6 +12,7 @@
 import os
 import subprocess
 import sys
+from pathlib import Path
 
 import psycopg
 import pytest
@@ -19,6 +20,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from app.config import settings
+
+# api/: здесь pyproject.toml с конфигом alembic
+API_DIR = Path(__file__).parent.parent
 
 # Та же dev-Postgres, база с суффиксом _test. Переопределяется TEST_DATABASE_URL
 TEST_DATABASE_URL = os.getenv(
@@ -32,6 +36,7 @@ def _alembic(*args: str) -> None:
     result = subprocess.run(
         [sys.executable, "-m", "alembic", *args],
         env={**os.environ, "DATABASE_URL": TEST_DATABASE_URL},
+        cwd=API_DIR,  # alembic ищет конфиг в текущей папке
         capture_output=True,
         text=True,
     )
