@@ -15,7 +15,19 @@ const API_ERRORS = [
 
 type ApiSetupError = (typeof API_ERRORS)[number];
 export type SetupError = ApiSetupError | "PasswordMismatch" | "InvalidEmail";
-export type SetupState = { email: string; error?: SetupError };
+type SetupField = "token" | "email" | "password" | "confirm";
+
+/** errors по полям формы, error общий: он не про конкретное поле. */
+export type SetupState = {
+  errors?: Partial<Record<SetupField, SetupError>>;
+  error?: SetupError;
+};
+
+// к какому полю относится ошибка api; остальные показываются над кнопкой
+const FIELD_OF: Partial<Record<ApiSetupError, SetupField>> = {
+  InvalidSetupToken: "token",
+  WeakPassword: "password",
+};
 
 function isApiSetupError(detail: unknown): detail is ApiSetupError {
   return API_ERRORS.includes(detail as ApiSetupError);
@@ -26,9 +38,9 @@ export async function setup(_prev: SetupState, form: FormData): Promise<SetupSta
   const email = String(form.get("email") ?? "");
   const password = String(form.get("password") ?? "");
 
-  // повтор пароля проверяем здесь: api про него не знает, это забота формы
+  // форма проверяет то же самое, но action можно вызвать и мимо неё
   if (password !== String(form.get("confirm") ?? "")) {
-    return { email, error: "PasswordMismatch" };
+    return { errors: { confirm: "PasswordMismatch" } };
   }
 
   let sessionToken: string;
@@ -38,9 +50,12 @@ export async function setup(_prev: SetupState, form: FormData): Promise<SetupSta
       body: { token, email, password },
     }));
   } catch (e) {
-    if (e instanceof ApiError && isApiSetupError(e.detail)) return { email, error: e.detail };
+    if (e instanceof ApiError && isApiSetupError(e.detail)) {
+      const field = FIELD_OF[e.detail];
+      return field ? { errors: { [field]: e.detail } } : { error: e.detail };
+    }
     // 422 от pydantic, у него detail список: на деле это кривой email
-    if (e instanceof ApiError && e.status === 422) return { email, error: "InvalidEmail" };
+    if (e instanceof ApiError && e.status === 422) return { errors: { email: "InvalidEmail" } };
     throw e;
   }
   await setSessionCookie(sessionToken);

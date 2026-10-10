@@ -17,7 +17,8 @@
       "OwnerAlreadyExists": "The owner already exists, sign in with your email.",
       "WeakPassword": "The password is shorter than 8 characters.",
       "PasswordMismatch": "Passwords don't match.",
-      "InvalidEmail": "Looks like a typo in the email."
+      "InvalidEmail": "Looks like a typo in the email.",
+      "Required": "This field is required."
     }
   },
   "Auth": {
