@@ -22,6 +22,9 @@ from sqlalchemy.pool import NullPool
 
 from app.config import settings
 from app.db import get_session
+from app.identity import repository as identity_repository
+from app.identity import service as identity_service
+from app.identity.passwords import hash_password
 from app.main import app
 
 # api/: здесь pyproject.toml с конфигом alembic
@@ -95,3 +98,19 @@ async def client(session):
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         yield c
     app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def login_as(session):
+    """Завести пользователя с ролью и войти. Отдаёт заголовок с токеном."""
+
+    async def login(role: str) -> dict[str, str]:
+        email = f"{role}@test.dev"
+        identity_repository.add_user(
+            session, email=email, password_hash=hash_password("password1"), role=role
+        )
+        await session.commit()
+        token = await identity_service.login(session, email=email, password="password1")
+        return {"Authorization": f"Bearer {token}"}
+
+    return login

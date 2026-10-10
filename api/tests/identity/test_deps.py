@@ -18,10 +18,7 @@ from app.identity import (
     IdentityError,
     UserRef,
     identity_error_handler,
-    repository,
-    service,
 )
-from app.identity.passwords import hash_password
 
 neighbour = FastAPI(exception_handlers={IdentityError: identity_error_handler})
 
@@ -44,26 +41,18 @@ async def probe(session):
     neighbour.dependency_overrides.clear()
 
 
-async def login_as(session, role: str) -> dict:
-    email = f"{role}@test.dev"
-    repository.add_user(session, email=email, password_hash=hash_password("password1"), role=role)
-    await session.commit()
-    token = await service.login(session, email=email, password="password1")
-    return {"Authorization": f"Bearer {token}"}
-
-
-async def test_neighbour_gets_ref(probe, session):
-    r = await probe.get("/whoami", headers=await login_as(session, "member"))
+async def test_neighbour_gets_ref(probe, login_as):
+    r = await probe.get("/whoami", headers=await login_as("member"))
     assert r.json() == {"type": "UserRef", "role": "member"}
 
 
-async def test_owner_passes(probe, session):
-    r = await probe.get("/owner-only", headers=await login_as(session, "owner"))
+async def test_owner_passes(probe, login_as):
+    r = await probe.get("/owner-only", headers=await login_as("owner"))
     assert (r.status_code, r.json()) == (200, {"role": "owner"})
 
 
-async def test_member_rejected(probe, session):
-    r = await probe.get("/owner-only", headers=await login_as(session, "member"))
+async def test_member_rejected(probe, login_as):
+    r = await probe.get("/owner-only", headers=await login_as("member"))
     assert (r.status_code, r.json()["detail"]) == (403, "OwnerOnly")
 
 

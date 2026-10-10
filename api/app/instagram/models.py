@@ -17,6 +17,9 @@ class MetaApp(Base):
         CheckConstraint("id = 1", name="single_row"),
         {"schema": "instagram"},
     )
+    # updated_at считает база: забираем его RETURNING-ом сразу после UPDATE,
+    # иначе чтение в ответе станет скрытым запросом, а в async это ошибка
+    __mapper_args__ = {"eager_defaults": True}
 
     id: Mapped[int] = mapped_column(SmallInteger, primary_key=True, default=1)
     # Instagram App ID, не секрет: он виден в адресе OAuth

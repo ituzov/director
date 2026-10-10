@@ -6,13 +6,17 @@
 
 from fastapi import FastAPI
 
-from app import identity
+from app import identity, instagram
 
 app = FastAPI(
     title="Director API",
-    exception_handlers={identity.IdentityError: identity.identity_error_handler},
+    exception_handlers={
+        identity.IdentityError: identity.identity_error_handler,
+        instagram.InstagramError: instagram.instagram_error_handler,
+    },
 )
 app.include_router(identity.router)
+app.include_router(instagram.router)
 
 
 @app.get("/health")
