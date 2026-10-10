@@ -16,10 +16,13 @@ from pathlib import Path
 
 import psycopg
 import pytest
+from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from app.config import settings
+from app.db import get_session
+from app.main import app
 
 # api/: здесь pyproject.toml с конфигом alembic
 API_DIR = Path(__file__).parent.parent
@@ -83,3 +86,12 @@ async def session():
             yield s  # здесь выполняется тест
         await outer.rollback()  # ROLLBACK: выбрасываем всё, что тест записал
     await engine.dispose()
+
+
+@pytest.fixture
+async def client(session):
+    """HTTP-клиент к приложению в той же песочнице: ручки получают нашу сессию."""
+    app.dependency_overrides[get_session] = lambda: session
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        yield c
+    app.dependency_overrides.clear()

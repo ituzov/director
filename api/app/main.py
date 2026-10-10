@@ -6,10 +6,16 @@
 
 from fastapi import FastAPI
 
-app = FastAPI(title="Director API")
+from app import identity
+
+app = FastAPI(
+    title="Director API",
+    exception_handlers={identity.IdentityError: identity.identity_error_handler},
+)
+app.include_router(identity.router)
 
 
 @app.get("/health")
 def health() -> dict[str, str]:
-    """Жив ли процесс. Для healthcheck в compose и Dokploy."""
+    """Жив ли процесс. Для healthcheck в compose."""
     return {"status": "ok"}
