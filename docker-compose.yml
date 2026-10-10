@@ -7,6 +7,7 @@ x-api: &api
   image: director-api
   environment:
     DATABASE_URL: postgresql+psycopg://director:${POSTGRES_PASSWORD}@db:5432/director
+    SECRET_KEY: ${SECRET_KEY:?задай SECRET_KEY в .env}
 
 services:
   db:

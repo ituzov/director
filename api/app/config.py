@@ -18,6 +18,9 @@ class Settings(BaseSettings):
 
     # postgresql+psycopg://user:pass@host:port/dbname
     database_url: str
+    # Из него выводятся ключи шифрования секретов в базе. Потерян или
+    # заменён: зашифрованное раньше не расшифровать
+    secret_key: str
     # одноразовый токен регистрации владельца, кладёт установщик.
     # Не задан: setup выключен
     setup_token: str | None = None
