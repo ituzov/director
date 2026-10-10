@@ -1,7 +1,4 @@
 {
-  "Home": {
-    "title": "Director"
-  },
   "Setup": {
     "title": "First sign-in",
     "description": "Create the owner of this installation. They can do everything and invite the rest.",
@@ -35,5 +32,20 @@
       "InvalidCredentials": "Wrong email or password.",
       "Required": "This field is required."
     }
+  },
+  "App": {
+    "nav": {
+      "overview": "Overview"
+    },
+    "overview": {
+      "title": "Overview",
+      "empty": "Campaigns and their stats will show up here."
+    },
+    "logout": "Sign out",
+    "roles": {
+      "owner": "Owner",
+      "member": "Member"
+    },
+    "version": "Version {version}"
   }
 }
