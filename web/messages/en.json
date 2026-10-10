@@ -1,4 +1,8 @@
 {
+  "Common": {
+    "copy": "Copy",
+    "copied": "Copied"
+  },
   "Setup": {
     "title": "First sign-in",
     "description": "Create the owner of this installation. They can do everything and invite the rest.",
@@ -35,7 +39,12 @@
   },
   "App": {
     "nav": {
-      "overview": "Overview"
+      "groups": {
+        "work": "Workspace",
+        "settings": "Settings"
+      },
+      "overview": "Overview",
+      "metaApp": "Meta app"
     },
     "overview": {
       "title": "Overview",
@@ -47,5 +56,36 @@
       "member": "Member"
     },
     "version": "Version {version}"
+  },
+  "MetaApp": {
+    "description": "Director connects Instagram accounts and receives comments through this app. Create it in the Meta dashboard and copy its two keys here.",
+    "keys": "App keys",
+    "appId": "Instagram App ID",
+    "appIdHint": "In the Meta dashboard: Instagram → API setup with Instagram login.",
+    "appSecret": "Instagram App Secret",
+    "appSecretHint": "Same place, next to the App ID: 32 characters, digits and letters a–f.",
+    "secretSet": "Set. Director doesn't show it, even to you.",
+    "replace": "Replace",
+    "submit": "Save",
+    "updatedAt": "Keys updated {date}",
+    "errors": {
+      "Required": "Fill in this field.",
+      "InvalidAppId": "The App ID is digits only.",
+      "InvalidAppSecret": "The secret is 32 characters, digits and letters a–f. An IGAA… token won't work here.",
+      "AppSecretRequired": "The app can't be connected without the secret."
+    },
+    "strings": {
+      "title": "Values for the Meta dashboard",
+      "description": "Copy each value into the Meta dashboard, in the place named below it.",
+      "webhookUrl": "Webhook URL",
+      "webhookUrlHint": "Instagram → Webhooks → Callback URL.",
+      "verifyToken": "Verify token",
+      "verifyTokenHint": "Instagram → Webhooks → Verify token.",
+      "redirectUri": "Redirect URL",
+      "redirectUriHint": "Instagram → Instagram business login settings → Redirect URL.",
+      "privacyUrl": "Privacy policy",
+      "privacyUrlHint": "App settings → Basic → Privacy policy URL.",
+      "noPublicUrl": "The server address isn't set (PUBLIC_URL), so there are no links yet."
+    }
   }
 }

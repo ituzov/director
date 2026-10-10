@@ -10,10 +10,11 @@ import {
   SidebarMenuSkeleton,
   SidebarRail,
 } from "@/components/ui/sidebar";
+import { getCurrentUser } from "@/lib/session";
 import { APP_VERSION } from "@/lib/version";
 
-import { NavMain } from "./nav-main";
-import { UserMenu } from "./user-menu";
+import { NavGroup } from "./nav-group";
+import { UserDropdown } from "./user-dropdown";
 
 export function AppSidebar() {
   const t = useTranslations("Auth");
@@ -30,7 +31,11 @@ export function AppSidebar() {
         </div>
       </SidebarHeader>
       <SidebarContent>
-        <NavMain />
+        <NavGroup group="work" />
+        {/* без заглушки: участнику скелет показал бы группу, которой у него нет */}
+        <Suspense>
+          <NavSettings />
+        </Suspense>
       </SidebarContent>
       <SidebarFooter>
         {/* пользователь зависит от сессии: в оболочке скелет, сам блок приезжает потоком */}
@@ -44,4 +49,17 @@ export function AppSidebar() {
       <SidebarRail />
     </Sidebar>
   );
+}
+
+/** Настройки видит только владелец. Читает сессию, поэтому живёт только внутри Suspense. */
+async function NavSettings() {
+  const user = await getCurrentUser();
+  return user.role === "owner" ? <NavGroup group="settings" /> : null;
+}
+
+/** Кто вошёл. Читает сессию, поэтому живёт только внутри Suspense. */
+async function UserMenu() {
+  const user = await getCurrentUser();
+  // в браузер только то, что нужно меню: не весь объект пользователя
+  return <UserDropdown email={user.email} role={user.role} />;
 }

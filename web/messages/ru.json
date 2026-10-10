@@ -1,4 +1,8 @@
 {
+  "Common": {
+    "copy": "Скопировать",
+    "copied": "Скопировано"
+  },
   "Setup": {
     "title": "Первый вход",
     "description": "Создайте владельца установки. Он сможет всё, остальных пригласит сам.",
@@ -35,7 +39,12 @@
   },
   "App": {
     "nav": {
-      "overview": "Обзор"
+      "groups": {
+        "work": "Работа",
+        "settings": "Настройки"
+      },
+      "overview": "Обзор",
+      "metaApp": "Приложение Meta"
     },
     "overview": {
       "title": "Обзор",
@@ -47,5 +56,36 @@
       "member": "Участник"
     },
     "version": "Версия {version}"
+  },
+  "MetaApp": {
+    "description": "Через это приложение Директор подключает аккаунты Instagram и получает комменты. Создайте его в кабинете Meta и перенесите сюда два ключа.",
+    "keys": "Ключи приложения",
+    "appId": "Instagram App ID",
+    "appIdHint": "В кабинете Meta: Instagram → Настройка API со входом через Instagram.",
+    "appSecret": "Instagram App Secret",
+    "appSecretHint": "Там же, рядом с App ID: 32 символа из цифр и букв a–f.",
+    "secretSet": "Задан. Директор не показывает его даже вам.",
+    "replace": "Заменить",
+    "submit": "Сохранить",
+    "updatedAt": "Ключи обновлены {date}",
+    "errors": {
+      "Required": "Заполните поле.",
+      "InvalidAppId": "App ID состоит только из цифр.",
+      "InvalidAppSecret": "Секрет это 32 символа из цифр и букв a–f. Токен IGAA… сюда не подходит.",
+      "AppSecretRequired": "Без секрета приложение не подключить."
+    },
+    "strings": {
+      "title": "Строки для кабинета Meta",
+      "description": "Скопируйте каждую строку в кабинет Meta, на место из подсказки.",
+      "webhookUrl": "Адрес вебхука",
+      "webhookUrlHint": "Instagram → Вебхуки → URL обратного вызова.",
+      "verifyToken": "Маркер подтверждения",
+      "verifyTokenHint": "Instagram → Вебхуки → Подтверждение маркера.",
+      "redirectUri": "Адрес возврата",
+      "redirectUriHint": "Instagram → Настройка входа через Instagram → URL перенаправления.",
+      "privacyUrl": "Политика конфиденциальности",
+      "privacyUrlHint": "Настройки приложения → Основное → URL политики конфиденциальности.",
+      "noPublicUrl": "Адрес сервера не задан (PUBLIC_URL), поэтому ссылок пока нет."
+    }
   }
 }

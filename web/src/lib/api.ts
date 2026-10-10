@@ -12,7 +12,7 @@ export class ApiError extends Error {
   }
 }
 
-type Options = { method?: "GET" | "POST"; body?: unknown; token?: string };
+type Options = { method?: "GET" | "POST" | "PUT"; body?: unknown; token?: string };
 
 export async function apiFetch<T>(
   path: string,
