@@ -21,16 +21,6 @@
   --font-sans: var(--font-manrope);
   --font-display: var(--font-unbounded);
   --font-mono: var(--font-jetbrains-mono);
-
-  --text-hero: 2.75rem;
-  --text-hero--line-height: 1.02;
-  --text-hero--letter-spacing: -0.035em;
-  --text-hero--font-weight: 500;
-
-  --text-display: 5rem;
-  --text-display--line-height: 1.02;
-  --text-display--letter-spacing: -0.035em;
-  --text-display--font-weight: 500;
 }
 
 body {
