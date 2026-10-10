@@ -1,20 +1,20 @@
 import { redirect } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Suspense } from "react";
 
 import { AuthShell } from "@/components/auth-shell";
 import { apiFetch } from "@/lib/api";
 
 import { SetupForm } from "./_components/setup-form";
 
+// без стриминга, как у входа: переход на /login должен быть HTTP-редиректом, а не миганием
+export const instant = false;
+
 export default function SetupPage({ searchParams }: PageProps<"/[locale]/setup">) {
   const t = useTranslations("Setup");
 
   return (
     <AuthShell title={t("title")} description={t("description")}>
-      <Suspense>
-        <Setup searchParams={searchParams} />
-      </Suspense>
+      <Setup searchParams={searchParams} />
     </AuthShell>
   );
 }

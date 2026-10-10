@@ -24,5 +24,16 @@
   "Auth": {
     "name": "Director",
     "tagline": "<line>Someone <hl>comments</hl> on your post,</line> <line>Director replies in their <hl>DMs</hl>.</line>"
+  },
+  "Login": {
+    "title": "Sign in",
+    "description": "The email and password you set when you registered.",
+    "email": "Email",
+    "password": "Password",
+    "submit": "Sign in",
+    "errors": {
+      "InvalidCredentials": "Wrong email or password.",
+      "Required": "This field is required."
+    }
   }
 }
