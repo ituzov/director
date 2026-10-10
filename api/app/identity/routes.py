@@ -11,6 +11,7 @@ from app.identity.exceptions import (
     InvalidCredentials,
     InvalidSetupToken,
     OwnerAlreadyExists,
+    OwnerOnly,
     SetupDisabled,
     WeakPassword,
 )
@@ -24,6 +25,7 @@ _STATUS = {
     OwnerAlreadyExists: status.HTTP_409_CONFLICT,
     WeakPassword: status.HTTP_422_UNPROCESSABLE_CONTENT,
     InvalidCredentials: status.HTTP_401_UNAUTHORIZED,
+    OwnerOnly: status.HTTP_403_FORBIDDEN,
 }
 
 

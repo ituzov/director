@@ -7,6 +7,8 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.db import SessionDep
 from app.identity import service
+from app.identity.contracts import UserRef
+from app.identity.exceptions import OwnerOnly
 from app.identity.models import User
 
 # Нет заголовка Authorization: Bearer ... HTTPBearer сам ответит 401
@@ -27,3 +29,20 @@ async def get_current_user(session: SessionDep, credentials: BearerToken) -> Use
 
 
 CurrentUser = Annotated[User, Depends(get_current_user)]
+
+
+async def get_current_user_ref(user: CurrentUser) -> UserRef:
+    return UserRef(id=user.id, role=user.role, can_connect_accounts=user.can_connect_accounts)
+
+
+# для соседей: кто делает запрос, справкой
+CurrentUserRef = Annotated[UserRef, Depends(get_current_user_ref)]
+
+
+async def require_owner(user: CurrentUserRef) -> UserRef:
+    if user.role != "owner":
+        raise OwnerOnly
+    return user
+
+
+CurrentOwner = Annotated[UserRef, Depends(require_owner)]

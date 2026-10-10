@@ -23,3 +23,7 @@ class WeakPassword(IdentityError):
 
 class InvalidCredentials(IdentityError):
     """Нет такой почты или пароль не подошёл. Нарочно одна ошибка на оба случая."""
+
+
+class OwnerOnly(IdentityError):
+    """Действие только для владельца установки."""

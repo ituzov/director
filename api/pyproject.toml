@@ -54,7 +54,8 @@ type = "layers"
 layers = [
     "app.main | app.worker",
     "app.campaigns | app.updates",
-    "app.instagram | app.identity",
+    "app.instagram",
+    "app.identity",
     "app.core : app.config : app.db",
 ]
 
