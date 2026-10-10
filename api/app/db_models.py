@@ -5,3 +5,4 @@
 """
 
 from app.identity.models import LoginSession, User  # noqa: F401
+from app.instagram.models import MetaApp  # noqa: F401
