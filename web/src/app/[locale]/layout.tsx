@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { JetBrains_Mono, Manrope, Unbounded } from "next/font/google";
+import { Geist, Geist_Mono, Unbounded } from "next/font/google";
 import { notFound } from "next/navigation";
 import { hasLocale, NextIntlClientProvider } from "next-intl";
 import { routing } from "@/i18n/routing";
@@ -11,13 +11,13 @@ const display = Unbounded({
   weight: ["400", "500", "600"],
 });
 
-const body = Manrope({
-  variable: "--font-manrope",
+const body = Geist({
+  variable: "--font-geist",
   subsets: ["latin", "cyrillic"],
 });
 
-const mono = JetBrains_Mono({
-  variable: "--font-jetbrains-mono",
+const mono = Geist_Mono({
+  variable: "--font-geist-mono",
   subsets: ["latin", "cyrillic"],
 });
 
