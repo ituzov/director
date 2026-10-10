@@ -5,8 +5,7 @@ import { redirect } from "next/navigation";
 import { cache } from "react";
 
 import { ApiError, apiFetch } from "@/lib/api";
-
-export const SESSION_COOKIE = "director_session";
+import { SESSION_COOKIE } from "@/lib/session-cookie";
 
 export type User = {
   id: string;
@@ -35,18 +34,22 @@ export async function deleteSessionCookie() {
   (await cookies()).delete(SESSION_COOKIE);
 }
 
-/** Кто вошёл. Нет сессии или она мертва: на вход. Один запрос к api на рендер. */
-export const getCurrentUser = cache(async (): Promise<User> => {
+/** Кто вошёл, или null: нет cookie или api не признал сессию. Один запрос к api на рендер. */
+export const findCurrentUser = cache(async (): Promise<User | null> => {
   const token = await getToken();
-  if (!token) redirect("/login");
-
-  let user: User | null = null;
+  if (!token) return null;
   try {
-    user = await apiFetch<User>("/auth/me", { token });
+    return await apiFetch<User>("/auth/me", { token });
   } catch (e) {
-    if (!(e instanceof ApiError && e.status === 401)) throw e;
+    if (e instanceof ApiError && e.status === 401) return null;
+    throw e;
   }
+});
+
+/** Кто вошёл. Нет сессии или она мертва: на вход. */
+export async function getCurrentUser(): Promise<User> {
+  const user = await findCurrentUser();
   // redirect бросает исключение, поэтому он вне try
   if (!user) redirect("/login");
   return user;
-});
+}
