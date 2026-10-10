@@ -22,7 +22,7 @@ export function AppSidebar() {
   return (
     <Sidebar variant="floating" collapsible="icon">
       <SidebarHeader>
-        <div className="flex items-center gap-2 p-1">
+        <div className="flex items-center gap-2 p-1 group-data-[collapsible=icon]:p-0">
           <Logo className="size-8" />
           <span className="font-display text-base group-data-[collapsible=icon]:hidden">
             {t("name")}
