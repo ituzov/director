@@ -12,6 +12,9 @@ class Settings(BaseSettings):
 
     # postgresql+psycopg://user:pass@host:port/dbname
     database_url: str
+    # одноразовый токен регистрации владельца, кладёт установщик.
+    # Не задан: setup выключен
+    setup_token: str | None = None
 
 
 settings = Settings()  # type: ignore[call-arg]  # значения приходят из окружения
