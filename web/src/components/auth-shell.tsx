@@ -1,8 +1,7 @@
 import { useTranslations } from "next-intl";
 
 import { Logo } from "@/components/logo";
-
-import { version } from "../../package.json";
+import { APP_VERSION } from "@/lib/version";
 
 type Props = { title: string; description: string; children: React.ReactNode };
 
@@ -25,7 +24,7 @@ export function AuthShell({ title, description, children }: Props) {
           })}
         </p>
         <div className="flex gap-4 font-mono text-xs opacity-70">
-          <span>v{version}</span>
+          <span>{APP_VERSION}</span>
           <a
             href="https://github.com/ituzov/director"
             target="_blank"
