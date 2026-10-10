@@ -19,3 +19,7 @@ class OwnerAlreadyExists(IdentityError):
 
 class WeakPassword(IdentityError):
     """Пароль короче минимума."""
+
+
+class InvalidCredentials(IdentityError):
+    """Нет такой почты или пароль не подошёл. Нарочно одна ошибка на оба случая."""
