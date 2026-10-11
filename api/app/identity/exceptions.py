@@ -27,3 +27,7 @@ class InvalidCredentials(IdentityError):
 
 class OwnerOnly(IdentityError):
     """Действие только для владельца установки."""
+
+
+class CannotConnectAccounts(IdentityError):
+    """Подключать аккаунты Instagram может владелец или участник с этим правом."""

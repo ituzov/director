@@ -4,12 +4,13 @@
 """
 
 from app.identity.contracts import UserRef
-from app.identity.deps import CurrentOwner, CurrentUserRef
+from app.identity.deps import CanConnectAccounts, CurrentOwner, CurrentUserRef
 from app.identity.exceptions import IdentityError
 from app.identity.routes import identity_error_handler, router
 
 __all__ = [
     # для ручек соседей: кто делает запрос и проверки доступа
+    "CanConnectAccounts",
     "CurrentOwner",
     "CurrentUserRef",
     # справки

@@ -7,6 +7,7 @@ from app.db import SessionDep
 from app.identity import service
 from app.identity.deps import BearerToken, CurrentUser
 from app.identity.exceptions import (
+    CannotConnectAccounts,
     IdentityError,
     InvalidCredentials,
     InvalidSetupToken,
@@ -26,6 +27,7 @@ _STATUS = {
     WeakPassword: status.HTTP_422_UNPROCESSABLE_CONTENT,
     InvalidCredentials: status.HTTP_401_UNAUTHORIZED,
     OwnerOnly: status.HTTP_403_FORBIDDEN,
+    CannotConnectAccounts: status.HTTP_403_FORBIDDEN,
 }
 
 

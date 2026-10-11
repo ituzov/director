@@ -9,7 +9,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from app.db import SessionDep
 from app.identity import service
 from app.identity.contracts import UserRef
-from app.identity.exceptions import OwnerOnly
+from app.identity.exceptions import CannotConnectAccounts, OwnerOnly
 from app.identity.models import User
 
 # Нет заголовка Authorization: Bearer ... HTTPBearer сам ответит 401
@@ -51,3 +51,13 @@ async def require_owner(user: CurrentUserRef) -> UserRef:
 
 
 CurrentOwner = Annotated[UserRef, Depends(require_owner)]
+
+
+async def require_can_connect(user: CurrentUserRef) -> UserRef:
+    # владельцу право не выдают: оно у него по роли
+    if user.role != "owner" and not user.can_connect_accounts:
+        raise CannotConnectAccounts
+    return user
+
+
+CanConnectAccounts = Annotated[UserRef, Depends(require_can_connect)]

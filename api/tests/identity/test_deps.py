@@ -13,12 +13,14 @@ from httpx import ASGITransport, AsyncClient
 
 from app.db import get_session
 from app.identity import (
+    CanConnectAccounts,
     CurrentOwner,
     CurrentUserRef,
     IdentityError,
     UserRef,
     identity_error_handler,
 )
+from app.identity import repository as identity_repository
 
 neighbour = FastAPI(exception_handlers={IdentityError: identity_error_handler})
 
@@ -31,6 +33,11 @@ async def whoami(user: CurrentUserRef) -> dict:
 @neighbour.get("/owner-only")
 async def owner_only(owner: CurrentOwner) -> dict:
     return {"role": owner.role}
+
+
+@neighbour.get("/connect")
+async def connect(user: CanConnectAccounts) -> dict:
+    return {"role": user.role}
 
 
 @pytest.fixture
@@ -64,3 +71,14 @@ def test_ref_is_read_only():
     ref = UserRef(id=uuid.uuid7(), role="member", can_connect_accounts=False)
     with pytest.raises(dataclasses.FrozenInstanceError):
         ref.role = "owner"
+
+
+async def test_connect_owner_and_granted_member(probe, login_as, session):
+    assert (await probe.get("/connect", headers=await login_as("owner"))).status_code == 200
+    member = await login_as("member")
+    assert (await probe.get("/connect", headers=member)).status_code == 403
+    # право выдали: тот же участник проходит
+    user = await identity_repository.user_by_email(session, "member@test.dev")
+    user.can_connect_accounts = True
+    await session.commit()
+    assert (await probe.get("/connect", headers=member)).status_code == 200
