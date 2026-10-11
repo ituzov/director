@@ -53,6 +53,8 @@ class AutoreplyForm(BaseModel):
     follow_gate: bool = False
     not_following_text: ButtonMessageText | None = None
     comment_replies: list[CommentReply] = Field(default=[], max_length=10)
+    # random: любой, кроме прошлого; sequence: по кругу
+    comment_reply_mode: Literal["random", "sequence"] = "random"
     enabled: bool = True
 
     @model_validator(mode="after")
@@ -100,6 +102,7 @@ class AutoreplyOut(BaseModel):
     follow_gate: bool
     not_following_text: str | None
     comment_replies: list[str]
+    comment_reply_mode: str
     enabled: bool
     archived_at: datetime | None
     created_at: datetime

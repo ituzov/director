@@ -27,6 +27,9 @@ class Autoreply(Base):
     __tablename__ = "autoreply"
     __table_args__ = (
         CheckConstraint("scope IN ('all', 'posts')", name="scope_known"),
+        CheckConstraint(
+            "comment_reply_mode IN ('random', 'sequence')", name="comment_reply_mode_known"
+        ),
         # проверка подписки без текста «подпишись» оставила бы человека без ответа
         CheckConstraint("NOT follow_gate OR not_following_text IS NOT NULL", name="gate_has_text"),
         {"schema": "autoreplies"},
@@ -53,14 +56,16 @@ class Autoreply(Base):
     follow_gate: Mapped[bool] = mapped_column(default=False)
     not_following_text: Mapped[str | None] = mapped_column(Text)
 
-    # ответы под комментом по очереди; пустой список: в комментах не отвечаем
+    # варианты ответа под комментом; пустой список: в комментах не отвечаем
     comment_replies: Mapped[list[str]] = mapped_column(ARRAY(Text), server_default="{}")
-    # какой ответ следующий: растёт атомарно, берётся по модулю длины списка
-    comment_reply_seq: Mapped[int] = mapped_column(server_default="0")
+    # random: любой, кроме прошлого; sequence: по кругу
+    comment_reply_mode: Mapped[str] = mapped_column(String(8), server_default="random")
+    # номер прошлого варианта: с ним не повторяемся подряд в обоих режимах
+    last_comment_reply: Mapped[int | None]
 
     created_by: Mapped[uuid.UUID]
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    # ставит сервис при правке владельцем, не onupdate: счётчик ответов тоже
+    # ставит сервис при правке владельцем, не onupdate: выбор ответа в комментах тоже
     # обновляет строку, но автоответ от этого не меняется
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

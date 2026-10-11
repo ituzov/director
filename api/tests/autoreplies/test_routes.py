@@ -49,11 +49,17 @@ async def test_create_and_read(client, owner, account):
     body = r.json()
     assert body["keywords"] == ["хочу гайд", "Гайд"]
     assert body["comment_replies"] == ["Отправили!", "Лови в директе"]
+    assert body["comment_reply_mode"] == "random"
     assert (body["enabled"], body["archived_at"], body["media_ids"]) == (True, None, [])
 
     assert (await client.get(f"/autoreplies/{body['id']}", headers=owner)).json() == body
     r = await client.get("/autoreplies", headers=owner, params={"account_id": str(account.id)})
     assert r.json() == [body]
+
+
+async def test_comment_replies_in_sequence(client, owner, account):
+    r = await create(client, owner, form(account, comment_reply_mode="sequence"))
+    assert r.json()["comment_reply_mode"] == "sequence"
 
 
 async def test_create_for_posts(client, owner, account):
@@ -85,6 +91,7 @@ async def test_text_trimmed(client, owner, account):
         ({"reply_text": "   "}, None),
         ({"comment_replies": ["ок"] * 11}, None),
         ({"scope": "some"}, None),
+        ({"comment_reply_mode": "shuffle"}, None),
     ],
 )
 async def test_bad_form(client, owner, account, change, code):

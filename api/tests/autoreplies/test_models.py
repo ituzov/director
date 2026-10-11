@@ -49,6 +49,12 @@ async def test_unknown_scope_rejected(session):
         await session.commit()
 
 
+async def test_unknown_comment_reply_mode_rejected(session):
+    session.add(make_autoreply(comment_reply_mode="shuffle"))
+    with pytest.raises(IntegrityError, match="ck_autoreply_comment_reply_mode_known"):
+        await session.commit()
+
+
 async def test_gate_needs_text(session):
     session.add(make_autoreply(follow_gate=True))
     with pytest.raises(IntegrityError, match="ck_autoreply_gate_has_text"):

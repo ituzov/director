@@ -65,6 +65,8 @@ async def update(session: AsyncSession, autoreply_id: uuid.UUID, form: Autoreply
     )
     for field, value in _fields(form).items():
         setattr(autoreply, field, value)
+    # список вариантов могли переставить: старый номер указывал бы не туда
+    autoreply.last_comment_reply = None
     autoreply.updated_at = func.now()
     await repository.replace_keywords(session, autoreply.id, words)
     await repository.replace_media(session, autoreply.id, form.media_ids)

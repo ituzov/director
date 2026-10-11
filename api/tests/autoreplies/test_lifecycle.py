@@ -7,7 +7,7 @@ import pytest
 from sqlalchemy import select
 from structlog.testing import capture_logs
 
-from app.autoreplies.models import AutoreplyMedia
+from app.autoreplies.models import Autoreply, AutoreplyMedia
 from app.instagram.models import Account
 
 
@@ -70,6 +70,18 @@ async def test_update_replaces_form(client, owner, create):
     # ответы в комментах в форме не прислали: стали пустыми, форма целиком
     assert body["comment_replies"] == []
     assert body["created_at"] == created["created_at"]
+
+
+async def test_update_forgets_last_comment_reply(client, owner, create, session):
+    created = await create(comment_replies=["a", "b"])
+    autoreply = await session.get(Autoreply, uuid.UUID(created["id"]))
+    autoreply.last_comment_reply = 1
+    await session.commit()
+    await client.put(
+        f"/autoreplies/{created['id']}", headers=owner, json=form(comment_replies=["b"])
+    )
+    await session.refresh(autoreply)
+    assert autoreply.last_comment_reply is None
 
 
 async def test_update_keeps_own_words_and_posts(client, owner, create):

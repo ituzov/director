@@ -54,6 +54,7 @@ def _out(full: service.Full) -> AutoreplyOut:
         follow_gate=a.follow_gate,
         not_following_text=a.not_following_text,
         comment_replies=a.comment_replies,
+        comment_reply_mode=a.comment_reply_mode,
         enabled=a.enabled,
         archived_at=a.archived_at,
         created_at=a.created_at,
