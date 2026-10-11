@@ -47,6 +47,13 @@
       "accounts": "Accounts",
       "metaApp": "Meta app"
     },
+    "account": {
+      "label": "Accounts",
+      "instagram": "Instagram",
+      "reconnect": "Needs reconnecting",
+      "connect": "Connect account",
+      "none": "Connect an account"
+    },
     "overview": {
       "title": "Overview",
       "empty": "Auto-replies and their stats will show up here."

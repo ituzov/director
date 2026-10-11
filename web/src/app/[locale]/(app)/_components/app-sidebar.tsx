@@ -1,34 +1,32 @@
 import { useTranslations } from "next-intl";
 import { Suspense } from "react";
 
-import { Logo } from "@/components/logo";
 import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
   SidebarHeader,
-  SidebarMenuSkeleton,
   SidebarRail,
 } from "@/components/ui/sidebar";
+import { getCurrentAccount, getSwitchableAccounts } from "@/lib/current-account";
 import { getCurrentUser } from "@/lib/session";
 import { APP_VERSION } from "@/lib/version";
 
+import { AccountSwitcher } from "./account-switcher";
 import { NavGroup } from "./nav-group";
+import { ProfileSkeleton } from "./profile-skeleton";
 import { UserDropdown } from "./user-dropdown";
 
 export function AppSidebar() {
-  const t = useTranslations("Auth");
   const tApp = useTranslations("App");
 
   return (
     <Sidebar variant="floating" collapsible="icon">
       <SidebarHeader>
-        <div className="flex items-center gap-2 p-1 group-data-[collapsible=icon]:p-0">
-          <Logo className="size-8" />
-          <span className="font-display text-base group-data-[collapsible=icon]:hidden">
-            {t("name")}
-          </span>
-        </div>
+        {/* аккаунты приходят из api: в оболочке скелет, сам переключатель потоком */}
+        <Suspense fallback={<ProfileSkeleton />}>
+          <AccountMenu />
+        </Suspense>
       </SidebarHeader>
       <SidebarContent>
         <NavGroup group="work" />
@@ -39,7 +37,7 @@ export function AppSidebar() {
       </SidebarContent>
       <SidebarFooter>
         {/* пользователь зависит от сессии: в оболочке скелет, сам блок приезжает потоком */}
-        <Suspense fallback={<SidebarMenuSkeleton showIcon />}>
+        <Suspense fallback={<ProfileSkeleton />}>
           <UserMenu />
         </Suspense>
         <p className="text-center text-xs text-muted-foreground group-data-[collapsible=icon]:hidden">
@@ -48,6 +46,17 @@ export function AppSidebar() {
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>
+  );
+}
+
+/** Какой аккаунт настраиваем. Ходит в api, поэтому живёт только внутри Suspense. */
+async function AccountMenu() {
+  const [accounts, current] = await Promise.all([getSwitchableAccounts(), getCurrentAccount()]);
+  return (
+    <AccountSwitcher
+      accounts={accounts.map(({ id, username, status }) => ({ id, username, status }))}
+      currentId={current?.id ?? null}
+    />
   );
 }
 
