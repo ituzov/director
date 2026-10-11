@@ -9,6 +9,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @dataclass(frozen=True, slots=True)
+class AccountRef:
+    """Подключённый аккаунт Instagram для соседей: без токена."""
+
+    id: uuid.UUID
+    ig_user_id: str
+    username: str
+    # active, token_expired, disconnected
+    status: str
+
+
+@dataclass(frozen=True, slots=True)
 class CommentRef:
     """Коммент под постом, разобранный из входящих."""
 

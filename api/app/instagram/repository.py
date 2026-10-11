@@ -39,6 +39,10 @@ async def claim_inbox_event(session: AsyncSession) -> InboxEvent | None:
     )
 
 
+async def get_account(session: AsyncSession, account_id: uuid.UUID) -> Account | None:
+    return await session.get(Account, account_id)
+
+
 async def get_account_by_ig_id(session: AsyncSession, ig_user_id: str) -> Account | None:
     return await session.scalar(select(Account).where(Account.ig_user_id == ig_user_id))
 

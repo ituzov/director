@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.core import crypto, signing
 from app.instagram import graph, repository, webhook
+from app.instagram.contracts import AccountRef
 from app.instagram.exceptions import (
     AppSecretRequired,
     InvalidOAuthState,
@@ -50,6 +51,19 @@ async def get_meta_app(session: AsyncSession) -> MetaApp | None:
 
 async def list_accounts(session: AsyncSession) -> list[Account]:
     return await repository.list_accounts(session)
+
+
+async def get_account(session: AsyncSession, account_id: uuid.UUID) -> AccountRef | None:
+    """Аккаунт для соседей: справка без токена, None если такого нет."""
+    account = await repository.get_account(session, account_id)
+    if account is None:
+        return None
+    return AccountRef(
+        id=account.id,
+        ig_user_id=account.ig_user_id,
+        username=account.username,
+        status=account.status,
+    )
 
 
 async def save_meta_app(session: AsyncSession, *, app_id: str, app_secret: str | None) -> MetaApp:
