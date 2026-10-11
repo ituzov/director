@@ -15,6 +15,7 @@ from collections.abc import Awaitable, Callable
 
 import structlog
 from fastapi import Request, Response
+from structlog.tracebacks import ExceptionDictTransformer
 from structlog.typing import Processor
 
 # ключи, значения которых в лог не попадают никогда, даже если их передали по ошибке
@@ -69,13 +70,20 @@ def setup_logging(level: str = "INFO", json: bool | None = None) -> None:
         # тестах перестаёт видеть записи. Выигрыш от кэша для нас копеечный
         cache_logger_on_first_use=False,
     )
+    # Трейсбек без локальных переменных: по умолчанию оба рендерера печатают их в
+    # каждом кадре, а там секрет Meta, токены и тела вебхуков. Маскировка их не
+    # видит, она смотрит только на верхний уровень записи
     renderer: list[Processor] = (
         [
-            structlog.processors.dict_tracebacks,
+            structlog.processors.ExceptionRenderer(ExceptionDictTransformer(show_locals=False)),
             structlog.processors.JSONRenderer(ensure_ascii=False),
         ]
         if json
-        else [structlog.dev.ConsoleRenderer()]
+        else [
+            structlog.dev.ConsoleRenderer(
+                exception_formatter=structlog.dev.RichTracebackFormatter(show_locals=False)
+            )
+        ]
     )
     handler = logging.StreamHandler()
     handler.setFormatter(

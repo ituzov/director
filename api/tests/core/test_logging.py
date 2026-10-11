@@ -5,6 +5,8 @@ import logging
 
 import pytest
 import structlog
+from sqlalchemy import text
+from sqlalchemy.exc import DBAPIError
 from structlog.testing import capture_logs
 
 from app.core.logging import _mask_secrets
@@ -117,3 +119,33 @@ async def test_request_line_logger_name_is_stable(client, real_logging, capsys):
     lines = [json.loads(line) for line in capsys.readouterr().err.splitlines()]
     [request] = [e for e in lines if e["event"] == "request"]
     assert request["logger"] == "app.core"
+
+
+# значение, которое лежит в локальной переменной упавшей функции
+LOCAL_SECRET = "local-secret-value"
+
+
+@pytest.mark.parametrize("as_json", [True, False])
+def test_traceback_without_locals(real_logging, capsys, as_json):
+    # трейсбек есть, а значений из кадров нет: там секрет Meta, токены и тела вебхуков
+    real_logging(json=as_json)
+
+    def connect(app_secret: str) -> None:
+        raise RuntimeError("boom")
+
+    try:
+        connect(LOCAL_SECRET)
+    except RuntimeError:
+        structlog.get_logger("app.test").exception("failed")
+    err = capsys.readouterr().err
+    assert "RuntimeError" in err and "connect" in err
+    assert LOCAL_SECRET not in err
+
+
+async def test_sql_error_without_parameters(session):
+    # SQLAlchemy не кладёт значения запроса в текст ошибки. Ошибка тут «деление на ноль»:
+    # её Postgres пишет без значений, а ошибку разбора значения он повторяет сам
+    with pytest.raises(DBAPIError) as info:
+        await session.execute(text("SELECT CAST(:value AS text), 1 / 0"), {"value": LOCAL_SECRET})
+    assert "SELECT CAST" in str(info.value)
+    assert LOCAL_SECRET not in str(info.value)

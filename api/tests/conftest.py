@@ -18,12 +18,12 @@ from pathlib import Path
 import psycopg
 import pytest
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.pool import NullPool
 
 from app.config import settings
 from app.core.logging import setup_logging
-from app.db import get_session
+from app.db import get_session, make_engine
 from app.identity import repository as identity_repository
 from app.identity import service as identity_service
 from app.identity.passwords import hash_password
@@ -79,7 +79,7 @@ async def session():
     Её commit() становится savepoint внутри нашей транзакции, а настоящего
     COMMIT не бывает вовсе. После теста откатываем транзакцию целиком.
     """
-    engine = create_async_engine(TEST_DATABASE_URL, poolclass=NullPool)
+    engine = make_engine(TEST_DATABASE_URL, poolclass=NullPool)
     async with engine.connect() as conn:
         outer = await conn.begin()  # BEGIN: черновик на весь тест
         async with AsyncSession(
@@ -120,9 +120,9 @@ def login_as(session):
 
 @pytest.fixture
 def real_logging():
-    """Настоящая цепочка логов в JSON на время теста, потом прежние обработчики.
-    Читать вывод через capsys.readouterr().err."""
+    """Настоящая цепочка логов на время теста (JSON, или консоль с json=False),
+    потом прежние обработчики. Читать вывод через capsys.readouterr().err."""
     root = logging.getLogger()
     handlers, level = root.handlers[:], root.level
-    yield lambda: setup_logging("INFO", json=True)
+    yield lambda json=True: setup_logging("INFO", json=json)
     root.handlers, root.level = handlers, level

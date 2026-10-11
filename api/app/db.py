@@ -19,7 +19,16 @@ from app.config import settings
 SCHEMAS = ("identity", "instagram", "campaigns", "updates", "activity", "core")
 
 # psycopg 3 в одном URL умеет и sync, и async, async-движок берёт async-режим
-engine = create_async_engine(settings.database_url, pool_pre_ping=True)
+
+
+def make_engine(url: str, **options):
+    """Движок с нашими правилами. Один на приложение, тесты строят свой так же."""
+    # hide_parameters: значения запроса не попадают в текст ошибки, а там бывают
+    # токены и тела вебхуков. Сам запрос в ошибке остаётся
+    return create_async_engine(url, hide_parameters=True, **options)
+
+
+engine = make_engine(settings.database_url, pool_pre_ping=True)
 SessionLocal = async_sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 
 
