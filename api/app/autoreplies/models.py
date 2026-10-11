@@ -147,7 +147,7 @@ class Delivery(Base):
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # первое нажатие
     clicked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    # последнее обработанное нажатие: порог от двойного тапа
+    # последнее нажатие: когда человек нажимал в последний раз
     last_click_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # материал выдан; после этого нажатия игнорируются
     delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

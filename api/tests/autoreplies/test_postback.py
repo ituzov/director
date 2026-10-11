@@ -89,11 +89,20 @@ async def test_click_queues_material(session, delivery):
     assert await journal(session) == ["autoreply.clicked"]
 
 
-async def test_double_tap_ignored(session, delivery):
+async def test_double_tap_one_message(session, delivery):
+    # двойной тап: оба нажатия в одном раунде, письмо одно
     await press(session, click(delivery))
-    await press(session, click(delivery, at=CLICK + timedelta(seconds=5)))
+    await press(session, click(delivery, at=CLICK + timedelta(milliseconds=200)))
     assert len(await outbox(session)) == 1
-    assert await journal(session) == ["autoreply.clicked"]
+
+
+async def test_quick_click_after_follow_asked_answered(session, delivery):
+    # не подписан, подписался и через 5 секунд нажал снова: ответ обязателен
+    await gate_on(session, delivery)
+    await press(session, click(delivery))
+    await result(session, delivery, "not_following")
+    await press(session, click(delivery, at=CLICK + timedelta(seconds=5)))
+    assert len(await outbox(session)) == 2
 
 
 async def test_second_click_while_material_queued(session, delivery):

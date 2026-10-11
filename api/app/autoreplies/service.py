@@ -2,7 +2,6 @@
 
 import uuid
 from dataclasses import dataclass
-from datetime import timedelta
 
 import structlog
 from sqlalchemy import func
@@ -29,8 +28,6 @@ REF_PREFIX = "autoreplies"
 INTRO = "intro"
 COMMENT = "comment"
 MATERIAL = "material"
-# нажатия чаще этого считаем одним (двойной тап)
-DOUBLE_TAP = timedelta(seconds=30)
 
 
 @dataclass(frozen=True, slots=True)
@@ -284,7 +281,7 @@ async def _enqueue_replies(
 
 async def handle_postback(session: AsyncSession, postback: instagram.PostbackRef) -> bool:
     """Нажатие кнопки автоответа: выдать материал. True: кнопка наша, даже если
-    нажатие пропущено (двойной тап, уже выдано, выдачи нет)."""
+    нажатие пропущено (уже выдано, выдачи нет)."""
     if not postback.payload.startswith(BUTTON_PREFIX):
         return False
     try:
@@ -299,8 +296,8 @@ async def handle_postback(session: AsyncSession, postback: instagram.PostbackRef
     ):
         # автоответ удалили или нажал не тот, кому выдавали
         return True
-    if delivery.last_click_at and postback.acted_at - delivery.last_click_at < DOUBLE_TAP:
-        return True
+    # двойной тап отдельно не ловим: оба нажатия попадут в один раунд, и второе
+    # письмо в очередь не ляжет. Порог по времени глушил осознанные нажатия
     delivery.last_click_at = postback.acted_at
 
     journal = {
