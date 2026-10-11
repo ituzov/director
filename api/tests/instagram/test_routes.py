@@ -8,7 +8,7 @@ from app.config import settings
 from app.core import crypto
 from app.instagram import repository
 
-APP_ID = "1571874044224461"
+APP_ID = "1000000000000099"
 SECRET = "0123456789abcdef0123456789abcdef"
 OTHER_SECRET = "f" * 32
 OLD = datetime(2000, 1, 1, tzinfo=UTC)
