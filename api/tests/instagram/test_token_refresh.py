@@ -7,10 +7,11 @@ from datetime import timedelta
 
 import httpx
 import pytest
-from sqlalchemy import func
+from sqlalchemy import func, select
 from structlog.testing import capture_logs
 
 from app import instagram, worker
+from app.activity.models import Event
 from app.core import crypto
 from app.instagram import tasks
 from app.instagram.models import Account
@@ -23,6 +24,7 @@ class FakeMeta:
     def __init__(self) -> None:
         self.asked: list[str] = []
         self.fail_for: set[str] = set()
+        self.invalid: set[str] = set()
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         assert request.url.path == "/refresh_access_token"
@@ -31,6 +33,8 @@ class FakeMeta:
         self.asked.append(old)
         if old in self.fail_for:
             return httpx.Response(500, json={"error": {"message": "x", "code": 2}})
+        if old in self.invalid:
+            return httpx.Response(400, json={"error": {"message": "x", "code": 190}})
         return httpx.Response(
             200,
             json={
@@ -151,3 +155,14 @@ async def test_worker_periodic_refreshes(session, meta):
 
     await worker.periodic(same)
     assert await token_of(session, account) == f"{NEW_TOKEN}-old"
+
+
+async def test_invalid_token_expires_account(session, meta):
+    account = await make(session, "revoked", left=timedelta(days=10))
+    meta.invalid = {"revoked"}
+    assert await instagram.refresh_due_tokens(session) == 0
+    await session.refresh(account)
+    # бот молчит до нового входа, бесполезный секрет стёрт
+    assert (account.status, account.token_encrypted) == ("token_expired", None)
+    [entry] = (await session.scalars(select(Event))).all()
+    assert (entry.kind, entry.account_id) == ("account.token_expired", account.id)

@@ -423,3 +423,19 @@ async def test_plain_message_not_checked(session, account, meta):
     await instagram.send_outbox_task(session, results)
     assert [r.method for r in meta.requests] == ["POST"]
     assert results.got[0].variant is None
+
+
+async def test_invalid_token_expires_account(session, account, meta):
+    await private_reply(session, account)
+    await private_reply(session, account, comment_id="c2")
+    meta.fail(400, 190)
+    results = Results()
+    await instagram.send_outbox_task(session, results)
+    await session.refresh(account)
+    assert (account.status, account.token_encrypted) == ("token_expired", None)
+    assert results.got[0].reason == "190"
+
+    # следующее письмо этого аккаунта в Meta уже не идёт
+    await instagram.send_outbox_task(session, results)
+    assert len(meta.requests) == 1
+    assert results.got[1].reason == "account_inactive"
