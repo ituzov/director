@@ -4,7 +4,7 @@
 import uuid
 from collections import defaultdict
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -77,3 +77,112 @@ async def add_delivery(
         .on_conflict_do_nothing()
         .returning(Delivery.id)
     )
+
+
+async def lock_account(session: AsyncSession, account_id: uuid.UUID) -> None:
+    """Сохранения автоответов одного аккаунта по очереди до конца транзакции:
+    иначе два одновременных пройдут проверку конфликтов мимо друг друга."""
+    await session.execute(
+        select(func.pg_advisory_xact_lock(func.hashtextextended(str(account_id), 0)))
+    )
+
+
+async def taken_keyword(
+    session: AsyncSession,
+    account_id: uuid.UUID,
+    normalized: list[str],
+    exclude_id: uuid.UUID | None,
+) -> tuple[Keyword, Autoreply] | None:
+    """Слово из списка у другого живого общего автоответа аккаунта."""
+    query = (
+        select(Keyword, Autoreply)
+        .join(Autoreply)
+        .where(Autoreply.account_id == account_id, Autoreply.scope == "all")
+        .where(Autoreply.archived_at.is_(None), Keyword.normalized.in_(normalized))
+        .order_by(Keyword.id)
+        .limit(1)
+    )
+    if exclude_id is not None:
+        query = query.where(Autoreply.id != exclude_id)
+    row = (await session.execute(query)).first()
+    return (row[0], row[1]) if row else None
+
+
+async def taken_media(
+    session: AsyncSession, media_ids: list[str], exclude_id: uuid.UUID | None
+) -> tuple[str, Autoreply] | None:
+    """Пост из списка у другого живого частного автоответа."""
+    query = (
+        select(AutoreplyMedia.media_id, Autoreply)
+        .join(Autoreply)
+        .where(AutoreplyMedia.media_id.in_(media_ids), AutoreplyMedia.archived.is_(False))
+        .limit(1)
+    )
+    if exclude_id is not None:
+        query = query.where(Autoreply.id != exclude_id)
+    row = (await session.execute(query)).first()
+    return (row[0], row[1]) if row else None
+
+
+def add_autoreply(session: AsyncSession, autoreply: Autoreply) -> None:
+    session.add(autoreply)
+
+
+def add_keywords(
+    session: AsyncSession, autoreply_id: uuid.UUID, words: list[tuple[str, str]]
+) -> None:
+    """Слова в порядке ввода: (как ввёл, нормализованное)."""
+    session.add_all(
+        Keyword(autoreply_id=autoreply_id, word=word, normalized=normalized)
+        for word, normalized in words
+    )
+
+
+def add_media(session: AsyncSession, autoreply_id: uuid.UUID, media_ids: list[str]) -> None:
+    session.add_all(AutoreplyMedia(autoreply_id=autoreply_id, media_id=m) for m in media_ids)
+
+
+async def get_autoreply(session: AsyncSession, autoreply_id: uuid.UUID) -> Autoreply | None:
+    return await session.get(Autoreply, autoreply_id)
+
+
+async def list_autoreplies(
+    session: AsyncSession, account_id: uuid.UUID, *, archived: bool
+) -> list[Autoreply]:
+    archive = Autoreply.archived_at.is_not(None) if archived else Autoreply.archived_at.is_(None)
+    return list(
+        await session.scalars(
+            select(Autoreply)
+            .where(Autoreply.account_id == account_id, archive)
+            .order_by(Autoreply.created_at.desc())
+        )
+    )
+
+
+async def words_by_autoreply(
+    session: AsyncSession, autoreply_ids: list[uuid.UUID]
+) -> dict[uuid.UUID, list[str]]:
+    """Слова как ввёл владелец, в порядке ввода (uuid7 растёт со временем)."""
+    rows = await session.execute(
+        select(Keyword.autoreply_id, Keyword.word)
+        .where(Keyword.autoreply_id.in_(autoreply_ids))
+        .order_by(Keyword.id)
+    )
+    words: dict[uuid.UUID, list[str]] = defaultdict(list)
+    for autoreply_id, word in rows:
+        words[autoreply_id].append(word)
+    return words
+
+
+async def media_by_autoreply(
+    session: AsyncSession, autoreply_ids: list[uuid.UUID]
+) -> dict[uuid.UUID, list[str]]:
+    rows = await session.execute(
+        select(AutoreplyMedia.autoreply_id, AutoreplyMedia.media_id)
+        .where(AutoreplyMedia.autoreply_id.in_(autoreply_ids))
+        .order_by(AutoreplyMedia.media_id)
+    )
+    media: dict[uuid.UUID, list[str]] = defaultdict(list)
+    for autoreply_id, media_id in rows:
+        media[autoreply_id].append(media_id)
+    return media

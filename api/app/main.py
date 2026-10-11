@@ -6,7 +6,7 @@
 
 from fastapi import FastAPI
 
-from app import identity, instagram
+from app import autoreplies, identity, instagram
 from app.config import settings
 from app.core.logging import log_requests, setup_logging
 
@@ -18,11 +18,13 @@ app = FastAPI(
     exception_handlers={
         identity.IdentityError: identity.identity_error_handler,
         instagram.InstagramError: instagram.instagram_error_handler,
+        autoreplies.AutoreplyError: autoreplies.autoreply_error_handler,
     },
 )
 app.include_router(identity.router)
 app.include_router(instagram.router)
 app.include_router(instagram.webhook_router)
+app.include_router(autoreplies.router)
 app.middleware("http")(log_requests)
 
 

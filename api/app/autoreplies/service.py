@@ -1,9 +1,113 @@
-"""Логика автоответов: кто отвечает под постом и что выдаём."""
+"""Логика автоответов: настройка владельцем, кто отвечает под постом и что выдаём."""
 
+import uuid
+from dataclasses import dataclass
+
+import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app import activity, instagram
+from app import activity, identity, instagram
 from app.autoreplies import matching, repository
+from app.autoreplies.exceptions import AccountUnavailable, AutoreplyConflict, AutoreplyNotFound
+from app.autoreplies.models import Autoreply
+from app.autoreplies.schemas import AutoreplyForm, AutoreplyIn
+
+log = structlog.get_logger("app.autoreplies")
+
+
+@dataclass(frozen=True, slots=True)
+class Full:
+    """Автоответ вместе со словами и постами: всё, что нужно форме и карточке."""
+
+    autoreply: Autoreply
+    keywords: list[str]
+    media_ids: list[str]
+
+
+async def create(session: AsyncSession, form: AutoreplyIn, user: identity.UserRef) -> Full:
+    account = await instagram.get_account(session, form.account_id)
+    if account is None or account.status == "disconnected":
+        raise AccountUnavailable
+    await repository.lock_account(session, form.account_id)
+    await _check_conflicts(session, form.account_id, form, exclude_id=None)
+
+    autoreply = Autoreply(
+        account_id=form.account_id,
+        created_by=user.id,
+        **_fields(form),
+    )
+    repository.add_autoreply(session, autoreply)
+    await session.flush()
+    repository.add_keywords(session, autoreply.id, _words(form))
+    repository.add_media(session, autoreply.id, form.media_ids)
+    await session.commit()
+    log.info("autoreply.created", autoreply_id=str(autoreply.id), account_id=str(form.account_id))
+    return await get(session, autoreply.id)
+
+
+async def get(session: AsyncSession, autoreply_id: uuid.UUID) -> Full:
+    autoreply = await repository.get_autoreply(session, autoreply_id)
+    if autoreply is None:
+        raise AutoreplyNotFound
+    [full] = await _with_details(session, [autoreply])
+    return full
+
+
+async def list_for_account(
+    session: AsyncSession, account_id: uuid.UUID, *, archived: bool
+) -> list[Full]:
+    autoreplies = await repository.list_autoreplies(session, account_id, archived=archived)
+    return await _with_details(session, autoreplies)
+
+
+async def _with_details(session: AsyncSession, autoreplies: list[Autoreply]) -> list[Full]:
+    ids = [a.id for a in autoreplies]
+    words = await repository.words_by_autoreply(session, ids)
+    media = await repository.media_by_autoreply(session, ids)
+    return [Full(a, words.get(a.id, []), media.get(a.id, [])) for a in autoreplies]
+
+
+async def _check_conflicts(
+    session: AsyncSession,
+    account_id: uuid.UUID,
+    form: AutoreplyForm,
+    *,
+    exclude_id: uuid.UUID | None,
+) -> None:
+    """Общие не делят слова, частные не делят посты. Архивные никому не мешают,
+    выключенные мешают: включат обратно, и конфликт всплывёт молча."""
+    if form.scope == "all":
+        words = dict((normalized, word) for word, normalized in _words(form))
+        taken = await repository.taken_keyword(session, account_id, list(words), exclude_id)
+        if taken:
+            keyword, other = taken
+            raise AutoreplyConflict(
+                "keyword",
+                value=words[keyword.normalized],
+                autoreply_id=other.id,
+                name=other.name,
+                enabled=other.enabled,
+            )
+    else:
+        taken_post = await repository.taken_media(session, form.media_ids, exclude_id)
+        if taken_post:
+            media_id, other = taken_post
+            raise AutoreplyConflict(
+                "post",
+                value=media_id,
+                autoreply_id=other.id,
+                name=other.name,
+                enabled=other.enabled,
+            )
+
+
+def _words(form: AutoreplyForm) -> list[tuple[str, str]]:
+    return [(word, matching.normalize(word)) for word in form.keywords]
+
+
+def _fields(form: AutoreplyForm) -> dict:
+    """Поля самой строки автоответа: без слов и постов, они в своих таблицах."""
+    return form.model_dump(exclude={"keywords", "media_ids", "account_id"})
 
 
 async def handle_comment(session: AsyncSession, comment: instagram.CommentRef) -> bool:
