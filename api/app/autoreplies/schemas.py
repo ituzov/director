@@ -30,7 +30,9 @@ Name = Annotated[str, _text(100)]
 Word = Annotated[str, _text(100)]
 MediaId = Annotated[str, _text(100)]
 MessageText = Annotated[str, _text(), AfterValidator(_fits_message)]
-# лимит кнопки 20 знаков помним по Messenger, сверить с докой Instagram
+# сообщение с кнопкой (button template) у Meta до 640 знаков, не байт
+ButtonMessageText = Annotated[str, _text(640)]
+# лимит кнопки дока Instagram не называет: 20 знаков как в Messenger, с запасом
 ButtonText = Annotated[str, _text(20)]
 # лимит коммента в Instagram
 CommentReply = Annotated[str, _text(2200)]
@@ -43,11 +45,13 @@ class AutoreplyForm(BaseModel):
     scope: Literal["all", "posts"]
     media_ids: list[MediaId] = []
     keywords: list[Word] = Field(min_length=1, max_length=50)
-    intro_text: MessageText
+    # уходят с кнопкой
+    intro_text: ButtonMessageText
     button_text: ButtonText
+    # материал, обычным сообщением
     reply_text: MessageText
     follow_gate: bool = False
-    not_following_text: MessageText | None = None
+    not_following_text: ButtonMessageText | None = None
     comment_replies: list[CommentReply] = Field(default=[], max_length=10)
     enabled: bool = True
 

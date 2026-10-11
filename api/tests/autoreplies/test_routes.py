@@ -77,8 +77,11 @@ async def test_text_trimmed(client, owner, account):
         ({"scope": "posts", "media_ids": ["m1", "m1"]}, "post_duplicate"),
         ({"follow_gate": True}, "not_following_text_required"),
         ({"button_text": "x" * 21}, None),
-        # 501 кириллическая буква это 1002 байта
-        ({"intro_text": "я" * 501}, "message_too_long"),
+        # материал: 501 кириллическая буква это 1002 байта
+        ({"reply_text": "я" * 501}, "message_too_long"),
+        # с кнопкой: до 640 знаков
+        ({"intro_text": "x" * 641}, None),
+        ({"follow_gate": True, "not_following_text": "x" * 641}, None),
         ({"reply_text": "   "}, None),
         ({"comment_replies": ["ок"] * 11}, None),
         ({"scope": "some"}, None),
@@ -89,6 +92,12 @@ async def test_bad_form(client, owner, account, change, code):
     assert r.status_code == 422
     if code:
         assert code in str(r.json())
+
+
+async def test_button_message_up_to_640_chars(client, owner, account):
+    # 640 кириллических знаков это 1280 байт: лимит у кнопочного сообщения в знаках
+    r = await create(client, owner, form(account, intro_text="я" * 640))
+    assert r.status_code == 201
 
 
 async def test_follow_gate_with_text(client, owner, account):
