@@ -20,6 +20,7 @@ export function LoginForm() {
 
   return (
     <Form
+      method="post"
       // не action, а onSubmit: при <form action> React 19 сбрасывает поля после ошибки
       onSubmit={(event) => {
         event.preventDefault();

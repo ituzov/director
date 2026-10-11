@@ -40,6 +40,7 @@ export function MetaAppForm({ metaApp }: { metaApp: MetaApp | null }) {
 
   return (
     <Form
+      method="post"
       errors={fieldErrors}
       // не action, а onSubmit: при <form action> React 19 сбрасывает поля после ошибки
       onSubmit={(event) => {

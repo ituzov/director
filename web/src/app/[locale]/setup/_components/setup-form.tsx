@@ -30,6 +30,7 @@ export function SetupForm({ token }: { token?: string }) {
 
   return (
     <Form
+      method="post"
       errors={fieldErrors}
       // не action, а onSubmit: при <form action> React 19 сбрасывает поля, и пароли пропадали бы
       onSubmit={(event) => {
