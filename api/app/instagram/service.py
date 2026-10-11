@@ -2,6 +2,7 @@
 
 import secrets
 
+import structlog
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -10,6 +11,9 @@ from app.core import crypto
 from app.instagram import repository
 from app.instagram.exceptions import AppSecretRequired
 from app.instagram.models import MetaApp
+
+# имя логгера постоянное, по нему ищут в логах: при переезде файла не меняется
+log = structlog.get_logger("app.instagram")
 
 # Пути, которые владелец прописывает в кабинете Meta. Поменять путь значит
 # заставить каждого владельца перенастроить приложение, поэтому они постоянные
@@ -32,6 +36,7 @@ async def get_meta_app(session: AsyncSession) -> MetaApp | None:
 async def save_meta_app(session: AsyncSession, *, app_id: str, app_secret: str | None) -> MetaApp:
     """Сохранить ключи приложения. Секрет None значит «не менять»."""
     meta_app = await repository.get_meta_app(session)
+    first = meta_app is None
     if meta_app is None:
         if app_secret is None:
             raise AppSecretRequired
@@ -54,4 +59,6 @@ async def save_meta_app(session: AsyncSession, *, app_id: str, app_secret: str |
         # два первых сохранения разом: строку вставил соседний запрос, обновим её
         await session.rollback()
         return await save_meta_app(session, app_id=app_id, app_secret=app_secret)
+    # app_id не секрет, сам секрет в лог не идёт: только факт замены
+    log.info("meta_app.saved", app_id=app_id, first=first, secret_replaced=app_secret is not None)
     return meta_app
