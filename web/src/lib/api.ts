@@ -6,11 +6,14 @@ import { headers } from "next/headers";
 export class ApiError extends Error {
   readonly status: number;
   readonly detail: unknown;
+  // ответ целиком: рядом с detail api кладёт подробности, например conflict
+  readonly body: unknown;
 
-  constructor(status: number, detail: unknown) {
+  constructor(status: number, detail: unknown, body: unknown = null) {
     super(`api ответил ${status}`);
     this.status = status;
     this.detail = detail;
+    this.body = body;
   }
 }
 
@@ -38,7 +41,7 @@ export async function apiFetch<T>(
   });
   if (!res.ok) {
     const data = await res.json().catch(() => null);
-    throw new ApiError(res.status, data?.detail);
+    throw new ApiError(res.status, data?.detail, data);
   }
   return (res.status === 204 ? undefined : await res.json()) as T;
 }
