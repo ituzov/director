@@ -13,9 +13,9 @@
   --card-foreground: #101010;
   --popover: #ffffff;
   --popover-foreground: #101010;
-  /* главная кнопка чёрная, как «Войти» на обложке */
-  --primary: #101010;
-  --primary-foreground: #ffffff;
+  /* главная кнопка фирменного синего, как логотип */
+  --primary: var(--brand);
+  --primary-foreground: var(--brand-foreground);
   /* фоны при наведении и второстепенные кнопки: нейтральный серый */
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: #101010;
