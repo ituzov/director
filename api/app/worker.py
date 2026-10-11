@@ -17,7 +17,10 @@ from app.db import SessionLocal, engine
 POLL_SECONDS = 2
 
 # кому отдавать разобранное из входящих
-HANDLERS = instagram.InboxHandlers(on_comment=autoreplies.handle_comment)
+HANDLERS = instagram.InboxHandlers(
+    on_comment=autoreplies.handle_comment,
+    on_postback=autoreplies.handle_postback,
+)
 # кому сообщать итог отправки исходящих
 ON_RESULT = autoreplies.handle_send_result
 

@@ -4,7 +4,14 @@
 Публичный интерфейс модуля: снаружи импортируют только отсюда.
 """
 
-from app.instagram.contracts import AccountRef, Button, CommentRef, InboxHandlers, OutboxResult
+from app.instagram.contracts import (
+    AccountRef,
+    Button,
+    CommentRef,
+    InboxHandlers,
+    OutboxResult,
+    PostbackRef,
+)
 from app.instagram.exceptions import InstagramError
 from app.instagram.outbox import enqueue_comment_reply, enqueue_message, enqueue_private_reply
 from app.instagram.routes import instagram_error_handler, router, webhook_router
@@ -29,6 +36,7 @@ __all__ = [
     "process_inbox_event",
     "InboxHandlers",
     "CommentRef",
+    "PostbackRef",
     "send_outbox_task",
     "OutboxResult",
 ]

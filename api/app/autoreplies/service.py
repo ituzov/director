@@ -2,6 +2,7 @@
 
 import uuid
 from dataclasses import dataclass
+from datetime import timedelta
 
 import structlog
 from sqlalchemy import func
@@ -24,9 +25,12 @@ log = structlog.get_logger("app.autoreplies")
 BUTTON_PREFIX = "ar:"
 # метка исходящих автоответа: «autoreplies:<выдача>:<этап>»
 REF_PREFIX = "autoreplies"
-# этапы: директ с кнопкой и ответ под комментом
+# этапы: директ с кнопкой, ответ под комментом, материал после нажатия
 INTRO = "intro"
 COMMENT = "comment"
+MATERIAL = "material"
+# нажатия чаще этого считаем одним (двойной тап)
+DOUBLE_TAP = timedelta(seconds=30)
 
 
 @dataclass(frozen=True, slots=True)
@@ -278,6 +282,58 @@ async def _enqueue_replies(
     )
 
 
+async def handle_postback(session: AsyncSession, postback: instagram.PostbackRef) -> bool:
+    """Нажатие кнопки автоответа: выдать материал. True: кнопка наша, даже если
+    нажатие пропущено (двойной тап, уже выдано, выдачи нет)."""
+    if not postback.payload.startswith(BUTTON_PREFIX):
+        return False
+    try:
+        delivery_id = uuid.UUID(postback.payload.removeprefix(BUTTON_PREFIX))
+    except ValueError:
+        log.warning("autoreply.bad_button")
+        return True
+    delivery = await repository.get_delivery(session, delivery_id, lock=True)
+    if delivery is None or (delivery.account_id, delivery.person_id) != (
+        postback.account_id,
+        postback.person_id,
+    ):
+        # автоответ удалили или нажал не тот, кому выдавали
+        return True
+    if delivery.last_click_at and postback.acted_at - delivery.last_click_at < DOUBLE_TAP:
+        return True
+    delivery.last_click_at = postback.acted_at
+
+    journal = {
+        "account_id": delivery.account_id,
+        "autoreply_id": delivery.autoreply_id,
+        "person_id": delivery.person_id,
+        "comment_id": delivery.comment_id,
+        "data": {"delivery_id": str(delivery.id)},
+        "occurred_at": postback.acted_at,
+    }
+    if delivery.delivered_at:
+        # материал уже в переписке прямо над кнопкой
+        activity.record(session, "autoreply.repeat_click", **journal)
+        return True
+
+    if delivery.clicked_at is None:
+        delivery.clicked_at = postback.acted_at
+    # выключенный или архивный всё равно выдаёт: человеку пообещали, он нажал
+    autoreply = await repository.get_autoreply(session, delivery.autoreply_id)
+    await instagram.enqueue_message(
+        session,
+        account_id=delivery.account_id,
+        recipient_id=delivery.person_id,
+        acted_at=postback.acted_at,
+        text=autoreply.reply_text,
+        # материал на выдачу один: пока он в очереди, новые нажатия второй не поставят
+        dedup_key=f"material:{delivery.id}",
+        ref=_ref(delivery.id, MATERIAL),
+    )
+    activity.record(session, "autoreply.clicked", **journal)
+    return True
+
+
 async def handle_send_result(session: AsyncSession, result: instagram.OutboxResult) -> None:
     """Итог отправки письма автоответа: этап в выдаче и запись в журнал.
     Чужие метки и выдачи, которых уже нет, пропускаем."""
@@ -299,6 +355,9 @@ async def handle_send_result(session: AsyncSession, result: instagram.OutboxResu
     elif stage == COMMENT:
         delivery.commented_at = func.now()
         kind = "autoreply.commented"
+    elif stage == MATERIAL:
+        delivery.delivered_at = func.now()
+        kind = "autoreply.delivered"
     else:
         return
     activity.record(

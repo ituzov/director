@@ -38,6 +38,22 @@ class CommentRef:
 
 
 @dataclass(frozen=True, slots=True)
+class PostbackRef:
+    """Нажатие кнопки в директе, разобранное из входящих."""
+
+    # наш аккаунт, в чьём директе нажали
+    account_id: uuid.UUID
+    # кто нажал; тот же id, что автор коммента
+    person_id: str
+    # то, что мы положили в кнопку, как есть
+    payload: str
+    # id нажатия у Meta: по нему одно нажатие не обработать дважды
+    mid: str
+    # когда нажали по часам Meta; по ним меряем двойной тап
+    acted_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
 class Button:
     """Кнопка под сообщением. payload Meta вернёт вебхуком нажатия как есть."""
 
@@ -66,3 +82,4 @@ class InboxHandlers:
     Обработчик возвращает True, если взял событие себе."""
 
     on_comment: Callable[[AsyncSession, CommentRef], Awaitable[bool]] | None = None
+    on_postback: Callable[[AsyncSession, PostbackRef], Awaitable[bool]] | None = None

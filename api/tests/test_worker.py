@@ -56,6 +56,7 @@ async def test_one_event_per_step(session):
 
 def test_comments_go_to_autoreplies():
     assert worker.HANDLERS.on_comment is autoreplies.handle_comment
+    assert worker.HANDLERS.on_postback is autoreplies.handle_postback
     assert worker.ON_RESULT is autoreplies.handle_send_result
 
 

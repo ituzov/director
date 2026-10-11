@@ -234,5 +234,8 @@ async def lock_autoreply(session: AsyncSession, autoreply_id: uuid.UUID) -> Auto
     )
 
 
-async def get_delivery(session: AsyncSession, delivery_id: uuid.UUID) -> Delivery | None:
-    return await session.get(Delivery, delivery_id)
+async def get_delivery(
+    session: AsyncSession, delivery_id: uuid.UUID, *, lock: bool = False
+) -> Delivery | None:
+    """lock: выдача под замком до конца транзакции, два нажатия разом идут по очереди."""
+    return await session.get(Delivery, delivery_id, with_for_update=lock, populate_existing=lock)

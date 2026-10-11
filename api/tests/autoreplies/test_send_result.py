@@ -68,6 +68,13 @@ async def test_comment_sent(session, delivery):
     assert [e.kind for e in await journal(session)] == ["autoreply.commented"]
 
 
+async def test_material_sent(session, delivery):
+    await report(session, f"autoreplies:{delivery.id}:material", kind="message")
+    await session.refresh(delivery)
+    assert delivery.delivered_at is not None
+    assert [e.kind for e in await journal(session)] == ["autoreply.delivered"]
+
+
 @pytest.mark.parametrize(("outcome", "reason"), [("failed", "100"), ("expired", None)])
 async def test_not_sent(session, delivery, outcome, reason):
     await report(session, f"autoreplies:{delivery.id}:intro", outcome=outcome, reason=reason)

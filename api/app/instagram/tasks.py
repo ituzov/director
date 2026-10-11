@@ -2,7 +2,7 @@
 коммитит: одна транзакция на одно событие."""
 
 from collections.abc import Awaitable, Callable
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx
@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app import activity
 from app.core import crypto
 from app.instagram import graph, repository, webhook
-from app.instagram.contracts import CommentRef, InboxHandlers, OutboxResult
+from app.instagram.contracts import CommentRef, InboxHandlers, OutboxResult, PostbackRef
 from app.instagram.models import Account, InboxEvent, OutboxTask
 
 log = structlog.get_logger("app.instagram")
@@ -57,10 +57,51 @@ async def _handle(
         return "skipped", "unknown_account"
     if account.status != "active":
         return "skipped", "account_inactive"
-    if event.kind != webhook.COMMENT:
-        # сообщения, кнопки и прочтения пока никому не нужны
-        return "done", None
+    if event.kind == webhook.COMMENT:
+        return await _handle_comment(session, event, account, handlers)
+    if event.kind == webhook.POSTBACK:
+        return await _handle_postback(session, event, account, handlers)
+    # сообщения и прочтения пока никому не нужны
+    return "done", None
 
+
+async def _handle_postback(
+    session: AsyncSession, event: InboxEvent, account: Account, handlers: InboxHandlers
+) -> tuple[str, str | None]:
+    postback = _postback_ref(event, account)
+    if postback is None:
+        return "skipped", "bad_payload"
+    if handlers.on_postback:
+        await handlers.on_postback(session, postback)
+    return "done", None
+
+
+def _postback_ref(event: InboxEvent, account: Account) -> PostbackRef | None:
+    """Справка из payload нажатия. None, если не хватает нужного."""
+    value = event.payload
+    sender = _dict(value.get("sender")).get("id")
+    postback = _dict(value.get("postback"))
+    payload, mid = postback.get("payload"), postback.get("mid")
+    if not (sender and mid and isinstance(payload, str)):
+        return None
+    timestamp = value.get("timestamp")
+    acted_at = (
+        datetime.fromtimestamp(timestamp / 1000, UTC)
+        if isinstance(timestamp, int | float)
+        else event.received_at
+    )
+    return PostbackRef(
+        account_id=account.id,
+        person_id=str(sender),
+        payload=payload,
+        mid=str(mid),
+        acted_at=acted_at,
+    )
+
+
+async def _handle_comment(
+    session: AsyncSession, event: InboxEvent, account: Account, handlers: InboxHandlers
+) -> tuple[str, str | None]:
     comment = _comment_ref(event, account)
     if comment is None:
         # повтор кривые данные не вылечит

@@ -158,12 +158,80 @@ async def test_bad_comment_skipped(session, account, payload):
     assert (event.outcome, event.reason) == ("skipped", "bad_payload")
 
 
-@pytest.mark.parametrize("kind", [webhook.MESSAGE, webhook.POSTBACK, webhook.READ])
+@pytest.mark.parametrize("kind", [webhook.MESSAGE, webhook.READ])
 async def test_other_kinds_done_without_journal(session, account, kind):
     event_id = await add_event(session, kind=kind, payload={"sender": {"id": "500001"}})
     await instagram.process_inbox_event(session, NOBODY)
     assert (await stored(session, event_id)).outcome == "done"
     assert await journal(session) == []
+
+
+def postback_payload(**kw) -> dict:
+    return {
+        "sender": {"id": "500001"},
+        "recipient": {"id": IG_ID},
+        # нажали за 2 с до того, как Meta прислала вебхук (RECEIVED)
+        "timestamp": 1767323043000,
+        "postback": {"mid": "pb-1", "title": "Получить", "payload": "ar:123"},
+    } | kw
+
+
+async def test_postback_goes_to_handler(session, account):
+    event_id = await add_event(session, kind=webhook.POSTBACK, payload=postback_payload())
+    got = []
+
+    async def on_postback(s, postback):
+        got.append(postback)
+        return True
+
+    await instagram.process_inbox_event(session, instagram.InboxHandlers(on_postback=on_postback))
+    assert got == [
+        instagram.PostbackRef(
+            account_id=account.id,
+            person_id="500001",
+            payload="ar:123",
+            mid="pb-1",
+            # время нажатия по часам Meta, а не время вебхука
+            acted_at=RECEIVED - timedelta(seconds=2),
+        )
+    ]
+    assert (await stored(session, event_id)).outcome == "done"
+
+
+async def test_postback_without_timestamp_uses_received(session, account):
+    payload = postback_payload()
+    del payload["timestamp"]
+    await add_event(session, kind=webhook.POSTBACK, payload=payload)
+    got = []
+
+    async def on_postback(s, postback):
+        got.append(postback)
+        return True
+
+    await instagram.process_inbox_event(session, instagram.InboxHandlers(on_postback=on_postback))
+    assert got[0].acted_at == RECEIVED
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        postback_payload(sender={}),
+        postback_payload(postback={"mid": "pb-1"}),
+        postback_payload(postback={"payload": "ar:1"}),
+        {"sender": {"id": "1"}},
+    ],
+)
+async def test_bad_postback_skipped(session, account, payload):
+    event_id = await add_event(session, kind=webhook.POSTBACK, payload=payload)
+    await instagram.process_inbox_event(session, NOBODY)
+    event = await stored(session, event_id)
+    assert (event.outcome, event.reason) == ("skipped", "bad_payload")
+
+
+async def test_postback_without_handler_done(session, account):
+    event_id = await add_event(session, kind=webhook.POSTBACK, payload=postback_payload())
+    await instagram.process_inbox_event(session, NOBODY)
+    assert (await stored(session, event_id)).outcome == "done"
 
 
 async def failing(session, comment):
