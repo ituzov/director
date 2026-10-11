@@ -84,16 +84,20 @@ export function MetaAppForm({ metaApp }: { metaApp: MetaApp | null }) {
         <Button type="submit" disabled={pending}>
           {t("submit")}
         </Button>
-        {metaApp && inBrowser && (
-          <p className="text-muted-foreground text-sm">
-            {t("updatedAt", {
-              date: format.dateTime(new Date(metaApp.updated_at), {
-                dateStyle: "medium",
-                timeStyle: "short",
-              }),
-            })}
-          </p>
-        )}
+        {metaApp &&
+          (inBrowser ? (
+            <p className="text-muted-foreground text-sm">
+              {t("updatedAt", {
+                date: format.dateTime(new Date(metaApp.updated_at), {
+                  dateStyle: "medium",
+                  timeStyle: "short",
+                }),
+              })}
+            </p>
+          ) : (
+            // до гидрации пояс браузера неизвестен: держим место под строку
+            <Skeleton className="h-4 w-56" />
+          ))}
       </div>
     </Form>
   );
