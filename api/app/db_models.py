@@ -4,5 +4,6 @@
 Единственное место снаружи модулей, которому можно в их models.
 """
 
+from app.activity.models import Event  # noqa: F401
 from app.identity.models import LoginSession, User  # noqa: F401
 from app.instagram.models import MetaApp  # noqa: F401
