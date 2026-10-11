@@ -22,10 +22,19 @@ _SECRETS = {"authorization", "token", "access_token", "app_secret", "secret", "p
 # имя логгера постоянное, по нему ищут в логах: при переезде файла не меняется
 log = structlog.get_logger("app.core")
 
+# uvicorn кладёт в extra копию сообщения с цветовыми кодами терминала
+_NOISE = {"color_message"}
+
 
 def _mask_secrets(_logger: object, _method: str, event: dict) -> dict:
     for key in event.keys() & _SECRETS:
         event[key] = "***"
+    return event
+
+
+def _drop_noise(_logger: object, _method: str, event: dict) -> dict:
+    for key in event.keys() & _NOISE:
+        del event[key]
     return event
 
 
@@ -40,6 +49,7 @@ def setup_logging(level: str = "INFO", json: bool | None = None) -> None:
         structlog.stdlib.add_logger_name,
         structlog.stdlib.add_log_level,
         structlog.stdlib.ExtraAdder(),
+        _drop_noise,
         structlog.processors.TimeStamper(fmt="iso", utc=True),
         _mask_secrets,
     ]

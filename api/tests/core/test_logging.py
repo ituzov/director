@@ -93,6 +93,14 @@ def test_uvicorn_goes_to_common_format(real_logging, capsys):
     assert "GET / 200" not in err
 
 
+def test_uvicorn_color_copy_dropped(real_logging, capsys):
+    real_logging()
+    logging.getLogger("uvicorn.error").info("started", extra={"color_message": "\x1b[36mstarted"})
+    [entry] = [json.loads(line) for line in capsys.readouterr().err.splitlines()]
+    assert entry["event"] == "started"
+    assert "color_message" not in entry
+
+
 async def test_request_line_logger_name_is_stable(client, real_logging, capsys):
     # по имени логгера ищут в логах: оно не должно зависеть от имени файла
     real_logging()
