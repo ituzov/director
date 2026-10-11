@@ -62,3 +62,20 @@ async def save_meta_app(session: AsyncSession, *, app_id: str, app_secret: str |
     # app_id не секрет, сам секрет в лог не идёт: только факт замены
     log.info("meta_app.saved", app_id=app_id, first=first, secret_replaced=app_secret is not None)
     return meta_app
+
+
+async def verify_webhook(session: AsyncSession, *, mode: str | None, token: str | None) -> bool:
+    """Проверка адреса вебхука из кабинета Meta: подписка и наш маркер."""
+    meta_app = await repository.get_meta_app(session)
+    if meta_app is None:
+        reason = "no_app"
+    elif mode != "subscribe":
+        reason = "bad_mode"
+    # сравнение за постоянное время: по скорости ответа маркер не подобрать
+    elif token is None or not secrets.compare_digest(token, meta_app.verify_token):
+        reason = "bad_token"
+    else:
+        log.info("webhook.verified")
+        return True
+    log.warning("webhook.verify_failed", reason=reason)
+    return False

@@ -22,6 +22,7 @@ app = FastAPI(
 )
 app.include_router(identity.router)
 app.include_router(instagram.router)
+app.include_router(instagram.webhook_router)
 app.middleware("http")(log_requests)
 
 

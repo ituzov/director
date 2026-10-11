@@ -5,11 +5,12 @@
 """
 
 from app.instagram.exceptions import InstagramError
-from app.instagram.routes import instagram_error_handler, router
+from app.instagram.routes import instagram_error_handler, router, webhook_router
 
 __all__ = [
     # HTTP модуля, подключает main
     "InstagramError",
     "instagram_error_handler",
     "router",
+    "webhook_router",
 ]
