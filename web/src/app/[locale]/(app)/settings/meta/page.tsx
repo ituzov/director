@@ -1,4 +1,4 @@
-import { KeyRound } from "lucide-react";
+import { KeyRound, Link2 } from "lucide-react";
 import { notFound } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { cache, Suspense } from "react";
@@ -9,22 +9,24 @@ import type { MetaApp } from "@/lib/meta-app";
 import { getCurrentUser, getToken } from "@/lib/session";
 
 import { MetaAppForm, MetaAppFormSkeleton } from "./_components/meta-app-form";
-import { MetaStrings } from "./_components/meta-strings";
+import { MetaStrings, MetaStringsSkeleton } from "./_components/meta-strings";
 
 export default function MetaAppPage() {
   const t = useTranslations("MetaApp");
 
   return (
     <Page>
-      {/* шапка панели статическая и видна сразу, форма приезжает потоком */}
+      {/* шапки панелей статические и видны сразу, содержимое приезжает потоком */}
       <Panel icon={KeyRound} title={t("keys")} description={t("description")}>
         <Suspense fallback={<MetaAppFormSkeleton />}>
           <MetaAppKeys />
         </Suspense>
       </Panel>
-      <Suspense>
-        <MetaAppStrings />
-      </Suspense>
+      <Panel icon={Link2} title={t("strings.title")} description={t("strings.description")}>
+        <Suspense fallback={<MetaStringsSkeleton />}>
+          <MetaAppStrings />
+        </Suspense>
+      </Panel>
     </Page>
   );
 }
@@ -54,6 +56,5 @@ async function MetaAppKeys() {
 
 async function MetaAppStrings() {
   const metaApp = await getMetaApp();
-  // строки появляются после первого сохранения: до него нет маркера
-  return metaApp && <MetaStrings metaApp={metaApp} />;
+  return <MetaStrings metaApp={metaApp} />;
 }

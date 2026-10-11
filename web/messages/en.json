@@ -77,6 +77,7 @@
     "strings": {
       "title": "Values for the Meta dashboard",
       "description": "Copy each value into the Meta dashboard, in the place named below it.",
+      "pending": "These values appear once the keys are saved.",
       "webhookUrl": "Webhook URL",
       "webhookUrlHint": "Instagram → Webhooks → Callback URL.",
       "verifyToken": "Verify token",

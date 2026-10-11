@@ -8,10 +8,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-type Props = { label: string; value: string; hint?: string };
+type Props = { label: string; value?: string; hint?: string; disabled?: boolean };
 
-/** Строка, которую человек переносит куда-то ещё: только чтение и кнопка «Скопировать». */
-export function CopyField({ label, value, hint }: Props) {
+/** Строка, которую человек переносит куда-то ещё: только чтение и кнопка «Скопировать».
+ * Без значения поле выключено: строка будет, но позже. */
+export function CopyField({ label, value = "", hint, disabled = !value }: Props) {
   const t = useTranslations("Common");
   const id = useId();
   const [copied, setCopied] = useState(false);
@@ -31,6 +32,7 @@ export function CopyField({ label, value, hint }: Props) {
           id={id}
           value={value}
           readOnly
+          disabled={disabled}
           // клик по полю выделяет всё: удобно копировать и без кнопки
           onFocus={(event) => event.currentTarget.select()}
           className="font-mono"
@@ -42,6 +44,7 @@ export function CopyField({ label, value, hint }: Props) {
           size="icon"
           className="size-10 md:size-9"
           aria-label={copied ? t("copied") : t("copy")}
+          disabled={disabled}
           onClick={copy}
         >
           {copied ? <Check /> : <Copy />}
