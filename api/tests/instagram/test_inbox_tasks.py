@@ -71,6 +71,7 @@ async def test_comment_goes_to_journal_and_handler(session, account):
 
     async def on_comment(s, comment):
         got.append(comment)
+        return True
 
     handlers = instagram.InboxHandlers(on_comment=on_comment)
     assert await instagram.process_inbox_event(session, handlers) is True

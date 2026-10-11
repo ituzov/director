@@ -7,7 +7,7 @@ from contextlib import suppress
 
 import structlog
 
-from app import instagram
+from app import autoreplies, instagram
 from app.config import settings
 from app.core.logging import setup_logging
 from app.db import SessionLocal, engine
@@ -16,8 +16,8 @@ from app.db import SessionLocal, engine
 # Meta (1–9 с) почти незаметны, а пустой запрос по частичному индексу копеечный
 POLL_SECONDS = 2
 
-# кому отдавать разобранное. Автоответов ещё нет: комменты только в журнал
-HANDLERS = instagram.InboxHandlers()
+# кому отдавать разобранное из входящих
+HANDLERS = instagram.InboxHandlers(on_comment=autoreplies.handle_comment)
 
 log = structlog.get_logger("app.worker")
 

@@ -30,6 +30,7 @@ class CommentRef:
 class InboxHandlers:
     """Кому отдать разобранное из входящих. Собирает worker, порядок
     «сначала автоответы, потом ассистент» тоже его. None: этот вид пока
-    никому не нужен, событие просто отмечается разобранным."""
+    никому не нужен, событие просто отмечается разобранным.
+    Обработчик возвращает True, если взял событие себе."""
 
-    on_comment: Callable[[AsyncSession, CommentRef], Awaitable[None]] | None = None
+    on_comment: Callable[[AsyncSession, CommentRef], Awaitable[bool]] | None = None

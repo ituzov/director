@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 
 from sqlalchemy import func, select
 
-from app import worker
+from app import autoreplies, worker
 from app.instagram import webhook
 from app.instagram.models import InboxEvent
 
@@ -52,6 +52,5 @@ async def test_one_event_per_step(session):
     assert await worker.step(sessions(session)) is False
 
 
-def test_nobody_gets_events_yet():
-    # автоответов ещё нет; появятся, и здесь будет autoreplies.handle_comment
-    assert worker.HANDLERS.on_comment is None
+def test_comments_go_to_autoreplies():
+    assert worker.HANDLERS.on_comment is autoreplies.handle_comment
