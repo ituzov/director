@@ -132,5 +132,33 @@
       "MetaAppRequired": "Save the keys in “Meta app” first.",
       "PublicUrlRequired": "The server address (PUBLIC_URL) isn't set, so Instagram has nowhere to send you back."
     }
+  },
+  "Privacy": {
+    "title": "Privacy Policy",
+    "intro": "This site runs Director, a tool that automatically replies to comments and messages on Instagram. This page explains what data it receives and what happens to it. The data controller is the owner of the Instagram account you interacted with.",
+    "data": {
+      "title": "What data we receive",
+      "body": "When you comment on a post or send a direct message to an account connected to Director, Instagram passes us, through the Meta API, the text of the comment or message, any attachments you sent, your Instagram ID and username, and the time. We also receive read receipts for our messages and taps on buttons in them. We have no access to your followers, posts or contacts."
+    },
+    "purpose": {
+      "title": "Why",
+      "body": "To reply to you automatically, and so the account owner can see statistics: how many people wrote and how many of them got a reply. The data is not sold or used for advertising."
+    },
+    "storage": {
+      "title": "Where it is stored",
+      "body": "On a server managed by the account owner. The authors of the Director software have no access to it."
+    },
+    "retention": {
+      "title": "How long we keep it",
+      "body": "Incoming events are deleted one week after processing. The reply log is kept for one year, but text, IDs and usernames are erased from it after 90 days."
+    },
+    "sharing": {
+      "title": "Who we share it with",
+      "body": "Only Meta, through its API, when we send you a reply."
+    },
+    "deletion": {
+      "title": "How to delete your data",
+      "body": "Send a direct message to the account you interacted with and ask to delete your data. We will delete everything linked to your Instagram ID within 30 days and let you know when it's done."
+    }
   }
 }

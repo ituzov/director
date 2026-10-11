@@ -7,7 +7,7 @@ import { SESSION_COOKIE } from "@/lib/session-cookie";
 const handleI18nRouting = createMiddleware(routing);
 
 // страницы, куда пускаем без сессии
-const PUBLIC = ["/login", "/setup"];
+const PUBLIC = ["/login", "/setup", "/privacy"];
 
 export default function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
