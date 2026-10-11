@@ -7,3 +7,19 @@ class InstagramError(Exception):
 
 class AppSecretRequired(InstagramError):
     """Приложение Meta сохраняют впервые, а секрета нет."""
+
+
+class MetaAppRequired(InstagramError):
+    """Подключать аккаунты можно только после ключей приложения Meta."""
+
+
+class PublicUrlRequired(InstagramError):
+    """Без PUBLIC_URL нет адреса возврата: Instagram некуда вернуть человека."""
+
+
+class InvalidOAuthState(InstagramError):
+    """Пропуск входа не наш, просрочен или выдан другому пользователю."""
+
+
+class OAuthFailed(InstagramError):
+    """Meta ответила ошибкой на одном из шагов подключения."""

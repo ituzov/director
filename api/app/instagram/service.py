@@ -5,7 +5,9 @@ import hmac
 import json
 import secrets
 import ssl
-from datetime import UTC, datetime
+import uuid
+from datetime import UTC, datetime, timedelta
+from urllib.parse import urlencode
 
 import httpx
 import structlog
@@ -14,10 +16,16 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.core import crypto
-from app.instagram import repository, webhook
-from app.instagram.exceptions import AppSecretRequired
-from app.instagram.models import MetaApp
+from app.core import crypto, signing
+from app.instagram import graph, repository, webhook
+from app.instagram.exceptions import (
+    AppSecretRequired,
+    InvalidOAuthState,
+    MetaAppRequired,
+    OAuthFailed,
+    PublicUrlRequired,
+)
+from app.instagram.models import Account, MetaApp
 
 # имя логгера постоянное, по нему ищут в логах: при переезде файла не меняется
 log = structlog.get_logger("app.instagram")
@@ -206,3 +214,108 @@ async def receive_webhook(session: AsyncSession, *, body: bytes, signature: str 
         return True
     log.warning("webhook.rejected", reason=reason)
     return False
+
+
+# что просим у человека на экране Instagram
+SCOPES = [
+    "instagram_business_basic",
+    "instagram_business_manage_comments",
+    "instagram_business_manage_messages",
+]
+# на что подписываем аккаунт: остальное включим вместе с фичами
+FIELDS = ["comments", "messages", "messaging_postbacks", "messaging_seen"]
+# пропуск входа живёт 10 минут: дольше человек на экране Instagram не сидит
+STATE_PURPOSE = "instagram-oauth"
+STATE_MAX_AGE = 600
+AUTHORIZE_URL = "https://www.instagram.com/oauth/authorize"
+
+
+async def oauth_url(session: AsyncSession, *, user_id: uuid.UUID) -> str:
+    """Адрес экрана Instagram, куда уводим человека подключать аккаунт."""
+    meta_app = await repository.get_meta_app(session)
+    if meta_app is None:
+        raise MetaAppRequired
+    redirect_uri = public_url(OAUTH_CALLBACK_PATH)
+    if redirect_uri is None:
+        raise PublicUrlRequired
+    # соль: два входа подряд дают разные пропуски
+    state = signing.sign({"u": str(user_id), "n": secrets.token_hex(8)}, purpose=STATE_PURPOSE)
+    query = urlencode(
+        {
+            "client_id": meta_app.app_id,
+            "redirect_uri": redirect_uri,
+            "response_type": "code",
+            "scope": ",".join(SCOPES),
+            "state": state,
+        }
+    )
+    return f"{AUTHORIZE_URL}?{query}"
+
+
+async def connect_account(
+    session: AsyncSession, *, user_id: uuid.UUID, code: str, state: str
+) -> Account:
+    """Возврат с экрана Instagram: код в долгий токен, подписка на вебхуки, аккаунт в базу."""
+    try:
+        data = signing.unsign(state, purpose=STATE_PURPOSE, max_age=STATE_MAX_AGE)
+    except signing.SignatureError:
+        raise InvalidOAuthState from None
+    # пропуск выдан другому пользователю: кто-то подсунул чужую ссылку возврата
+    if data.get("u") != str(user_id):
+        raise InvalidOAuthState
+
+    meta_app = await repository.get_meta_app(session)
+    redirect_uri = public_url(OAUTH_CALLBACK_PATH)
+    if meta_app is None or redirect_uri is None:
+        raise InvalidOAuthState
+    app_secret = crypto.decrypt(meta_app.app_secret_encrypted)
+
+    step = "exchange_code"
+    try:
+        async with _http() as http:
+            short = await graph.exchange_code(
+                http,
+                app_id=meta_app.app_id,
+                app_secret=app_secret,
+                redirect_uri=redirect_uri,
+                code=code,
+            )
+            step = "long_lived_token"
+            long = await graph.long_lived_token(
+                http, app_secret=app_secret, short_token=short.access_token
+            )
+            step = "get_me"
+            me = await graph.get_me(http, token=long.access_token)
+            # подписка до записи: упала, значит аккаунта нет, и человек просто повторит.
+            # Наоборот остался бы «подключённый» аккаунт, на который не приходят события
+            step = "subscribe"
+            await graph.subscribe(http, token=long.access_token, fields=FIELDS)
+    except (graph.GraphError, httpx.HTTPError) as exc:
+        # текст ошибки Meta не пишем: только шаг, код и тип
+        log.warning(
+            "account.connect_failed",
+            step=step,
+            status=getattr(exc, "status", None),
+            code=getattr(exc, "code", None),
+            type=getattr(exc, "type", None) or type(exc).__name__,
+        )
+        raise OAuthFailed from None
+
+    account = await repository.upsert_account(
+        session,
+        ig_user_id=me.user_id,
+        username=me.username,
+        token_encrypted=crypto.encrypt(long.access_token),
+        token_expires_at=datetime.now(UTC) + timedelta(seconds=long.expires_in),
+        connected_by=user_id,
+    )
+    await session.commit()
+    # совпадает ли id из /me с entry[].id вебхуков, проверим вживую: оба id в лог
+    log.info(
+        "account.connected",
+        ig_user_id=me.user_id,
+        oauth_user_id=short.user_id,
+        username=me.username,
+        permissions=short.permissions,
+    )
+    return account

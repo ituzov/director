@@ -8,9 +8,23 @@ from fastapi.responses import JSONResponse, PlainTextResponse
 from app import identity
 from app.db import SessionDep
 from app.instagram import service
-from app.instagram.exceptions import AppSecretRequired, InstagramError
-from app.instagram.models import MetaApp
-from app.instagram.schemas import MetaAppIn, MetaAppOut, WebhookCheckOut
+from app.instagram.exceptions import (
+    AppSecretRequired,
+    InstagramError,
+    InvalidOAuthState,
+    MetaAppRequired,
+    OAuthFailed,
+    PublicUrlRequired,
+)
+from app.instagram.models import Account, MetaApp
+from app.instagram.schemas import (
+    AccountOut,
+    MetaAppIn,
+    MetaAppOut,
+    OAuthCallbackIn,
+    OAuthUrlOut,
+    WebhookCheckOut,
+)
 
 router = APIRouter(prefix="/instagram", tags=["instagram"])
 # адрес вебхука постоянный и без префикса модуля: его владелец вписал в кабинет Meta
@@ -18,6 +32,10 @@ webhook_router = APIRouter(tags=["instagram"])
 
 _STATUS = {
     AppSecretRequired: status.HTTP_422_UNPROCESSABLE_CONTENT,
+    MetaAppRequired: status.HTTP_409_CONFLICT,
+    PublicUrlRequired: status.HTTP_409_CONFLICT,
+    InvalidOAuthState: status.HTTP_400_BAD_REQUEST,
+    OAuthFailed: status.HTTP_502_BAD_GATEWAY,
 }
 
 
@@ -57,6 +75,31 @@ async def put_meta_app(
 async def check_webhook(session: SessionDep, owner: identity.CurrentOwner) -> WebhookCheckOut:
     error = await service.check_webhook(session)
     return WebhookCheckOut(ok=error is None, error=error)
+
+
+def _account_out(account: Account) -> AccountOut:
+    return AccountOut(
+        id=account.id,
+        ig_user_id=account.ig_user_id,
+        username=account.username,
+        status=account.status,
+        connected_at=account.connected_at,
+    )
+
+
+@router.get("/oauth/url")
+async def get_oauth_url(session: SessionDep, user: identity.CanConnectAccounts) -> OAuthUrlOut:
+    return OAuthUrlOut(url=await service.oauth_url(session, user_id=user.id))
+
+
+@router.post("/oauth/callback")
+async def oauth_callback(
+    body: OAuthCallbackIn, session: SessionDep, user: identity.CanConnectAccounts
+) -> AccountOut:
+    account = await service.connect_account(
+        session, user_id=user.id, code=body.code, state=body.state
+    )
+    return _account_out(account)
 
 
 @webhook_router.get(service.WEBHOOK_PATH, response_class=PlainTextResponse)

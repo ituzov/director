@@ -1,5 +1,6 @@
 """Схемы HTTP: что ручки instagram принимают и отдают. Модели наружу не отдаём."""
 
+import uuid
 from datetime import datetime
 from typing import Annotated
 
@@ -38,3 +39,23 @@ class WebhookCheckOut(BaseModel):
     ok: bool
     # None при ok; иначе код для текста в админке, список в service.check_webhook
     error: str | None = None
+
+
+class OAuthUrlOut(BaseModel):
+    url: str
+
+
+class OAuthCallbackIn(BaseModel):
+    # ограничения от мусора: настоящие код и state намного короче
+    code: Annotated[str, StringConstraints(min_length=1, max_length=1024)]
+    state: Annotated[str, StringConstraints(min_length=1, max_length=512)]
+
+
+class AccountOut(BaseModel):
+    """Токена здесь нет и не будет."""
+
+    id: uuid.UUID
+    ig_user_id: str
+    username: str
+    status: str
+    connected_at: datetime
