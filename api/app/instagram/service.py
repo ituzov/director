@@ -1,5 +1,8 @@
 """Сценарии instagram. Одна функция это одна операция и один commit."""
 
+import hashlib
+import hmac
+import json
 import secrets
 import ssl
 from datetime import UTC, datetime
@@ -12,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.core import crypto
-from app.instagram import repository
+from app.instagram import repository, webhook
 from app.instagram.exceptions import AppSecretRequired
 from app.instagram.models import MetaApp
 
@@ -150,3 +153,56 @@ async def check_webhook(session: AsyncSession) -> str | None:
     else:
         log.warning("webhook.check_failed", error=error)
     return error
+
+
+def _signature_ok(body: bytes, header: str, secret: str) -> bool:
+    # HMAC от сырых байтов тела: любое переформатирование JSON ломает подпись
+    expected = "sha256=" + hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+    # в байтах: строка заголовка может быть не ASCII, и тогда compare_digest падает
+    return hmac.compare_digest(expected.encode(), header.encode("latin-1"))
+
+
+async def receive_webhook(session: AsyncSession, *, body: bytes, signature: str | None) -> bool:
+    """Принять вебхук Meta во входящие. False, если он не от Meta (подпись не наша).
+    Разбирает worker: здесь только проверка, отбор и запись, чтобы ответить быстро."""
+    meta_app = await repository.get_meta_app(session)
+    if meta_app is None:
+        reason = "no_app"
+    elif not signature:
+        reason = "no_signature"
+    elif not _signature_ok(body, signature, crypto.decrypt(meta_app.app_secret_encrypted)):
+        reason = "bad_signature"
+    else:
+        try:
+            payload = json.loads(body)
+        except ValueError:
+            # подпись наша, а тело не JSON: повтор не поможет, принимаем пустым
+            log.warning("webhook.bad_json")
+            payload = None
+        parsed = webhook.parse_webhook(payload)
+        # id запроса едет с событием: worker поднимет его в свои логи
+        request_id = structlog.contextvars.get_contextvars().get("request_id")
+        stored = await repository.add_inbox_events(
+            session,
+            [
+                {
+                    "ig_account_id": item.ig_account_id,
+                    "kind": item.kind,
+                    "dedup_key": item.dedup_key,
+                    "payload": item.payload,
+                    "request_id": request_id,
+                }
+                for item in parsed.items
+            ],
+        )
+        # вся пачка одним commit: легла целиком или никак, и тогда Meta повторит
+        await session.commit()
+        log.info(
+            "webhook.received",
+            events=len(parsed.items),
+            stored=stored,
+            skipped=sorted(set(parsed.skipped)),
+        )
+        return True
+    log.warning("webhook.rejected", reason=reason)
+    return False

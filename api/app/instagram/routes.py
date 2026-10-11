@@ -2,7 +2,7 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Query, Request, status
+from fastapi import APIRouter, HTTPException, Query, Request, Response, status
 from fastapi.responses import JSONResponse, PlainTextResponse
 
 from app import identity
@@ -70,3 +70,12 @@ async def verify_webhook(
     if not await service.verify_webhook(session, mode=mode, token=token):
         raise HTTPException(status.HTTP_403_FORBIDDEN)
     return challenge
+
+
+@webhook_router.post(service.WEBHOOK_PATH)
+async def receive_webhook(request: Request, session: SessionDep) -> Response:
+    # тело читаем сырым: подпись считается от байтов, а не от разобранного JSON
+    accepted = await service.receive_webhook(
+        session, body=await request.body(), signature=request.headers.get("x-hub-signature-256")
+    )
+    return Response(status_code=status.HTTP_200_OK if accepted else status.HTTP_403_FORBIDDEN)
