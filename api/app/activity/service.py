@@ -2,6 +2,7 @@
 
 import re
 import uuid
+from datetime import datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,9 +21,13 @@ def record(
     person_id: str | None = None,
     comment_id: str | None = None,
     data: dict | None = None,
+    occurred_at: datetime | None = None,
 ) -> None:
     """Записать событие в сессии того, кто действует. Без commit: транзакцией
-    владеет вызывающий, и при откате запись уйдёт вместе с действием."""
+    владеет вызывающий, и при откате запись уйдёт вместе с действием.
+
+    occurred_at: когда это случилось, если не сейчас. worker разбирает коммент
+    позже, чем его написали, а в журнале нужно время коммента."""
     if not _KIND.fullmatch(kind):
         raise ValueError(f"вид события не в форме модуль.действие: {kind!r}")
     repository.add_event(
@@ -33,4 +38,5 @@ def record(
         person_id=person_id,
         comment_id=comment_id,
         data=data or {},
+        occurred_at=occurred_at,
     )

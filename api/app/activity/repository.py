@@ -2,6 +2,7 @@
 владеет вызывающий."""
 
 import uuid
+from datetime import datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,6 +18,7 @@ def add_event(
     person_id: str | None,
     comment_id: str | None,
     data: dict,
+    occurred_at: datetime | None,
 ) -> None:
     session.add(
         Event(
@@ -26,5 +28,7 @@ def add_event(
             person_id=person_id,
             comment_id=comment_id,
             data=data,
+            # None SQLAlchemy в INSERT не кладёт, время ставит now() базы
+            occurred_at=occurred_at,
         )
     )

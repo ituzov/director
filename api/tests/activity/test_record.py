@@ -1,6 +1,7 @@
 """Запись в журнал: идёт в транзакции вызывающего, форму вида события держат код и база."""
 
 import uuid
+from datetime import UTC, datetime
 
 import pytest
 from sqlalchemy import select
@@ -34,6 +35,15 @@ async def test_recorded_with_commit(session):
     )
     assert event.data == {"text": "гайд"}
     assert event.occurred_at is not None
+
+
+async def test_occurred_at_given(session):
+    # коммент написали раньше, чем worker до него добрался: в журнале время коммента
+    written = datetime(2026, 1, 2, 3, 4, 5, tzinfo=UTC)
+    activity.record(session, "comment.received", occurred_at=written)
+    await session.commit()
+    [event] = await events(session)
+    assert event.occurred_at == written
 
 
 async def test_data_defaults_to_empty(session):
