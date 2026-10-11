@@ -112,6 +112,52 @@ async def subscribe(http: httpx.AsyncClient, *, token: str, fields: list[str]) -
         raise GraphError(200, type_="subscribe_not_confirmed")
 
 
+async def send_message(
+    http: httpx.AsyncClient,
+    *,
+    token: str,
+    ig_user_id: str,
+    recipient: dict[str, str],
+    text: str,
+    button: dict[str, str] | None = None,
+) -> None:
+    """Сообщение в директ. recipient {"comment_id"} это Private Reply на коммент,
+    {"id"} обычное сообщение человеку. С кнопкой уходит шаблоном button."""
+    if button:
+        message: dict[str, Any] = {
+            "attachment": {
+                "type": "template",
+                "payload": {
+                    "template_type": "button",
+                    "text": text,
+                    "buttons": [{"type": "postback", **button}],
+                },
+            }
+        }
+    else:
+        message = {"text": text}
+    _json(
+        await http.post(
+            f"{GRAPH}/{VERSION}/{ig_user_id}/messages",
+            params={"access_token": token},
+            json={"recipient": recipient, "message": message},
+        )
+    )
+
+
+async def reply_to_comment(
+    http: httpx.AsyncClient, *, token: str, comment_id: str, text: str
+) -> None:
+    """Публичный ответ под комментом."""
+    _json(
+        await http.post(
+            f"{GRAPH}/{VERSION}/{comment_id}/replies",
+            params={"access_token": token},
+            json={"message": text},
+        )
+    )
+
+
 def _json(response: httpx.Response) -> dict[str, Any]:
     try:
         data = response.json()

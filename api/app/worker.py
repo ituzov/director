@@ -18,14 +18,20 @@ POLL_SECONDS = 2
 
 # кому отдавать разобранное из входящих
 HANDLERS = instagram.InboxHandlers(on_comment=autoreplies.handle_comment)
+# кому сообщать итог отправки исходящих; автоответы подключатся следующим шагом
+ON_RESULT = None
 
 log = structlog.get_logger("app.worker")
 
 
 async def step(make_session=SessionLocal) -> bool:
-    """Один шаг: одно входящее в своей сессии и транзакции. False: делать нечего."""
+    """Один шаг: одно входящее и одно исходящее, каждое в своей сессии и транзакции.
+    False: делать нечего ни там, ни там."""
     async with make_session() as session:
-        return await instagram.process_inbox_event(session, HANDLERS)
+        received = await instagram.process_inbox_event(session, HANDLERS)
+    async with make_session() as session:
+        sent = await instagram.send_outbox_task(session, ON_RESULT)
+    return received or sent
 
 
 async def main() -> None:

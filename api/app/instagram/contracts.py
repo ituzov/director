@@ -46,6 +46,19 @@ class Button:
 
 
 @dataclass(frozen=True, slots=True)
+class OutboxResult:
+    """Чем кончилась отправка исходящего. Уходит тому, кто его поставил, по ref."""
+
+    ref: str
+    # private_reply, message, comment_reply
+    kind: str
+    # sent, failed, expired
+    outcome: str
+    # код ошибки Meta или наша причина; None у sent
+    reason: str | None
+
+
+@dataclass(frozen=True, slots=True)
 class InboxHandlers:
     """Кому отдать разобранное из входящих. Собирает worker, порядок
     «сначала автоответы, потом ассистент» тоже его. None: этот вид пока

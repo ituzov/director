@@ -1,17 +1,20 @@
 """Задачи worker в instagram. Каждая работает в переданной сессии и сама
 коммитит: одна транзакция на одно событие."""
 
+from collections.abc import Awaitable, Callable
 from datetime import timedelta
 from typing import Any
 
+import httpx
 import structlog
 from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import activity
-from app.instagram import repository, webhook
-from app.instagram.contracts import CommentRef, InboxHandlers
-from app.instagram.models import Account, InboxEvent
+from app.core import crypto
+from app.instagram import graph, repository, webhook
+from app.instagram.contracts import CommentRef, InboxHandlers, OutboxResult
+from app.instagram.models import Account, InboxEvent, OutboxTask
 
 log = structlog.get_logger("app.instagram")
 
@@ -113,6 +116,154 @@ async def _record_failure(session: AsyncSession, event_id: Any, error: Exception
         event.retry_at = func.now() + RETRY_DELAYS[event.attempts - 1]
         log.warning("inbox.retry", attempts=event.attempts, exc_info=error)
     await session.commit()
+
+
+# --- исходящие ---
+
+OnResult = Callable[[AsyncSession, OutboxResult], Awaitable[None]]
+
+# лимит Meta на Private Reply в час на аккаунт
+PRIVATE_REPLIES_PER_HOUR = 750
+SEND_TIMEOUT = 15.0
+# пауза перед повтором отправки: Meta легла или притормозила нас
+SEND_RETRY_DELAYS = (
+    timedelta(minutes=1),
+    timedelta(minutes=10),
+    timedelta(hours=1),
+    timedelta(hours=1),
+)
+# коды ограничения частоты у Graph API: это временно, повторяем позже.
+# Проверить вживую, какие коды отдаёт Instagram
+RATE_LIMIT_CODES = {4, 17, 32, 613}
+
+
+def _http() -> httpx.AsyncClient:
+    # в тестах подменяется: в сеть тесты не ходят
+    return httpx.AsyncClient(timeout=SEND_TIMEOUT)
+
+
+async def send_outbox_task(session: AsyncSession, on_result: OnResult | None = None) -> bool:
+    """Отправить одно исходящее, которому пора. False: отправлять нечего.
+
+    Итог отправки фиксируется отдельным коммитом до того, как его узнает
+    вызывающий: упади обработчик итога, письмо всё равно не уйдёт второй раз."""
+    task = await repository.claim_outbox_task(session)
+    if task is None:
+        return False
+    task_id, ref, kind = task.id, task.ref, task.kind
+    with structlog.contextvars.bound_contextvars(request_id=task.request_id):
+        try:
+            result = await _send(session, task)
+            await session.commit()
+        except Exception as error:
+            # ошибка нашего кода, а не Meta: откат и повтор, как у входящих
+            await session.rollback()
+            await _record_send_failure(session, task_id, error)
+            return True
+        if result is not None and ref is not None and on_result is not None:
+            try:
+                await on_result(session, OutboxResult(ref, kind, *result))
+                await session.commit()
+            except Exception:
+                await session.rollback()
+                log.exception("outbox.result_failed", kind=kind)
+    return True
+
+
+async def _send(session: AsyncSession, task: OutboxTask) -> tuple[str, str | None] | None:
+    """Попытка отправки. Итог (outcome, reason), если задача завершена; None, если
+    отложена до run_at."""
+    expired = task.expires_at is not None and task.expires_at <= await _now(session)
+    if expired:
+        return _finish_task(task, "expired", None)
+
+    account = await repository.get_account(session, task.account_id)
+    if account is None or account.status != "active" or not account.token_encrypted:
+        return _finish_task(task, "failed", "account_inactive")
+
+    if task.kind == "private_reply":
+        count, oldest = await repository.private_replies_last_hour(session, account.id)
+        if count >= PRIVATE_REPLIES_PER_HOUR:
+            # не ждём, а переносим: остальные аккаунты не стоят за этим в очереди
+            task.run_at = oldest + timedelta(hours=1)
+            log.info("outbox.deferred", kind=task.kind, reason="rate_limit")
+            return None
+
+    token = crypto.decrypt(account.token_encrypted)
+    try:
+        async with _http() as http:
+            await _call_meta(http, task, token=token, ig_user_id=account.ig_user_id)
+    except (graph.GraphError, httpx.HTTPError) as error:
+        return _meta_failed(task, error)
+    log.info("outbox.sent", kind=task.kind, attempts=task.attempts)
+    return _finish_task(task, "sent", None)
+
+
+async def _call_meta(
+    http: httpx.AsyncClient, task: OutboxTask, *, token: str, ig_user_id: str
+) -> None:
+    payload = task.payload
+    if task.kind == "comment_reply":
+        await graph.reply_to_comment(
+            http, token=token, comment_id=payload["comment_id"], text=payload["text"]
+        )
+        return
+    recipient = (
+        {"comment_id": payload["comment_id"]}
+        if task.kind == "private_reply"
+        else {"id": payload["recipient_id"]}
+    )
+    await graph.send_message(
+        http,
+        token=token,
+        ig_user_id=ig_user_id,
+        recipient=recipient,
+        text=payload["text"],
+        button=payload.get("button"),
+    )
+
+
+def _meta_failed(task: OutboxTask, error: Exception) -> tuple[str, str | None] | None:
+    """Meta ответила ошибкой или не ответила. Временное повторяем, окончательное нет."""
+    if isinstance(error, graph.GraphError):
+        reason = str(error.code if error.code is not None else error.status)
+        temporary = error.status >= 500 or error.status == 429 or error.code in RATE_LIMIT_CODES
+    else:
+        # сеть: таймаут, обрыв
+        reason, temporary = type(error).__name__, True
+    task.attempts += 1
+    task.reason = reason[:64]
+    if temporary and task.attempts < MAX_ATTEMPTS:
+        task.run_at = func.now() + SEND_RETRY_DELAYS[task.attempts - 1]
+        log.warning("outbox.retry", kind=task.kind, attempts=task.attempts, reason=reason)
+        return None
+    log.warning("outbox.failed", kind=task.kind, attempts=task.attempts, reason=reason)
+    return _finish_task(task, "failed", reason)
+
+
+async def _record_send_failure(session: AsyncSession, task_id: Any, error: Exception) -> None:
+    task = await session.get(OutboxTask, task_id, with_for_update=True)
+    task.attempts += 1
+    task.reason = type(error).__name__[:64]
+    if task.attempts >= MAX_ATTEMPTS:
+        _finish_task(task, "failed", task.reason)
+        log.error("outbox.failed", attempts=task.attempts, exc_info=error)
+    else:
+        task.run_at = func.now() + SEND_RETRY_DELAYS[task.attempts - 1]
+        log.warning("outbox.retry", attempts=task.attempts, exc_info=error)
+    await session.commit()
+
+
+def _finish_task(task: OutboxTask, outcome: str, reason: str | None) -> tuple[str, str | None]:
+    task.outcome = outcome
+    task.reason = reason
+    task.finished_at = func.now()
+    return outcome, reason
+
+
+async def _now(session: AsyncSession):
+    # время базы, а не процесса: сроки задач тоже считала база
+    return await session.scalar(func.now().select())
 
 
 def _finish(event: InboxEvent, outcome: str, reason: str | None) -> None:

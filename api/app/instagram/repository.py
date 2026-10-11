@@ -2,13 +2,13 @@
 владеет сервис."""
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.instagram.models import Account, InboxEvent, MetaApp
+from app.instagram.models import Account, InboxEvent, MetaApp, OutboxTask
 
 
 async def get_meta_app(session: AsyncSession) -> MetaApp | None:
@@ -37,6 +37,34 @@ async def claim_inbox_event(session: AsyncSession) -> InboxEvent | None:
         .limit(1)
         .with_for_update(skip_locked=True)
     )
+
+
+async def claim_outbox_task(session: AsyncSession) -> OutboxTask | None:
+    """Самое раннее исходящее, которому пора. Запирается до конца транзакции."""
+    return await session.scalar(
+        select(OutboxTask)
+        .where(OutboxTask.outcome.is_(None), OutboxTask.run_at <= func.now())
+        .order_by(OutboxTask.run_at)
+        .limit(1)
+        .with_for_update(skip_locked=True)
+    )
+
+
+async def private_replies_last_hour(
+    session: AsyncSession, account_id: uuid.UUID
+) -> tuple[int, datetime | None]:
+    """Сколько Private Reply аккаунт отправил за час и когда самый ранний из них."""
+    count, oldest = (
+        await session.execute(
+            select(func.count(), func.min(OutboxTask.finished_at)).where(
+                OutboxTask.account_id == account_id,
+                OutboxTask.kind == "private_reply",
+                OutboxTask.outcome == "sent",
+                OutboxTask.finished_at > func.now() - timedelta(hours=1),
+            )
+        )
+    ).one()
+    return count, oldest
 
 
 async def get_account(session: AsyncSession, account_id: uuid.UUID) -> Account | None:

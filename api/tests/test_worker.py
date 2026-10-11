@@ -3,11 +3,13 @@
 import uuid
 from contextlib import asynccontextmanager
 
+import httpx
 from sqlalchemy import func, select
 
-from app import autoreplies, worker
-from app.instagram import webhook
-from app.instagram.models import InboxEvent
+from app import autoreplies, instagram, worker
+from app.core import crypto
+from app.instagram import tasks, webhook
+from app.instagram.models import Account, InboxEvent
 
 
 def sessions(session):
@@ -54,3 +56,22 @@ async def test_one_event_per_step(session):
 
 def test_comments_go_to_autoreplies():
     assert worker.HANDLERS.on_comment is autoreplies.handle_comment
+
+
+async def test_step_sends_outbox(session, monkeypatch):
+    # входящих нет, а исходящее есть: шаг занят, не спим
+    account = Account(
+        ig_user_id="17841400000000000",
+        username="shop",
+        token_encrypted=crypto.encrypt("t"),
+        connected_by=uuid.uuid7(),
+    )
+    session.add(account)
+    await session.flush()
+    await instagram.enqueue_comment_reply(session, account_id=account.id, comment_id="c1", text="x")
+    await session.commit()
+    transport = httpx.MockTransport(lambda request: httpx.Response(200, json={"id": "r1"}))
+    monkeypatch.setattr(tasks, "_http", lambda: httpx.AsyncClient(transport=transport))
+
+    assert await worker.step(sessions(session)) is True
+    assert await worker.step(sessions(session)) is False
