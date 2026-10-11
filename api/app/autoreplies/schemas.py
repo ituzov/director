@@ -76,6 +76,12 @@ class AutoreplyIn(AutoreplyForm):
     account_id: uuid.UUID
 
 
+class EnabledIn(BaseModel):
+    """Переключатель в списке: только вкл/выкл, без всей формы."""
+
+    enabled: bool
+
+
 class AutoreplyOut(BaseModel):
     id: uuid.UUID
     account_id: uuid.UUID

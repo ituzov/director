@@ -11,6 +11,10 @@ class AutoreplyNotFound(AutoreplyError):
     """Такого автоответа нет."""
 
 
+class AutoreplyArchived(AutoreplyError):
+    """Архивный не правят и не включают: сначала вернуть из архива."""
+
+
 class AccountUnavailable(AutoreplyError):
     """Аккаунта нет или он отключён: автоответу некуда отвечать."""
 

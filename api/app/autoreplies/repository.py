@@ -4,7 +4,7 @@
 import uuid
 from collections import defaultdict
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -186,3 +186,38 @@ async def media_by_autoreply(
     for autoreply_id, media_id in rows:
         media[autoreply_id].append(media_id)
     return media
+
+
+async def keyword_pairs(session: AsyncSession, autoreply_id: uuid.UUID) -> list[tuple[str, str]]:
+    """Слова автоответа: (как ввёл, нормализованное), в порядке ввода."""
+    rows = await session.execute(
+        select(Keyword.word, Keyword.normalized)
+        .where(Keyword.autoreply_id == autoreply_id)
+        .order_by(Keyword.id)
+    )
+    return [(word, normalized) for word, normalized in rows]
+
+
+async def replace_keywords(
+    session: AsyncSession, autoreply_id: uuid.UUID, words: list[tuple[str, str]]
+) -> None:
+    await session.execute(delete(Keyword).where(Keyword.autoreply_id == autoreply_id))
+    add_keywords(session, autoreply_id, words)
+
+
+async def replace_media(
+    session: AsyncSession, autoreply_id: uuid.UUID, media_ids: list[str]
+) -> None:
+    await session.execute(delete(AutoreplyMedia).where(AutoreplyMedia.autoreply_id == autoreply_id))
+    add_media(session, autoreply_id, media_ids)
+
+
+async def set_media_archived(
+    session: AsyncSession, autoreply_id: uuid.UUID, archived: bool
+) -> None:
+    """Флаг архива у постов: на нём стоит частичный уникальный индекс."""
+    await session.execute(
+        update(AutoreplyMedia)
+        .where(AutoreplyMedia.autoreply_id == autoreply_id)
+        .values(archived=archived)
+    )

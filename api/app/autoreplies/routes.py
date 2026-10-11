@@ -9,11 +9,12 @@ from app import identity
 from app.autoreplies import service
 from app.autoreplies.exceptions import (
     AccountUnavailable,
+    AutoreplyArchived,
     AutoreplyConflict,
     AutoreplyError,
     AutoreplyNotFound,
 )
-from app.autoreplies.schemas import AutoreplyIn, AutoreplyOut
+from app.autoreplies.schemas import AutoreplyForm, AutoreplyIn, AutoreplyOut, EnabledIn
 from app.db import SessionDep
 
 router = APIRouter(prefix="/autoreplies", tags=["autoreplies"])
@@ -21,6 +22,7 @@ router = APIRouter(prefix="/autoreplies", tags=["autoreplies"])
 _STATUS = {
     AutoreplyNotFound: status.HTTP_404_NOT_FOUND,
     AccountUnavailable: status.HTTP_409_CONFLICT,
+    AutoreplyArchived: status.HTTP_409_CONFLICT,
     AutoreplyConflict: status.HTTP_409_CONFLICT,
 }
 
@@ -81,3 +83,37 @@ async def get_autoreply(
     autoreply_id: uuid.UUID, session: SessionDep, user: identity.CurrentUserRef
 ) -> AutoreplyOut:
     return _out(await service.get(session, autoreply_id))
+
+
+@router.put("/{autoreply_id}")
+async def update_autoreply(
+    autoreply_id: uuid.UUID,
+    body: AutoreplyForm,
+    session: SessionDep,
+    user: identity.CanConnectAccounts,
+) -> AutoreplyOut:
+    return _out(await service.update(session, autoreply_id, body))
+
+
+@router.put("/{autoreply_id}/enabled")
+async def set_enabled(
+    autoreply_id: uuid.UUID,
+    body: EnabledIn,
+    session: SessionDep,
+    user: identity.CanConnectAccounts,
+) -> AutoreplyOut:
+    return _out(await service.set_enabled(session, autoreply_id, body.enabled))
+
+
+@router.post("/{autoreply_id}/archive")
+async def archive_autoreply(
+    autoreply_id: uuid.UUID, session: SessionDep, user: identity.CanConnectAccounts
+) -> AutoreplyOut:
+    return _out(await service.archive(session, autoreply_id))
+
+
+@router.post("/{autoreply_id}/unarchive")
+async def unarchive_autoreply(
+    autoreply_id: uuid.UUID, session: SessionDep, user: identity.CanConnectAccounts
+) -> AutoreplyOut:
+    return _out(await service.unarchive(session, autoreply_id))
