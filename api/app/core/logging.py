@@ -7,6 +7,7 @@
 """
 
 import logging
+import re
 import sys
 import time
 import uuid
@@ -24,6 +25,9 @@ log = structlog.get_logger("app.core")
 
 # uvicorn кладёт в extra копию сообщения с цветовыми кодами терминала
 _NOISE = {"color_message"}
+
+# чужой id берём, только если он похож на id: мимо Caddy заголовок шлёт кто угодно
+_REQUEST_ID = re.compile(r"[A-Za-z0-9-]{1,64}")
 
 
 def _mask_secrets(_logger: object, _method: str, event: dict) -> dict:
@@ -106,7 +110,9 @@ async def log_requests(
     маркер прямо в адрес (?hub.verify_token=...).
     """
     # id приходит от Caddy (X-Request-ID), без него придумываем свой
-    request_id = request.headers.get("x-request-id") or uuid.uuid4().hex
+    request_id = request.headers.get("x-request-id", "")
+    if not _REQUEST_ID.fullmatch(request_id):
+        request_id = uuid.uuid4().hex
     # контекст прошлого запроса не должен протечь в этот
     structlog.contextvars.clear_contextvars()
     structlog.contextvars.bind_contextvars(request_id=request_id)

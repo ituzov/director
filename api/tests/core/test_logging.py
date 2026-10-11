@@ -24,6 +24,14 @@ async def test_request_logged_with_id(client):
     assert r.headers["x-request-id"] == "abc"
 
 
+async def test_odd_request_id_replaced(client):
+    # мусор и простыни в заголовке не попадают ни в логи, ни в inbox
+    for odd in ("a" * 65, "a b", "<script>"):
+        r = await client.get("/setup", headers={"x-request-id": odd})
+        assert len(r.headers["x-request-id"]) == 32
+        assert r.headers["x-request-id"] != odd
+
+
 async def test_request_id_generated(client):
     r = await client.get("/setup")
     assert len(r.headers["x-request-id"]) == 32
