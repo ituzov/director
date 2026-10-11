@@ -59,3 +59,26 @@ class AccountOut(BaseModel):
     username: str
     status: str
     connected_at: datetime
+
+
+class MediaOut(BaseModel):
+    """Пост для выбора в форме автоответа."""
+
+    id: str
+    caption: str | None
+    # FEED или REELS: подпись «Пост» или «Рилс»
+    type: str | None
+    # IMAGE, VIDEO, CAROUSEL_ALBUM
+    media_type: str | None
+    # миниатюра: у видео thumbnail_url, у фото и карусели сама картинка.
+    # Ссылка временная, Meta подписывает её на несколько дней
+    thumbnail: str | None
+    permalink: str | None
+    timestamp: datetime | None
+    comments_count: int | None
+
+
+class MediaPageOut(BaseModel):
+    items: list[MediaOut]
+    # закладка следующей страницы; None, если постов больше нет
+    next: str | None

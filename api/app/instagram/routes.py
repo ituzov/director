@@ -1,5 +1,6 @@
 """HTTP-ручки instagram. Тонкие: разобрать запрос, позвать сервис, собрать ответ."""
 
+import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response, status
@@ -9,16 +10,20 @@ from app import identity
 from app.db import SessionDep
 from app.instagram import service
 from app.instagram.exceptions import (
+    AccountUnavailable,
     AppSecretRequired,
     InstagramError,
     InvalidOAuthState,
     MetaAppRequired,
+    MetaUnavailable,
     OAuthFailed,
     PublicUrlRequired,
 )
 from app.instagram.models import Account, MetaApp
 from app.instagram.schemas import (
     AccountOut,
+    MediaOut,
+    MediaPageOut,
     MetaAppIn,
     MetaAppOut,
     OAuthCallbackIn,
@@ -36,6 +41,8 @@ _STATUS = {
     PublicUrlRequired: status.HTTP_409_CONFLICT,
     InvalidOAuthState: status.HTTP_400_BAD_REQUEST,
     OAuthFailed: status.HTTP_502_BAD_GATEWAY,
+    AccountUnavailable: status.HTTP_409_CONFLICT,
+    MetaUnavailable: status.HTTP_502_BAD_GATEWAY,
 }
 
 
@@ -128,3 +135,28 @@ async def receive_webhook(request: Request, session: SessionDep) -> Response:
         session, body=await request.body(), signature=request.headers.get("x-hub-signature-256")
     )
     return Response(status_code=status.HTTP_200_OK if accepted else status.HTTP_403_FORBIDDEN)
+
+
+@router.get("/accounts/{account_id}/media")
+async def list_media(
+    account_id: uuid.UUID,
+    session: SessionDep,
+    user: identity.CurrentUserRef,
+    after: Annotated[str | None, Query(max_length=512)] = None,
+) -> MediaPageOut:
+    """Посты аккаунта для выбора в автоответе. Закладка after из прошлого ответа."""
+    page = await service.list_media(session, account_id, after=after)
+    return MediaPageOut(items=[_media_out(m) for m in page.items], next=page.after)
+
+
+def _media_out(media: dict) -> MediaOut:
+    return MediaOut(
+        id=str(media.get("id")),
+        caption=media.get("caption"),
+        type=media.get("media_product_type"),
+        media_type=media.get("media_type"),
+        thumbnail=media.get("thumbnail_url") or media.get("media_url"),
+        permalink=media.get("permalink"),
+        timestamp=media.get("timestamp"),
+        comments_count=media.get("comments_count"),
+    )

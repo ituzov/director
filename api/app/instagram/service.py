@@ -15,14 +15,17 @@ from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app import activity
 from app.config import settings
 from app.core import crypto, signing
 from app.instagram import graph, repository, webhook
 from app.instagram.contracts import AccountRef
 from app.instagram.exceptions import (
+    AccountUnavailable,
     AppSecretRequired,
     InvalidOAuthState,
     MetaAppRequired,
+    MetaUnavailable,
     OAuthFailed,
     PublicUrlRequired,
 )
@@ -51,6 +54,43 @@ async def get_meta_app(session: AsyncSession) -> MetaApp | None:
 
 async def list_accounts(session: AsyncSession) -> list[Account]:
     return await repository.list_accounts(session)
+
+
+# токен недействителен: истёк, отозван, сменили пароль. Только новый вход
+TOKEN_INVALID = 190
+
+
+def expire_account(session: AsyncSession, account: Account) -> None:
+    """Токен больше не годен: бот у аккаунта молчит, пока владелец не войдёт заново.
+    Сам токен стираем: хранить бесполезный секрет незачем. Без commit."""
+    account.status = "token_expired"
+    account.token_encrypted = None
+    activity.record(session, "account.token_expired", account_id=account.id)
+    log.warning("account.token_expired", account_id=str(account.id))
+
+
+async def list_media(
+    session: AsyncSession, account_id: uuid.UUID, *, after: str | None
+) -> graph.MediaPage:
+    """Посты аккаунта страницами, прямо из Meta: ничего не храним."""
+    account = await repository.get_account(session, account_id)
+    if account is None or account.status != "active" or not account.token_encrypted:
+        raise AccountUnavailable
+    try:
+        async with _http() as http:
+            return await graph.list_media(
+                http, token=crypto.decrypt(account.token_encrypted), after=after
+            )
+    except graph.GraphError as error:
+        if error.code == TOKEN_INVALID:
+            expire_account(session, account)
+            await session.commit()
+            raise AccountUnavailable from error
+        log.warning("media.list_failed", reason=str(error.code or error.status))
+        raise MetaUnavailable from error
+    except httpx.HTTPError as error:
+        log.warning("media.list_failed", reason=type(error).__name__)
+        raise MetaUnavailable from error
 
 
 async def get_account(session: AsyncSession, account_id: uuid.UUID) -> AccountRef | None:

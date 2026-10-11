@@ -90,6 +90,36 @@ async def long_lived_token(
     return LongToken(access_token=data["access_token"], expires_in=int(data["expires_in"]))
 
 
+@dataclass(frozen=True, slots=True)
+class MediaPage:
+    # посты как прислала Meta: только поля из MEDIA_FIELDS
+    items: list[dict[str, Any]]
+    # закладка следующей страницы; None, если страница последняя
+    after: str | None
+
+
+MEDIA_FIELDS = (
+    "id,caption,media_type,media_product_type,thumbnail_url,media_url,"
+    "permalink,timestamp,comments_count"
+)
+
+
+async def list_media(
+    http: httpx.AsyncClient, *, token: str, after: str | None = None, limit: int = 24
+) -> MediaPage:
+    """Посты аккаунта, новые первыми. Готовую ссылку paging.next не берём: в ней
+    наш токен, наружу отдаём только закладку after."""
+    params = {"fields": MEDIA_FIELDS, "limit": str(limit), "access_token": token}
+    if after:
+        params["after"] = after
+    data = _json(await http.get(f"{GRAPH}/{VERSION}/me/media", params=params))
+    paging = data.get("paging") if isinstance(data.get("paging"), dict) else {}
+    cursors = paging.get("cursors") if isinstance(paging.get("cursors"), dict) else {}
+    items = data.get("data") if isinstance(data.get("data"), list) else []
+    # next нет: страница последняя, даже если курсор after пришёл
+    return MediaPage(items=items, after=cursors.get("after") if "next" in paging else None)
+
+
 async def refresh_token(http: httpx.AsyncClient, *, token: str) -> LongToken:
     """Долгий токен в новый долгий на 60 дней. Meta требует: старше суток и не истёк."""
     data = _json(

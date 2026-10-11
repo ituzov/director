@@ -23,3 +23,11 @@ class InvalidOAuthState(InstagramError):
 
 class OAuthFailed(InstagramError):
     """Meta ответила ошибкой на одном из шагов подключения."""
+
+
+class AccountUnavailable(InstagramError):
+    """Аккаунта нет, он отключён или его токен больше не годен."""
+
+
+class MetaUnavailable(InstagramError):
+    """Meta не ответила или ответила ошибкой, которую повтор может исправить."""

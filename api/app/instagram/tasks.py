@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import activity
 from app.core import crypto
-from app.instagram import graph, repository, webhook
+from app.instagram import graph, repository, service, webhook
 from app.instagram.contracts import CommentRef, InboxHandlers, OutboxResult, PostbackRef
 from app.instagram.models import Account, InboxEvent, OutboxTask
 from app.instagram.outbox import FOLLOWING, NOT_FOLLOWING, UNKNOWN
@@ -174,8 +174,6 @@ SEND_RETRY_DELAYS = (
     timedelta(hours=1),
     timedelta(hours=1),
 )
-# токен недействителен: истёк, отозван, сменили пароль. Только новый вход
-TOKEN_INVALID = 190
 # коды ограничения частоты у Graph API: это временно, повторяем позже.
 # Проверить вживую, какие коды отдаёт Instagram
 RATE_LIMIT_CODES = {4, 17, 32, 613}
@@ -245,8 +243,8 @@ async def _send(session: AsyncSession, task: OutboxTask) -> Result | None:
                 http, task, token=token, ig_user_id=account.ig_user_id, variant=variant
             )
     except (graph.GraphError, httpx.HTTPError) as error:
-        if isinstance(error, graph.GraphError) and error.code == TOKEN_INVALID:
-            _expire_account(session, account)
+        if isinstance(error, graph.GraphError) and error.code == service.TOKEN_INVALID:
+            service.expire_account(session, account)
         return _meta_failed(task, error)
     log.info("outbox.sent", kind=task.kind, attempts=task.attempts, variant=variant)
     return _finish_task(task, "sent", None, variant)
@@ -386,9 +384,9 @@ async def _refresh_one(session: AsyncSession, account_id: Any) -> int:
         async with _http() as http:
             fresh = await graph.refresh_token(http, token=crypto.decrypt(account.token_encrypted))
     except graph.GraphError as error:
-        if error.code != TOKEN_INVALID:
+        if error.code != service.TOKEN_INVALID:
             raise
-        _expire_account(session, account)
+        service.expire_account(session, account)
         await session.commit()
         return 0
     account.token_encrypted = crypto.encrypt(fresh.access_token)
@@ -397,15 +395,6 @@ async def _refresh_one(session: AsyncSession, account_id: Any) -> int:
     await session.commit()
     log.info("account.token_refreshed", expires_at=expires_at.isoformat())
     return 1
-
-
-def _expire_account(session: AsyncSession, account: Account) -> None:
-    """Токен больше не годен: бот у аккаунта молчит, пока владелец не войдёт заново.
-    Сам токен стираем: хранить бесполезный секрет незачем."""
-    account.status = "token_expired"
-    account.token_encrypted = None
-    activity.record(session, "account.token_expired", account_id=account.id)
-    log.warning("account.token_expired", account_id=str(account.id))
 
 
 def _finish(event: InboxEvent, outcome: str, reason: str | None) -> None:
