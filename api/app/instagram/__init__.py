@@ -13,7 +13,14 @@ from app.instagram.contracts import (
     PostbackRef,
 )
 from app.instagram.exceptions import InstagramError
-from app.instagram.outbox import enqueue_comment_reply, enqueue_message, enqueue_private_reply
+from app.instagram.outbox import (
+    FOLLOWING,
+    NOT_FOLLOWING,
+    UNKNOWN,
+    enqueue_comment_reply,
+    enqueue_message,
+    enqueue_private_reply,
+)
 from app.instagram.routes import instagram_error_handler, router, webhook_router
 from app.instagram.service import get_account
 from app.instagram.tasks import process_inbox_event, send_outbox_task
@@ -32,6 +39,10 @@ __all__ = [
     "enqueue_comment_reply",
     "enqueue_message",
     "enqueue_private_reply",
+    # варианты сообщения с проверкой подписки
+    "FOLLOWING",
+    "NOT_FOLLOWING",
+    "UNKNOWN",
     # задачи worker
     "process_inbox_event",
     "InboxHandlers",

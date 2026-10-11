@@ -78,8 +78,9 @@ async def test_click_queues_material(session, delivery):
     assert (task.kind, task.ref, task.dedup_key) == (
         "message",
         f"autoreplies:{delivery.id}:material",
-        f"message:material:{delivery.id}",
+        f"message:material:{delivery.id}:0",
     )
+    # без проверки подписки: одно обычное сообщение
     assert task.payload == {"recipient_id": "p1", "text": "https://guide"}
     # окно 24 часа от нажатия
     assert task.expires_at == CLICK + timedelta(hours=24)
@@ -152,3 +153,68 @@ async def test_other_account_ignored(session, delivery):
     )
     await press(session, postback)
     assert await outbox(session) == []
+
+
+async def gate_on(session, delivery) -> None:
+    autoreply = await session.get(Autoreply, delivery.autoreply_id)
+    autoreply.follow_gate, autoreply.not_following_text = True, "Подпишись 🙂"
+    await session.commit()
+
+
+async def test_gated_click_queues_both_variants(session, delivery):
+    await gate_on(session, delivery)
+    await press(session, click(delivery))
+    [task] = await outbox(session)
+    assert task.payload == {
+        "recipient_id": "p1",
+        "text": "https://guide",
+        "not_following": {
+            "text": "Подпишись 🙂",
+            "button": {"title": "Получить", "payload": f"ar:{delivery.id}"},
+        },
+        # проверить не дали: выдаём
+        "if_unknown": "following",
+    }
+
+
+async def result(session, delivery, variant, outcome="sent") -> None:
+    await autoreplies.handle_send_result(
+        session,
+        instagram.OutboxResult(
+            f"autoreplies:{delivery.id}:material", "message", outcome, None, variant
+        ),
+    )
+    await session.commit()
+
+
+async def test_not_following_starts_new_round(session, delivery):
+    await gate_on(session, delivery)
+    await press(session, click(delivery))
+    await result(session, delivery, "not_following")
+    await session.refresh(delivery)
+    assert (delivery.delivered_at, delivery.gate_round) == (None, 1)
+    assert (await journal(session))[-1] == "autoreply.follow_asked"
+
+    # подписался и нажал снова: новое письмо нового раунда
+    await press(session, click(delivery, at=CLICK + timedelta(minutes=2)))
+    keys = sorted(t.dedup_key for t in await outbox(session))
+    assert keys == [f"message:material:{delivery.id}:0", f"message:material:{delivery.id}:1"]
+
+
+@pytest.mark.parametrize("variant", ["following", "unknown"])
+async def test_delivered_with_follow_note(session, delivery, variant):
+    await gate_on(session, delivery)
+    await press(session, click(delivery))
+    await result(session, delivery, variant)
+    await session.refresh(delivery)
+    assert (delivery.delivered_at is not None, delivery.gate_round) == (True, 0)
+    entry = (await session.scalars(select(Event).order_by(Event.id.desc()))).first()
+    assert (entry.kind, entry.data["follow"]) == ("autoreply.delivered", variant)
+
+
+async def test_plain_delivery_without_follow_note(session, delivery):
+    await press(session, click(delivery))
+    await result(session, delivery, None)
+    entry = (await session.scalars(select(Event).order_by(Event.id.desc()))).first()
+    assert entry.kind == "autoreply.delivered"
+    assert "follow" not in entry.data

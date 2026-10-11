@@ -320,15 +320,25 @@ async def handle_postback(session: AsyncSession, postback: instagram.PostbackRef
         delivery.clicked_at = postback.acted_at
     # выключенный или архивный всё равно выдаёт: человеку пообещали, он нажал
     autoreply = await repository.get_autoreply(session, delivery.autoreply_id)
+    gate = None
+    if autoreply.follow_gate:
+        # неподписанному та же кнопка: подпишется и нажмёт ещё раз
+        button = instagram.Button(
+            title=autoreply.button_text, payload=f"{BUTTON_PREFIX}{delivery.id}"
+        )
+        gate = (autoreply.not_following_text, button)
     await instagram.enqueue_message(
         session,
         account_id=delivery.account_id,
         recipient_id=delivery.person_id,
         acted_at=postback.acted_at,
         text=autoreply.reply_text,
-        # материал на выдачу один: пока он в очереди, новые нажатия второй не поставят
-        dedup_key=f"material:{delivery.id}",
+        # одно письмо на раунд: пока оно в очереди, новые нажатия второе не поставят
+        dedup_key=f"material:{delivery.id}:{delivery.gate_round}",
         ref=_ref(delivery.id, MATERIAL),
+        if_not_following=gate,
+        # Meta не дала проверить подписку: выдаём, а не гоняем человека по кругу
+        if_unknown=instagram.FOLLOWING,
     )
     activity.record(session, "autoreply.clicked", **journal)
     return True
@@ -341,7 +351,8 @@ async def handle_send_result(session: AsyncSession, result: instagram.OutboxResu
     if parsed is None:
         return
     delivery_id, stage = parsed
-    delivery = await repository.get_delivery(session, delivery_id)
+    # под замком: раунд растёт, пока рядом может разбираться новое нажатие
+    delivery = await repository.get_delivery(session, delivery_id, lock=True)
     if delivery is None:
         return
 
@@ -355,9 +366,16 @@ async def handle_send_result(session: AsyncSession, result: instagram.OutboxResu
     elif stage == COMMENT:
         delivery.commented_at = func.now()
         kind = "autoreply.commented"
+    elif stage == MATERIAL and result.variant == instagram.NOT_FOLLOWING:
+        # ушла просьба подписаться: следующее нажатие начнёт новый раунд
+        delivery.gate_round += 1
+        kind = "autoreply.follow_asked"
     elif stage == MATERIAL:
         delivery.delivered_at = func.now()
         kind = "autoreply.delivered"
+        if result.variant is not None:
+            # following или unknown: подписку проверили или Meta не дала проверить
+            data["follow"] = result.variant
     else:
         return
     activity.record(
