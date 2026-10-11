@@ -13,8 +13,8 @@ import uuid
 from collections.abc import Awaitable, Callable
 
 import structlog
-from starlette.requests import Request
-from starlette.responses import Response
+from fastapi import Request, Response
+from structlog.typing import Processor
 
 # ключи, значения которых в лог не попадают никогда, даже если их передали по ошибке
 _SECRETS = {"authorization", "token", "access_token", "app_secret", "secret", "password"}
@@ -34,7 +34,7 @@ def setup_logging(level: str = "INFO", json: bool | None = None) -> None:
         json = not sys.stderr.isatty()
 
     # общее для наших записей и чужих (uvicorn, SQLAlchemy)
-    shared = [
+    shared: list[Processor] = [
         structlog.contextvars.merge_contextvars,
         structlog.stdlib.add_logger_name,
         structlog.stdlib.add_log_level,
@@ -54,7 +54,7 @@ def setup_logging(level: str = "INFO", json: bool | None = None) -> None:
         # тестах перестаёт видеть записи. Выигрыш от кэша для нас копеечный
         cache_logger_on_first_use=False,
     )
-    renderer = (
+    renderer: list[Processor] = (
         [
             structlog.processors.dict_tracebacks,
             structlog.processors.JSONRenderer(ensure_ascii=False),
