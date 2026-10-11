@@ -184,3 +184,17 @@ async def test_member_without_right(client, owner, login_as):
     assert (await client.get(URL, headers=member)).status_code == 403
     r = await client.post(CALLBACK, headers=member, json={"code": "a", "state": "b"})
     assert r.status_code == 403
+
+
+async def test_list_accounts(client, owner, login_as, monkeypatch):
+    meta(monkeypatch, FakeMeta())
+    await client.post(
+        CALLBACK, headers=owner, json={"code": "a", "state": await start(client, owner)}
+    )
+    r = await client.get("/instagram/accounts", headers=await login_as("member"))
+    assert [(a["username"], a["status"]) for a in r.json()] == [("shop", "active")]
+    assert not any("token" in key for key in r.json()[0])
+
+
+async def test_list_accounts_needs_login(client):
+    assert (await client.get("/instagram/accounts")).status_code == 401

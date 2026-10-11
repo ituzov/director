@@ -48,6 +48,10 @@ async def get_meta_app(session: AsyncSession) -> MetaApp | None:
     return await repository.get_meta_app(session)
 
 
+async def list_accounts(session: AsyncSession) -> list[Account]:
+    return await repository.list_accounts(session)
+
+
 async def save_meta_app(session: AsyncSession, *, app_id: str, app_secret: str | None) -> MetaApp:
     """Сохранить ключи приложения. Секрет None значит «не менять»."""
     meta_app = await repository.get_meta_app(session)

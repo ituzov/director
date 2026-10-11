@@ -87,6 +87,12 @@ def _account_out(account: Account) -> AccountOut:
     )
 
 
+@router.get("/accounts")
+async def list_accounts(session: SessionDep, user: identity.CurrentUserRef) -> list[AccountOut]:
+    # аккаунты установки видит любой вошедший: роли на аккаунт появятся позже
+    return [_account_out(account) for account in await service.list_accounts(session)]
+
+
 @router.get("/oauth/url")
 async def get_oauth_url(session: SessionDep, user: identity.CanConnectAccounts) -> OAuthUrlOut:
     return OAuthUrlOut(url=await service.oauth_url(session, user_id=user.id))

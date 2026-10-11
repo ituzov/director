@@ -4,7 +4,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import func
+from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -68,3 +68,11 @@ async def upsert_account(
     )
     # populate_existing: если строка уже в сессии, освежить её значениями из базы
     return await session.scalar(statement, execution_options={"populate_existing": True})
+
+
+async def list_accounts(session: AsyncSession) -> list[Account]:
+    # сначала живые, внутри по нику: так их ищут глазами
+    result = await session.scalars(
+        select(Account).order_by(Account.status != "active", Account.username)
+    )
+    return list(result.all())
