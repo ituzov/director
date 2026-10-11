@@ -31,7 +31,8 @@ export function NavGroup({ group }: { group: keyof typeof GROUPS }) {
     <SidebarGroup>
       <SidebarGroupLabel>{t(`groups.${group}`)}</SidebarGroupLabel>
       <SidebarGroupContent>
-        <SidebarMenu>
+        {/* у shadcn пункты вплотную: подсвеченные соседи слипались в одну плашку */}
+        <SidebarMenu className="gap-1">
           {GROUPS[group].map(({ href, key, icon: Icon }) => (
             <SidebarMenuItem key={href}>
               <SidebarMenuButton
