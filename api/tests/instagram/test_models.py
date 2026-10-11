@@ -67,3 +67,11 @@ async def test_unknown_status_rejected(session):
     session.add(make_account(status="paused"))
     with pytest.raises(IntegrityError, match="ck_account_status_known"):
         await session.commit()
+
+
+async def test_long_external_ids_fit(session):
+    # длину чужих id и ника Meta не обещает: длинные ложатся, а не роняют вход и вебхук
+    long_id = "1" * 100
+    session.add(make_account(ig_user_id=long_id, username="u" * 100))
+    session.add(InboxEvent(ig_account_id=long_id, kind="comment", dedup_key="k", payload={}))
+    await session.commit()

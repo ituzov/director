@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, Index, SmallInteger, String, func, text
+from sqlalchemy import CheckConstraint, DateTime, Index, SmallInteger, String, Text, func, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -58,8 +58,9 @@ class InboxEvent(Base):
     received_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
-    # id аккаунта Instagram из entry[].id: чей это вебхук
-    ig_account_id: Mapped[str] = mapped_column(String(32))
+    # id аккаунта Instagram из entry[].id: чей это вебхук. Длину чужих id Meta не
+    # обещает, поэтому без ограничения: лишние символы не должны ронять вебхук
+    ig_account_id: Mapped[str] = mapped_column(Text)
     # comment, message, postback
     kind: Mapped[str] = mapped_column(String(16))
     # Meta повторяет вебхуки: id коммента или mid сообщения, второй раз не ляжет
@@ -92,9 +93,9 @@ class Account(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid7)
     # id аккаунта в Instagram: он же entry[].id в вебхуках. Повторный вход оживляет строку
-    ig_user_id: Mapped[str] = mapped_column(String(32), unique=True)
+    ig_user_id: Mapped[str] = mapped_column(Text, unique=True)
     # ник меняется: обновляем при каждом входе, для людей, не для связей
-    username: Mapped[str] = mapped_column(String(64))
+    username: Mapped[str] = mapped_column(Text)
     # долгий токен, зашифрован core.crypto. Пусто после отключения
     token_encrypted: Mapped[str | None]
     # токен живёт 60 дней; worker обновляет его заранее, иначе только новый вход
