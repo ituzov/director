@@ -1,5 +1,7 @@
 import "server-only";
 
+import { headers } from "next/headers";
+
 /** Ошибка api: HTTP-статус и detail из ответа FastAPI, например "WeakPassword". */
 export class ApiError extends Error {
   readonly status: number;
@@ -22,11 +24,15 @@ export async function apiFetch<T>(
   const base = process.env.API_URL;
   if (!base) throw new Error("API_URL не задан");
 
+  // id запроса от Caddy: по нему логи api склеиваются с тем, что открыл человек
+  const requestId = (await headers()).get("x-request-id");
+
   const res = await fetch(new URL(path, base), {
     method,
     headers: {
       ...(body !== undefined && { "Content-Type": "application/json" }),
       ...(token && { Authorization: `Bearer ${token}` }),
+      ...(requestId && { "X-Request-ID": requestId }),
     },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
