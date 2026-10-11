@@ -1,4 +1,4 @@
-import { KeyRound, Link2 } from "lucide-react";
+import { KeyRound, Link2, ShieldCheck } from "lucide-react";
 import { notFound } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { cache, Suspense } from "react";
@@ -10,6 +10,7 @@ import { getCurrentUser, getToken } from "@/lib/session";
 
 import { MetaAppForm, MetaAppFormSkeleton } from "./_components/meta-app-form";
 import { MetaStrings, MetaStringsSkeleton } from "./_components/meta-strings";
+import { WebhookStatus, WebhookStatusSkeleton } from "./_components/webhook-status";
 
 export default function MetaAppPage() {
   const t = useTranslations("MetaApp");
@@ -25,6 +26,11 @@ export default function MetaAppPage() {
       <Panel icon={Link2} title={t("strings.title")} description={t("strings.description")}>
         <Suspense fallback={<MetaStringsSkeleton />}>
           <MetaAppStrings />
+        </Suspense>
+      </Panel>
+      <Panel icon={ShieldCheck} title={t("webhook.title")} description={t("webhook.description")}>
+        <Suspense fallback={<WebhookStatusSkeleton />}>
+          <MetaAppWebhook />
         </Suspense>
       </Panel>
     </Page>
@@ -57,4 +63,8 @@ async function MetaAppKeys() {
 async function MetaAppStrings() {
   const metaApp = await getMetaApp();
   return <MetaStrings metaApp={metaApp} />;
+}
+
+async function MetaAppWebhook() {
+  return <WebhookStatus metaApp={await getMetaApp()} />;
 }

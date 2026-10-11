@@ -87,6 +87,28 @@
       "privacyUrl": "Privacy policy",
       "privacyUrlHint": "App settings → Basic → Privacy policy URL.",
       "noPublicUrl": "The server address isn't set (PUBLIC_URL), so there are no links yet."
+    },
+    "webhook": {
+      "title": "Check",
+      "description": "Whether webhooks reach Director: this is how Meta reports new comments and messages.",
+      "pending": "The check becomes available once the keys are saved.",
+      "reachTitle": "URL is visible from the internet",
+      "reachDescription": "Director calls its own webhook URL the same way Meta does. If it answers, the domain, certificate and routing are fine.",
+      "check": "Check",
+      "ok": "The URL responds.",
+      "metaTitle": "Verification in Meta",
+      "refresh": "Refresh status",
+      "verified": "Meta verified the URL {date}.",
+      "notVerified": "Paste the URL and verify token into the Meta dashboard, click “Verify and save” and refresh the status.",
+      "errors": {
+        "no_app": "Save the keys first.",
+        "no_public_url": "The server address isn't set (PUBLIC_URL).",
+        "timeout": "The URL didn't respond within 10 seconds.",
+        "tls": "The HTTPS certificate was rejected, and Meta only works with a valid certificate.",
+        "unreachable": "The URL can't be reached: check the domain and that the server is visible from the internet.",
+        "bad_status": "The URL responded with an error, so the request didn't reach Director.",
+        "bad_body": "Something other than Director responded: check that /webhooks/ leads to the api."
+      }
     }
   }
 }

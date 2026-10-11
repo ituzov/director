@@ -3,6 +3,7 @@
 import { refresh } from "next/cache";
 
 import { ApiError, apiFetch } from "@/lib/api";
+import type { WebhookCheck } from "@/lib/meta-app";
 import { getToken } from "@/lib/session";
 
 type MetaAppField = "app_id" | "app_secret";
@@ -26,6 +27,16 @@ export async function saveMetaApp(_prev: MetaAppState, form: FormData): Promise<
   // страница перерисуется с новыми данными: дата обновления, строки для Meta
   refresh();
   return {};
+}
+
+export async function checkWebhook(): Promise<WebhookCheck> {
+  const result = await apiFetch<WebhookCheck>("/instagram/app/webhook-check", {
+    method: "POST",
+    token: await getToken(),
+  });
+  // заодно подтянуть статус от Meta: пока смотрели, владелец мог нажать «Подтвердить»
+  refresh();
+  return result;
 }
 
 // AppSecretRequired от api или список ошибок pydantic с loc ["body", поле]

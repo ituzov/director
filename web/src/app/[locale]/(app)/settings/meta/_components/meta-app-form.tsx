@@ -2,12 +2,13 @@
 
 import { Form } from "@base-ui/react/form";
 import { useFormatter, useTranslations } from "next-intl";
-import { startTransition, useActionState, useState, useSyncExternalStore } from "react";
+import { startTransition, useActionState, useState } from "react";
 
 import { FormField } from "@/components/form-field";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useInBrowser } from "@/hooks/use-in-browser";
 import type { MetaApp } from "@/lib/meta-app";
 
 import { type MetaAppError, saveMetaApp, type MetaAppState } from "../actions";
@@ -17,8 +18,6 @@ const INITIAL: MetaAppState = {};
 const APP_ID = /^[0-9]{1,32}$/;
 const APP_SECRET = /^[0-9a-fA-F]{32}$/;
 
-const subscribe = () => () => {};
-
 export function MetaAppForm({ metaApp }: { metaApp: MetaApp | null }) {
   const t = useTranslations("MetaApp");
   const format = useFormatter();
@@ -27,11 +26,7 @@ export function MetaAppForm({ metaApp }: { metaApp: MetaApp | null }) {
   const [replacing, setReplacing] = useState(metaApp === null);
   // время в поясе браузера, а он известен только в браузере: на сервере строку не рисуем,
   // иначе разметка сервера и браузера разойдётся
-  const inBrowser = useSyncExternalStore(
-    subscribe,
-    () => true,
-    () => false,
-  );
+  const inBrowser = useInBrowser();
 
   const fieldErrors = Object.fromEntries(
     Object.entries(state.errors ?? {}).map(([field, code]) => [field, t(`errors.${code}`)]),
