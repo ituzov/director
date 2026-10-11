@@ -1,0 +1,5 @@
+# Массовое переформатирование: git blame его пропускает и показывает настоящего автора строки.
+# Локально: git config blame.ignoreRevsFile .git-blame-ignore-revs
+
+# web: весь код через prettier
+e356b6b84ecec8417f26df6d69dfe586bbb08cc8
