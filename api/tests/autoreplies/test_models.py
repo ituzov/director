@@ -125,3 +125,12 @@ async def test_deleting_autoreply_takes_its_rows(session):
     await session.commit()
     for model in (Keyword, AutoreplyMedia, Delivery):
         assert (await session.scalars(select(model))).all() == []
+
+
+async def test_delivery_starts_at_round_zero(session):
+    autoreply = make_autoreply()
+    await add(session, autoreply)
+    delivery = make_delivery(autoreply)
+    await add(session, delivery)
+    await session.refresh(delivery)
+    assert delivery.gate_round == 0

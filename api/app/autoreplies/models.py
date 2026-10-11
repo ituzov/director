@@ -8,6 +8,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    SmallInteger,
     String,
     Text,
     UniqueConstraint,
@@ -150,3 +151,6 @@ class Delivery(Base):
     last_click_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # материал выдан; после этого нажатия игнорируются
     delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # раунд выдачи: растёт, когда вместо материала ушла просьба подписаться.
+    # Материал ставится в очередь раз за раунд, нажатия внутри раунда второй не ставят
+    gate_round: Mapped[int] = mapped_column(SmallInteger, server_default="0")
