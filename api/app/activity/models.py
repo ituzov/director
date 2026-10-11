@@ -35,7 +35,7 @@ class Event(Base):
     kind: Mapped[str] = mapped_column(String(64))
     # наш id аккаунта Instagram; пусто у событий установки целиком
     account_id: Mapped[uuid.UUID | None]
-    campaign_id: Mapped[uuid.UUID | None]
+    autoreply_id: Mapped[uuid.UUID | None]
     # id человека и коммента в Instagram; стираются вместе с data.
     # Длину чужих id Meta не обещает, поэтому без ограничения
     person_id: Mapped[str | None] = mapped_column(Text)

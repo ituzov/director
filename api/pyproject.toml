@@ -54,7 +54,7 @@ name = "Модули зависят только вниз"
 type = "layers"
 layers = [
     "app.main | app.worker",
-    "app.campaigns | app.updates",
+    "app.autoreplies | app.updates",
     "app.instagram",
     "app.identity",
     "app.activity",
@@ -62,10 +62,10 @@ layers = [
 ]
 
 [[tool.importlinter.contracts]]
-name = "campaigns: только через публичный интерфейс"
+name = "autoreplies: только через публичный интерфейс"
 type = "protected"
-protected_modules = ["app.campaigns.*"]
-allowed_importers = ["app.campaigns", "app.campaigns.**", "app.db_models"]
+protected_modules = ["app.autoreplies.*"]
+allowed_importers = ["app.autoreplies", "app.autoreplies.**", "app.db_models"]
 
 [[tool.importlinter.contracts]]
 name = "updates: только через публичный интерфейс"

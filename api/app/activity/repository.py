@@ -13,7 +13,7 @@ def add_event(
     *,
     kind: str,
     account_id: uuid.UUID | None,
-    campaign_id: uuid.UUID | None,
+    autoreply_id: uuid.UUID | None,
     person_id: str | None,
     comment_id: str | None,
     data: dict,
@@ -22,7 +22,7 @@ def add_event(
         Event(
             kind=kind,
             account_id=account_id,
-            campaign_id=campaign_id,
+            autoreply_id=autoreply_id,
             person_id=person_id,
             comment_id=comment_id,
             data=data,
