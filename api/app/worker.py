@@ -12,8 +12,9 @@ from app.config import settings
 from app.core.logging import setup_logging
 from app.db import SessionLocal, engine
 
-# входящих нет: спим. Meta сама доставляет за 1–9 с, 5 с поверх незаметны
-POLL_SECONDS = 5
+# входящих нет: спим. Человек нажал кнопку и ждёт ответ, 2 с поверх доставки
+# Meta (1–9 с) почти незаметны, а пустой запрос по частичному индексу копеечный
+POLL_SECONDS = 2
 
 # кому отдавать разобранное. Автоответов ещё нет: комменты только в журнал
 HANDLERS = instagram.InboxHandlers()
