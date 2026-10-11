@@ -44,6 +44,7 @@
         "settings": "Settings"
       },
       "overview": "Overview",
+      "autoreplies": "Auto-replies",
       "accounts": "Accounts",
       "metaApp": "Meta app"
     },
@@ -166,6 +167,30 @@
     "deletion": {
       "title": "How to delete your data",
       "body": "Send a direct message to the account you interacted with and ask to delete your data. We will delete everything linked to your Instagram ID within 30 days and let you know when it's done."
+    }
+  },
+  "Autoreplies": {
+    "title": "Auto-replies",
+    "description": "Someone comments a code word under a post and gets a direct message with a button. The button gives them the material.",
+    "create": "Create",
+    "tabs": {
+      "active": "Active",
+      "archive": "Archive"
+    },
+    "noAccount": "<link>Connect an Instagram account</link> to see its auto-replies here.",
+    "empty": "No auto-replies yet.",
+    "emptyArchive": "The archive is empty.",
+    "allPosts": "All posts",
+    "posts": "{count, plural, one {# post} other {# posts}}",
+    "followGate": "Followers only",
+    "enabled": "Auto-reply “{name}” is on",
+    "menu": "Actions",
+    "edit": "Edit",
+    "archive": "Archive",
+    "unarchive": "Restore",
+    "conflict": {
+      "keyword": "Can’t restore: the word “{value}” is already used by “{name}”.",
+      "post": "Can’t restore: this post is already used by “{name}”."
     }
   },
   "AutoreplyForm": {
