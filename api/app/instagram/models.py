@@ -69,3 +69,40 @@ class InboxEvent(Base):
     # id запроса вебхука: worker поднимает его в логи, цепочка читается по одному id
     request_id: Mapped[str | None] = mapped_column(String(64))
     processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class Account(Base):
+    """Подключённый аккаунт Instagram. Принадлежит установке, а не пользователю:
+    connected_by только помнит, кто подключал. После отключения строка остаётся,
+    по ней журнал и статистика знают, чей это был аккаунт."""
+
+    __tablename__ = "account"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('active', 'token_expired', 'disconnected')", name="status_known"
+        ),
+        # активному аккаунту без токена нечем отвечать: база такого не допускает
+        CheckConstraint(
+            "status <> 'active' OR token_encrypted IS NOT NULL", name="active_has_token"
+        ),
+        {"schema": "instagram"},
+    )
+    # даты считает база: забираем их RETURNING-ом сразу после INSERT и UPDATE
+    __mapper_args__ = {"eager_defaults": True}
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid7)
+    # id аккаунта в Instagram: он же entry[].id в вебхуках. Повторный вход оживляет строку
+    ig_user_id: Mapped[str] = mapped_column(String(32), unique=True)
+    # ник меняется: обновляем при каждом входе, для людей, не для связей
+    username: Mapped[str] = mapped_column(String(64))
+    # долгий токен, зашифрован core.crypto. Пусто после отключения
+    token_encrypted: Mapped[str | None]
+    # токен живёт 60 дней; worker обновляет его заранее, иначе только новый вход
+    token_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    status: Mapped[str] = mapped_column(String(16), default="active")
+    # кто подключал: id из identity, без внешнего ключа на чужую схему
+    connected_by: Mapped[uuid.UUID]
+    connected_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    disconnected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

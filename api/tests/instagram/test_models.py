@@ -1,9 +1,11 @@
 """Модели instagram: инварианты держит база, а не только код."""
 
+import uuid
+
 import pytest
 from sqlalchemy.exc import IntegrityError
 
-from app.instagram.models import InboxEvent, MetaApp
+from app.instagram.models import Account, InboxEvent, MetaApp
 
 
 def make_app(**kw) -> MetaApp:
@@ -30,4 +32,38 @@ async def test_inbox_duplicate_rejected(session):
 
     session.add(make_event())
     with pytest.raises(IntegrityError, match="uq_inbox_dedup_key"):
+        await session.commit()
+
+
+def make_account(**kw) -> Account:
+    return Account(
+        **{"ig_user_id": "17841400000000000", "username": "shop", "connected_by": uuid.uuid7()}
+        | {"token_encrypted": "x"}
+        | kw
+    )
+
+
+async def test_account_twice_rejected(session):
+    # тот же аккаунт Instagram вторым входом оживляет строку, а не заводит новую
+    session.add(make_account())
+    await session.commit()
+    session.add(make_account())
+    with pytest.raises(IntegrityError, match="uq_account_ig_user_id"):
+        await session.commit()
+
+
+async def test_active_account_needs_token(session):
+    session.add(make_account(token_encrypted=None))
+    with pytest.raises(IntegrityError, match="ck_account_active_has_token"):
+        await session.commit()
+
+
+async def test_disconnected_account_without_token(session):
+    session.add(make_account(token_encrypted=None, status="disconnected"))
+    await session.commit()
+
+
+async def test_unknown_status_rejected(session):
+    session.add(make_account(status="paused"))
+    with pytest.raises(IntegrityError, match="ck_account_status_known"):
         await session.commit()
