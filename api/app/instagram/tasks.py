@@ -15,6 +15,7 @@ from app.core import crypto
 from app.instagram import graph, repository, webhook
 from app.instagram.contracts import CommentRef, InboxHandlers, OutboxResult, PostbackRef
 from app.instagram.models import Account, InboxEvent, OutboxTask
+from app.instagram.outbox import FOLLOWING, NOT_FOLLOWING, UNKNOWN
 
 log = structlog.get_logger("app.instagram")
 
@@ -203,7 +204,8 @@ async def send_outbox_task(session: AsyncSession, on_result: OnResult | None = N
             return True
         if result is not None and ref is not None and on_result is not None:
             try:
-                await on_result(session, OutboxResult(ref, kind, *result))
+                outcome, reason, variant = result
+                await on_result(session, OutboxResult(ref, kind, outcome, reason, variant))
                 await session.commit()
             except Exception:
                 await session.rollback()
@@ -211,9 +213,12 @@ async def send_outbox_task(session: AsyncSession, on_result: OnResult | None = N
     return True
 
 
-async def _send(session: AsyncSession, task: OutboxTask) -> tuple[str, str | None] | None:
-    """Попытка отправки. Итог (outcome, reason), если задача завершена; None, если
-    отложена до run_at."""
+Result = tuple[str, str | None, str | None]
+
+
+async def _send(session: AsyncSession, task: OutboxTask) -> Result | None:
+    """Попытка отправки. Итог (outcome, reason, variant), если задача завершена;
+    None, если отложена до run_at."""
     expired = task.expires_at is not None and task.expires_at <= await _now(session)
     if expired:
         return _finish_task(task, "expired", None)
@@ -233,17 +238,46 @@ async def _send(session: AsyncSession, task: OutboxTask) -> tuple[str, str | Non
     token = crypto.decrypt(account.token_encrypted)
     try:
         async with _http() as http:
-            await _call_meta(http, task, token=token, ig_user_id=account.ig_user_id)
+            variant = await _choose_variant(http, task, token=token)
+            await _call_meta(
+                http, task, token=token, ig_user_id=account.ig_user_id, variant=variant
+            )
     except (graph.GraphError, httpx.HTTPError) as error:
         return _meta_failed(task, error)
-    log.info("outbox.sent", kind=task.kind, attempts=task.attempts)
-    return _finish_task(task, "sent", None)
+    log.info("outbox.sent", kind=task.kind, attempts=task.attempts, variant=variant)
+    return _finish_task(task, "sent", None, variant)
+
+
+async def _choose_variant(http: httpx.AsyncClient, task: OutboxTask, *, token: str) -> str | None:
+    """Вариант сообщения с проверкой подписки; None у обычных писем. Временная ошибка
+    проверки летит наверх и повторяется как ошибка отправки; окончательная (нет
+    согласия человека) даёт unknown."""
+    if "not_following" not in task.payload:
+        return None
+    try:
+        follows = await graph.follows_business(
+            http, token=token, person_id=task.payload["recipient_id"]
+        )
+    except graph.GraphError as error:
+        if _temporary(error):
+            raise
+        log.warning("outbox.follow_unknown", reason=str(error.code or error.status))
+        return UNKNOWN
+    return FOLLOWING if follows else NOT_FOLLOWING
 
 
 async def _call_meta(
-    http: httpx.AsyncClient, task: OutboxTask, *, token: str, ig_user_id: str
+    http: httpx.AsyncClient,
+    task: OutboxTask,
+    *,
+    token: str,
+    ig_user_id: str,
+    variant: str | None,
 ) -> None:
     payload = task.payload
+    # unknown: тот вариант, что вызывающий выбрал на случай непроверенной подписки
+    chosen = payload.get("if_unknown") if variant == UNKNOWN else variant
+    message = payload["not_following"] if chosen == NOT_FOLLOWING else payload
     if task.kind == "comment_reply":
         await graph.reply_to_comment(
             http, token=token, comment_id=payload["comment_id"], text=payload["text"]
@@ -259,16 +293,20 @@ async def _call_meta(
         token=token,
         ig_user_id=ig_user_id,
         recipient=recipient,
-        text=payload["text"],
-        button=payload.get("button"),
+        text=message["text"],
+        button=message.get("button"),
     )
 
 
-def _meta_failed(task: OutboxTask, error: Exception) -> tuple[str, str | None] | None:
+def _temporary(error: graph.GraphError) -> bool:
+    return error.status >= 500 or error.status == 429 or error.code in RATE_LIMIT_CODES
+
+
+def _meta_failed(task: OutboxTask, error: Exception) -> Result | None:
     """Meta ответила ошибкой или не ответила. Временное повторяем, окончательное нет."""
     if isinstance(error, graph.GraphError):
         reason = str(error.code if error.code is not None else error.status)
-        temporary = error.status >= 500 or error.status == 429 or error.code in RATE_LIMIT_CODES
+        temporary = _temporary(error)
     else:
         # сеть: таймаут, обрыв
         reason, temporary = type(error).__name__, True
@@ -295,11 +333,13 @@ async def _record_send_failure(session: AsyncSession, task_id: Any, error: Excep
     await session.commit()
 
 
-def _finish_task(task: OutboxTask, outcome: str, reason: str | None) -> tuple[str, str | None]:
+def _finish_task(
+    task: OutboxTask, outcome: str, reason: str | None, variant: str | None = None
+) -> Result:
     task.outcome = outcome
     task.reason = reason
     task.finished_at = func.now()
-    return outcome, reason
+    return outcome, reason, variant
 
 
 async def _now(session: AsyncSession):

@@ -146,3 +146,26 @@ async def test_outcome_only_when_finished(session, account, fields):
     session.add(make_task(account, **fields))
     with pytest.raises(IntegrityError, match="ck_outbox_outcome_when_finished"):
         await session.commit()
+
+
+async def test_message_with_follow_check(session, account):
+    await instagram.enqueue_message(
+        session,
+        account_id=account.id,
+        recipient_id="p1",
+        acted_at=AT,
+        text="ссылка",
+        dedup_key="d1:0",
+        if_not_following=("Подпишись", instagram.Button(title="Получить", payload="ar:1")),
+    )
+    await session.commit()
+    [task] = await tasks(session)
+    assert task.payload == {
+        "recipient_id": "p1",
+        "text": "ссылка",
+        "not_following": {
+            "text": "Подпишись",
+            "button": {"title": "Получить", "payload": "ar:1"},
+        },
+        "if_unknown": "following",
+    }

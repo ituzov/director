@@ -27,12 +27,19 @@ class FakeMeta:
         self.requests: list[httpx.Request] = []
         self.response = httpx.Response(200, json={"recipient_id": "p1", "message_id": "mid"})
         self.error: Exception | None = None
+        # ответ на вопрос о подписке
+        self.follow = httpx.Response(200, json={"is_user_follow_business": True, "id": "p1"})
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         self.requests.append(request)
         if self.error:
             raise self.error
+        if request.method == "GET":
+            return self.follow
         return self.response
+
+    def sent(self) -> list[dict]:
+        return [json.loads(r.content) for r in self.requests if r.method == "POST"]
 
     def fail(self, status: int, code: int | None = None) -> None:
         self.response = httpx.Response(status, json={"error": {"message": "x", "code": code}})
@@ -325,3 +332,94 @@ async def test_token_not_in_logs(session, account, meta, real_logging, capsys):
     out = capsys.readouterr().err
     assert "outbox.sent" in out
     assert TOKEN not in out
+
+
+async def gated(session, account, **kw) -> None:
+    await instagram.enqueue_message(
+        session,
+        **{
+            "account_id": account.id,
+            "recipient_id": "p1",
+            "acted_at": FAR,
+            "text": "ссылка на гайд",
+            "dedup_key": "d1:0",
+            "ref": "autoreplies:d1:material",
+            "if_not_following": (
+                "Подпишись 🙂",
+                instagram.Button(title="Получить", payload="ar:d1"),
+            ),
+        }
+        | kw,
+    )
+    await session.commit()
+
+
+async def test_following_gets_main(session, account, meta):
+    await gated(session, account)
+    results = Results()
+    await instagram.send_outbox_task(session, results)
+    check = meta.requests[0]
+    assert (check.method, check.url.path) == ("GET", f"/{graph.VERSION}/p1")
+    assert check.url.params["fields"] == "is_user_follow_business"
+    assert meta.sent() == [{"recipient": {"id": "p1"}, "message": {"text": "ссылка на гайд"}}]
+    assert results.got[0].variant == "following"
+
+
+async def test_not_following_gets_other(session, account, meta):
+    meta.follow = httpx.Response(200, json={"is_user_follow_business": False, "id": "p1"})
+    await gated(session, account)
+    results = Results()
+    await instagram.send_outbox_task(session, results)
+    [body] = meta.sent()
+    assert body["message"]["attachment"]["payload"]["text"] == "Подпишись 🙂"
+    assert body["message"]["attachment"]["payload"]["buttons"][0]["payload"] == "ar:d1"
+    assert (results.got[0].outcome, results.got[0].variant) == ("sent", "not_following")
+
+
+@pytest.mark.parametrize(
+    ("if_unknown", "text"),
+    [("following", "ссылка на гайд"), ("not_following", None)],
+)
+async def test_no_consent_uses_callers_choice(session, account, meta, if_unknown, text):
+    # Meta не дала проверить: человек не давал согласия
+    meta.follow = httpx.Response(400, json={"error": {"message": "x", "code": 230}})
+    await gated(session, account, if_unknown=if_unknown)
+    results = Results()
+    with capture_logs() as logs:
+        await instagram.send_outbox_task(session, results)
+    [body] = meta.sent()
+    if text:
+        assert body["message"] == {"text": text}
+    else:
+        assert body["message"]["attachment"]["payload"]["text"] == "Подпишись 🙂"
+    assert results.got[0].variant == "unknown"
+    assert "outbox.follow_unknown" in [e["event"] for e in logs]
+
+
+async def test_follow_check_down_retried(session, account, meta):
+    meta.follow = httpx.Response(500, json={"error": {"message": "x", "code": 2}})
+    await gated(session, account)
+    results = Results()
+    await instagram.send_outbox_task(session, results)
+    # проверка не прошла: ничего не отправили, повторим позже
+    assert meta.sent() == []
+    task = await stored(session)
+    assert (task.outcome, task.attempts) == (None, 1)
+    assert results.got == []
+
+
+async def test_plain_message_not_checked(session, account, meta):
+    await instagram.enqueue_message(
+        session,
+        account_id=account.id,
+        recipient_id="p1",
+        acted_at=FAR,
+        text="ссылка",
+        dedup_key="k",
+        ref="autoreplies:d1:material",
+    )
+    await session.commit()
+    results = Results()
+    await instagram.send_outbox_task(session, results)
+    assert [r.method for r in meta.requests] == ["POST"]
+    assert results.got[0].variant is None

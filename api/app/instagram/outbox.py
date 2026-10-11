@@ -16,6 +16,11 @@ PRIVATE_REPLY_WINDOW = timedelta(days=7)
 # обычное сообщение: 24 часа от последнего действия человека
 MESSAGE_WINDOW = timedelta(hours=24)
 
+# варианты сообщения с проверкой подписки
+FOLLOWING = "following"
+NOT_FOLLOWING = "not_following"
+UNKNOWN = "unknown"
+
 
 async def enqueue_private_reply(
     session: AsyncSession,
@@ -49,14 +54,25 @@ async def enqueue_message(
     dedup_key: str,
     button: Button | None = None,
     ref: str | None = None,
+    if_not_following: tuple[str, Button | None] | None = None,
+    if_unknown: str = FOLLOWING,
 ) -> bool:
     """Сообщение в директ. Можно только 24 часа после действия человека (acted_at).
-    dedup_key задаёт вызывающий: например, одно сообщение на нажатие кнопки."""
+    dedup_key задаёт вызывающий: например, одно сообщение на нажатие кнопки.
+
+    if_not_following: (текст, кнопка) для неподписанных. Тогда перед отправкой
+    проверяется подписка, а text и button уходят подписанным. if_unknown: какой
+    вариант слать, если Meta не дала проверить (following или not_following)."""
+    payload: dict = {"recipient_id": recipient_id, "text": text, **_button(button)}
+    if if_not_following is not None:
+        other_text, other_button = if_not_following
+        payload["not_following"] = {"text": other_text, **_button(other_button)}
+        payload["if_unknown"] = if_unknown
     return await _enqueue(
         session,
         account_id=account_id,
         kind="message",
-        payload={"recipient_id": recipient_id, "text": text, **_button(button)},
+        payload=payload,
         dedup_key=f"message:{dedup_key}",
         expires_at=acted_at + MESSAGE_WINDOW,
         ref=ref,

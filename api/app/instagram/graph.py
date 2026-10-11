@@ -145,6 +145,18 @@ async def send_message(
     )
 
 
+async def follows_business(http: httpx.AsyncClient, *, token: str, person_id: str) -> bool:
+    """Подписан ли человек на аккаунт токена. Meta отдаёт только с согласия человека:
+    он писал в директ или нажимал кнопку."""
+    data = _json(
+        await http.get(
+            f"{GRAPH}/{VERSION}/{person_id}",
+            params={"fields": "is_user_follow_business", "access_token": token},
+        )
+    )
+    return data.get("is_user_follow_business") is True
+
+
 async def reply_to_comment(
     http: httpx.AsyncClient, *, token: str, comment_id: str, text: str
 ) -> None:

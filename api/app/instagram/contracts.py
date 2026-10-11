@@ -72,6 +72,9 @@ class OutboxResult:
     outcome: str
     # код ошибки Meta или наша причина; None у sent
     reason: str | None
+    # у отправки с проверкой подписки: following, not_following или unknown
+    # (проверить не дали, ушёл вариант, который вызывающий выбрал на этот случай)
+    variant: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
