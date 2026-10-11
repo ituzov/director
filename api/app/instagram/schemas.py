@@ -32,3 +32,9 @@ class MetaAppOut(BaseModel):
     webhook_url: str | None
     redirect_uri: str | None
     privacy_url: str | None
+
+
+class WebhookCheckOut(BaseModel):
+    ok: bool
+    # None при ok; иначе код для текста в админке, список в service.check_webhook
+    error: str | None = None

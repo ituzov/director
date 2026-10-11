@@ -10,7 +10,7 @@ from app.db import SessionDep
 from app.instagram import service
 from app.instagram.exceptions import AppSecretRequired, InstagramError
 from app.instagram.models import MetaApp
-from app.instagram.schemas import MetaAppIn, MetaAppOut
+from app.instagram.schemas import MetaAppIn, MetaAppOut, WebhookCheckOut
 
 router = APIRouter(prefix="/instagram", tags=["instagram"])
 # адрес вебхука постоянный и без префикса модуля: его владелец вписал в кабинет Meta
@@ -51,6 +51,12 @@ async def put_meta_app(
 ) -> MetaAppOut:
     meta_app = await service.save_meta_app(session, app_id=body.app_id, app_secret=body.app_secret)
     return _meta_app_out(meta_app)
+
+
+@router.post("/app/webhook-check")
+async def check_webhook(session: SessionDep, owner: identity.CurrentOwner) -> WebhookCheckOut:
+    error = await service.check_webhook(session)
+    return WebhookCheckOut(ok=error is None, error=error)
 
 
 @webhook_router.get(service.WEBHOOK_PATH, response_class=PlainTextResponse)
