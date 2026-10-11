@@ -2,7 +2,8 @@
 
 from typing import Annotated
 
-from fastapi import Depends, HTTPException, status
+import structlog
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.db import SessionDep
@@ -17,7 +18,7 @@ _bearer = HTTPBearer()
 BearerToken = Annotated[HTTPAuthorizationCredentials, Depends(_bearer)]
 
 
-async def get_current_user(session: SessionDep, credentials: BearerToken) -> User:
+async def get_current_user(request: Request, session: SessionDep, credentials: BearerToken) -> User:
     user = await service.user_by_token(session, credentials.credentials)
     if user is None:
         raise HTTPException(
@@ -25,6 +26,10 @@ async def get_current_user(session: SessionDep, credentials: BearerToken) -> Use
             detail="Сессия недействительна",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    # все записи лога ниже по запросу, в любом модуле, понесут user_id,
+    # а строка запроса возьмёт его из request.state
+    structlog.contextvars.bind_contextvars(user_id=str(user.id))
+    request.state.log_context = {"user_id": str(user.id)}
     return user
 
 

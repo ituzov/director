@@ -5,6 +5,7 @@ import hmac
 import secrets
 from datetime import UTC, datetime, timedelta
 
+import structlog
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -28,12 +29,17 @@ SESSION_RENEW_AFTER = timedelta(days=1)
 # хеш-пустышка: на несуществующую почту тратим столько же времени, сколько на настоящую
 _DUMMY_HASH = hash_password("dummy-password")
 
+# имя логгера постоянное, по нему ищут в логах: при переезде файла не меняется
+log = structlog.get_logger("app.identity")
+
 
 def _check_setup_token(token: str) -> None:
     if settings.setup_token is None:
         raise SetupDisabled
     # время сравнения не зависит от того, где расхождение: посимвольно не подобрать
     if not hmac.compare_digest(token.encode(), settings.setup_token.encode()):
+        # свежую установку кто-то пытается занять без ссылки установщика
+        log.warning("setup.invalid_token")
         raise InvalidSetupToken
 
 
@@ -60,6 +66,7 @@ async def register_owner(session: AsyncSession, *, token: str, email: str, passw
         # два setup одновременно: проверку выше прошли оба, второго остановил one_owner
         await session.rollback()
         raise OwnerAlreadyExists from e
+    log.info("setup.owner_registered", user_id=str(user.id))
     return user
 
 
@@ -74,8 +81,11 @@ async def login(
     user = await repository.user_by_email(session, email.strip().lower())
     if user is None:
         verify_password(_DUMMY_HASH, password)
+        # без почты: она личная, а по одной записи подбор паролей и так видно
+        log.warning("login.failed")
         raise InvalidCredentials
     if not verify_password(user.password_hash, password):
+        log.warning("login.failed")
         raise InvalidCredentials
     if needs_rehash(user.password_hash):
         user.password_hash = hash_password(password)
@@ -85,6 +95,7 @@ async def login(
         session, user_id=user.id, token_hash=_hash_token(token), expires_at=now + SESSION_TTL
     )
     await session.commit()
+    log.info("login.succeeded", user_id=str(user.id))
     return token
 
 
