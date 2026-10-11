@@ -6,7 +6,7 @@ export default function OverviewPage() {
   return (
     <div className="grid gap-2">
       <h1 className="text-2xl font-semibold">{t("title")}</h1>
-      <p className="text-muted-foreground text-sm">{t("empty")}</p>
+      <p className="text-sm text-muted-foreground">{t("empty")}</p>
     </div>
   );
 }

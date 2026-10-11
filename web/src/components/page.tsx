@@ -32,15 +32,15 @@ type PanelProps = {
  */
 export function Panel({ icon: Icon, title, description, actions, children }: PanelProps) {
   return (
-    <div className="bg-muted/40 rounded-2xl border p-1.5">
-      <section className="bg-card text-card-foreground rounded-xl border shadow-sm">
+    <div className="rounded-2xl border bg-muted/40 p-1.5">
+      <section className="rounded-xl border bg-card text-card-foreground shadow-sm">
         <header className="flex flex-wrap items-start justify-between gap-4 border-b p-4 md:p-6">
           <div className="grid gap-1">
             <h2 className="flex items-center gap-2 text-xl font-semibold">
-              {Icon && <Icon className="text-muted-foreground size-5" />}
+              {Icon && <Icon className="size-5 text-muted-foreground" />}
               {title}
             </h2>
-            {description && <p className="text-muted-foreground text-sm">{description}</p>}
+            {description && <p className="text-sm text-muted-foreground">{description}</p>}
           </div>
           {actions}
         </header>

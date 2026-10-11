@@ -20,10 +20,10 @@ export function MetaStrings({ metaApp }: { metaApp: MetaApp | null }) {
 
   return (
     <>
-      {!metaApp && <p className="text-muted-foreground text-sm">{t("pending")}</p>}
+      {!metaApp && <p className="text-sm text-muted-foreground">{t("pending")}</p>}
       {/* без PUBLIC_URL api не знает, по какому адресу его видит Meta */}
       {metaApp && !metaApp.webhook_url && (
-        <p className="text-muted-foreground text-sm">{t("noPublicUrl")}</p>
+        <p className="text-sm text-muted-foreground">{t("noPublicUrl")}</p>
       )}
       {FIELDS.map((field) => (
         <CopyField

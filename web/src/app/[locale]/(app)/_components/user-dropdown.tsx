@@ -30,7 +30,7 @@ export function UserDropdown({ email, role }: Props) {
             </Avatar>
             <div className="grid flex-1 text-left text-sm leading-tight">
               <span className="truncate font-medium">{email}</span>
-              <span className="text-muted-foreground truncate text-xs">{t(`roles.${role}`)}</span>
+              <span className="truncate text-xs text-muted-foreground">{t(`roles.${role}`)}</span>
             </div>
             <ChevronsUpDown className="ml-auto" />
           </DropdownMenuTrigger>

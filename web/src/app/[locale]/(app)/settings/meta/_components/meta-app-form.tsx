@@ -27,7 +27,11 @@ export function MetaAppForm({ metaApp }: { metaApp: MetaApp | null }) {
   const [replacing, setReplacing] = useState(metaApp === null);
   // время в поясе браузера, а он известен только в браузере: на сервере строку не рисуем,
   // иначе разметка сервера и браузера разойдётся
-  const inBrowser = useSyncExternalStore(subscribe, () => true, () => false);
+  const inBrowser = useSyncExternalStore(
+    subscribe,
+    () => true,
+    () => false,
+  );
 
   const fieldErrors = Object.fromEntries(
     Object.entries(state.errors ?? {}).map(([field, code]) => [field, t(`errors.${code}`)]),
@@ -86,7 +90,7 @@ export function MetaAppForm({ metaApp }: { metaApp: MetaApp | null }) {
         </Button>
         {metaApp &&
           (inBrowser ? (
-            <p className="text-muted-foreground text-sm">
+            <p className="text-sm text-muted-foreground">
               {t("updatedAt", {
                 date: format.dateTime(new Date(metaApp.updated_at), {
                   dateStyle: "medium",

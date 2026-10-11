@@ -24,11 +24,11 @@ export function FormField({ name, label, description, validate, children }: Prop
       <Field.Label render={<Label />}>{label}</Field.Label>
       {children}
       {description && (
-        <Field.Description className="text-muted-foreground text-xs">
+        <Field.Description className="text-xs text-muted-foreground">
           {description}
         </Field.Description>
       )}
-      <Field.Error className="text-destructive text-sm" />
+      <Field.Error className="text-sm text-destructive" />
     </Field.Root>
   );
 }

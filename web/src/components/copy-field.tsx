@@ -50,7 +50,7 @@ export function CopyField({ label, value = "", hint, disabled = !value }: Props)
           {copied ? <Check /> : <Copy />}
         </Button>
       </div>
-      {hint && <p className="text-muted-foreground text-xs">{hint}</p>}
+      {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
     </div>
   );
 }

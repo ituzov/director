@@ -59,6 +59,6 @@ export function CurrentPageTitle() {
 
   // h1 страницы: заголовки панелей на ней h2
   return item ? (
-    <h1 className="text-muted-foreground truncate text-sm font-normal">{t(item.key)}</h1>
+    <h1 className="truncate text-sm font-normal text-muted-foreground">{t(item.key)}</h1>
   ) : null;
 }

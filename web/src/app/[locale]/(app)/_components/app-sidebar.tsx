@@ -42,7 +42,7 @@ export function AppSidebar() {
         <Suspense fallback={<SidebarMenuSkeleton showIcon />}>
           <UserMenu />
         </Suspense>
-        <p className="text-muted-foreground text-center text-xs group-data-[collapsible=icon]:hidden">
+        <p className="text-center text-xs text-muted-foreground group-data-[collapsible=icon]:hidden">
           {tApp("version", { version: APP_VERSION })}
         </p>
       </SidebarFooter>

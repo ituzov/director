@@ -16,7 +16,7 @@ export function AuthShell({ title, description, children }: Props) {
           <Logo className="bg-brand-foreground text-brand" />
           <span className="font-display text-xl">{t("name")}</span>
         </div>
-        <p className="max-w-xl text-balance font-display text-3xl leading-tight text-brand-foreground/60 xl:text-4xl">
+        <p className="max-w-xl font-display text-3xl leading-tight text-balance text-brand-foreground/60 xl:text-4xl">
           {t.rich("tagline", {
             // каждая половина фразы со своей строки, внутри строки браузер выравнивает сам
             line: (chunks) => <span className="block">{chunks}</span>,
@@ -43,7 +43,7 @@ export function AuthShell({ title, description, children }: Props) {
               <Logo />
               <h1 className="text-2xl font-semibold">{title}</h1>
             </div>
-            <p className="text-muted-foreground text-sm">{description}</p>
+            <p className="text-sm text-muted-foreground">{description}</p>
           </div>
           {children}
         </div>

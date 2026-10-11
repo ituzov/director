@@ -44,7 +44,12 @@ export function SetupForm({ token }: { token?: string }) {
         {token ? (
           <input type="hidden" name="token" value={token} />
         ) : (
-          <FormField name="token" label={t("token")} description={t("tokenHint")} validate={required}>
+          <FormField
+            name="token"
+            label={t("token")}
+            description={t("tokenHint")}
+            validate={required}
+          >
             <Input autoComplete="off" />
           </FormField>
         )}
@@ -78,7 +83,7 @@ export function SetupForm({ token }: { token?: string }) {
           <Input type="password" autoComplete="new-password" />
         </FormField>
         {formError && (
-          <p role="alert" className="text-destructive text-sm">
+          <p role="alert" className="text-sm text-destructive">
             {t(`errors.${formError}`)}
           </p>
         )}

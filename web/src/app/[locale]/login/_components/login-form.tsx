@@ -38,7 +38,7 @@ export function LoginForm() {
         </FormField>
         {/* неверная почта или пароль: не говорим, что именно, поэтому общий блок, а не поле */}
         {state.error && (
-          <p role="alert" className="text-destructive text-sm">
+          <p role="alert" className="text-sm text-destructive">
             {t(`errors.${state.error}`)}
           </p>
         )}
