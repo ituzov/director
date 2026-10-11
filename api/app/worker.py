@@ -18,8 +18,8 @@ POLL_SECONDS = 2
 
 # кому отдавать разобранное из входящих
 HANDLERS = instagram.InboxHandlers(on_comment=autoreplies.handle_comment)
-# кому сообщать итог отправки исходящих; автоответы подключатся следующим шагом
-ON_RESULT = None
+# кому сообщать итог отправки исходящих
+ON_RESULT = autoreplies.handle_send_result
 
 log = structlog.get_logger("app.worker")
 

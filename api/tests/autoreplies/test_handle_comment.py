@@ -1,7 +1,8 @@
 """Коммент из входящих: кто отвечает под постом, выдача одна на человека и пост."""
 
+import itertools
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from sqlalchemy import select
@@ -9,9 +10,25 @@ from sqlalchemy import select
 from app import autoreplies, instagram
 from app.activity.models import Event
 from app.autoreplies.models import Autoreply, AutoreplyMedia, Delivery, Keyword
+from app.instagram.models import Account, OutboxTask
 
 ACCOUNT = uuid.uuid7()
 RECEIVED = datetime(2026, 1, 2, 3, 4, 5, tzinfo=UTC)
+
+
+@pytest.fixture(autouse=True)
+async def account(session) -> Account:
+    # письма выдачи ссылаются на настоящий аккаунт
+    account = Account(
+        id=ACCOUNT,
+        ig_user_id="17841400000000000",
+        username="shop",
+        token_encrypted="x",
+        connected_by=uuid.uuid7(),
+    )
+    session.add(account)
+    await session.commit()
+    return account
 
 
 async def make(session, *words, scope="all", posts=(), account_id=ACCOUNT, **kw) -> Autoreply:
@@ -168,3 +185,94 @@ async def test_earlier_word_decides(session, text):
     guide = await make(session, "гайд")
     await make(session, "прайс")
     assert await winner(session, comment(text)) == guide.id
+
+
+async def outbox(session) -> list[OutboxTask]:
+    return list(await session.scalars(select(OutboxTask).order_by(OutboxTask.kind)))
+
+
+async def test_delivery_queues_direct_with_button(session):
+    await make(session, "гайд", intro_text="{username}, держи 👇", button_text="Получить")
+    c = comment()
+    await handle(session, c)
+    [delivery] = await deliveries(session)
+
+    [task] = await outbox(session)
+    assert (task.kind, task.account_id, task.ref) == (
+        "private_reply",
+        ACCOUNT,
+        f"autoreplies:{delivery.id}:intro",
+    )
+    assert task.payload == {
+        "comment_id": c.comment_id,
+        "text": "vasya, держи 👇",
+        "button": {"title": "Получить", "payload": f"ar:{delivery.id}"},
+    }
+    # Private Reply живёт 7 дней от коммента
+    assert task.expires_at == RECEIVED + timedelta(days=7)
+
+
+async def test_comment_reply_with_username(session):
+    await make(session, "гайд", comment_replies=["@{username}, лови в директе"])
+    c = comment()
+    await handle(session, c)
+    [delivery] = await deliveries(session)
+    comment_task = next(t for t in await outbox(session) if t.kind == "comment_reply")
+    assert comment_task.payload == {"comment_id": c.comment_id, "text": "@vasya, лови в директе"}
+    assert comment_task.ref == f"autoreplies:{delivery.id}:comment"
+
+
+async def test_comment_replies_in_sequence(session):
+    autoreply = await make(
+        session, "гайд", comment_replies=["a", "b", "c"], comment_reply_mode="sequence"
+    )
+    for n in range(4):
+        await handle(session, comment(person_id=f"p{n}"))
+    texts = [
+        t.payload["text"]
+        for t in sorted(await outbox(session), key=lambda t: t.id)
+        if t.kind == "comment_reply"
+    ]
+    assert texts == ["a", "b", "c", "a"]
+    await session.refresh(autoreply)
+    assert autoreply.last_comment_reply == 0
+
+
+async def test_comment_replies_random_without_repeat(session):
+    await make(session, "гайд", comment_replies=["a", "b", "c"])
+    for n in range(20):
+        await handle(session, comment(person_id=f"p{n}"))
+    texts = [
+        t.payload["text"]
+        for t in sorted(await outbox(session), key=lambda t: t.id)
+        if t.kind == "comment_reply"
+    ]
+    assert len(texts) == 20
+    assert all(a != b for a, b in itertools.pairwise(texts))
+
+
+async def test_no_comment_replies_only_direct(session):
+    await make(session, "гайд")
+    await handle(session, comment())
+    assert [t.kind for t in await outbox(session)] == ["private_reply"]
+
+
+async def test_repeat_queues_nothing(session):
+    await make(session, "гайд", comment_replies=["a"])
+    await handle(session, comment())
+    await handle(session, comment("гайд ещё"))
+    assert len(await outbox(session)) == 2
+
+
+async def test_no_match_queues_nothing(session):
+    await make(session, "гайд", comment_replies=["a"])
+    await handle(session, comment("красиво"))
+    assert await outbox(session) == []
+
+
+async def test_rolled_back_with_comment(session):
+    await make(session, "гайд", comment_replies=["a"])
+    await autoreplies.handle_comment(session, comment())
+    await session.rollback()
+    assert await outbox(session) == []
+    assert await deliveries(session) == []

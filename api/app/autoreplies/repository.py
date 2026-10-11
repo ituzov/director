@@ -221,3 +221,18 @@ async def set_media_archived(
         .where(AutoreplyMedia.autoreply_id == autoreply_id)
         .values(archived=archived)
     )
+
+
+async def lock_autoreply(session: AsyncSession, autoreply_id: uuid.UUID) -> Autoreply:
+    """Автоответ под замком до конца транзакции: выбор варианта ответа и запись
+    прошлого номера одним действием, второй worker подождёт."""
+    return await session.scalar(
+        select(Autoreply)
+        .where(Autoreply.id == autoreply_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+
+
+async def get_delivery(session: AsyncSession, delivery_id: uuid.UUID) -> Delivery | None:
+    return await session.get(Delivery, delivery_id)

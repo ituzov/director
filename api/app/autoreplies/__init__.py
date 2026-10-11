@@ -8,7 +8,7 @@
 
 from app.autoreplies.exceptions import AutoreplyError
 from app.autoreplies.routes import autoreply_error_handler, router
-from app.autoreplies.service import handle_comment
+from app.autoreplies.service import handle_comment, handle_send_result
 
 __all__ = [
     # HTTP модуля, подключает main
@@ -17,4 +17,5 @@ __all__ = [
     "router",
     # обработчики для worker
     "handle_comment",
+    "handle_send_result",
 ]

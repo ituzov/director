@@ -8,7 +8,7 @@ from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import activity, identity, instagram
-from app.autoreplies import matching, repository
+from app.autoreplies import matching, replies, repository
 from app.autoreplies.exceptions import (
     AccountUnavailable,
     AutoreplyArchived,
@@ -19,6 +19,14 @@ from app.autoreplies.models import Autoreply
 from app.autoreplies.schemas import AutoreplyForm, AutoreplyIn
 
 log = structlog.get_logger("app.autoreplies")
+
+# кнопка автоответа: по префиксу нажатие узнаём среди кнопок других модулей
+BUTTON_PREFIX = "ar:"
+# метка исходящих автоответа: «autoreplies:<выдача>:<этап>»
+REF_PREFIX = "autoreplies"
+# этапы: директ с кнопкой и ответ под комментом
+INTRO = "intro"
+COMMENT = "comment"
 
 
 @dataclass(frozen=True, slots=True)
@@ -215,6 +223,8 @@ async def handle_comment(session: AsyncSession, comment: instagram.CommentRef) -
         person_id=comment.person_id,
         keyword=match.keyword,
     )
+    if delivery_id:
+        await _enqueue_replies(session, comment, match.autoreply_id, delivery_id)
     activity.record(
         session,
         "autoreply.matched" if delivery_id else "autoreply.repeat_comment",
@@ -229,6 +239,92 @@ async def handle_comment(session: AsyncSession, comment: instagram.CommentRef) -
         occurred_at=comment.received_at,
     )
     return True
+
+
+async def _enqueue_replies(
+    session: AsyncSession,
+    comment: instagram.CommentRef,
+    autoreply_id: uuid.UUID,
+    delivery_id: uuid.UUID,
+) -> None:
+    """Письма на выдачу: директ с кнопкой и, если заданы варианты, ответ под комментом.
+    В той же транзакции, что и выдача: решение и письма ложатся вместе."""
+    autoreply = await repository.lock_autoreply(session, autoreply_id)
+    await instagram.enqueue_private_reply(
+        session,
+        account_id=comment.account_id,
+        comment_id=comment.comment_id,
+        commented_at=comment.received_at,
+        text=replies.fill(autoreply.intro_text, comment.username),
+        button=instagram.Button(
+            title=autoreply.button_text, payload=f"{BUTTON_PREFIX}{delivery_id}"
+        ),
+        ref=_ref(delivery_id, INTRO),
+    )
+    index = replies.pick(
+        len(autoreply.comment_replies),
+        autoreply.last_comment_reply,
+        autoreply.comment_reply_mode,
+    )
+    if index is None:
+        return
+    autoreply.last_comment_reply = index
+    await instagram.enqueue_comment_reply(
+        session,
+        account_id=comment.account_id,
+        comment_id=comment.comment_id,
+        text=replies.fill(autoreply.comment_replies[index], comment.username),
+        ref=_ref(delivery_id, COMMENT),
+    )
+
+
+async def handle_send_result(session: AsyncSession, result: instagram.OutboxResult) -> None:
+    """Итог отправки письма автоответа: этап в выдаче и запись в журнал.
+    Чужие метки и выдачи, которых уже нет, пропускаем."""
+    parsed = _parse_ref(result.ref)
+    if parsed is None:
+        return
+    delivery_id, stage = parsed
+    delivery = await repository.get_delivery(session, delivery_id)
+    if delivery is None:
+        return
+
+    data: dict = {"delivery_id": str(delivery.id), "stage": stage}
+    if result.outcome != "sent":
+        kind = "autoreply.send_failed"
+        data |= {"outcome": result.outcome, "reason": result.reason}
+    elif stage == INTRO:
+        delivery.sent_at = func.now()
+        kind = "autoreply.sent"
+    elif stage == COMMENT:
+        delivery.commented_at = func.now()
+        kind = "autoreply.commented"
+    else:
+        return
+    activity.record(
+        session,
+        kind,
+        account_id=delivery.account_id,
+        autoreply_id=delivery.autoreply_id,
+        person_id=delivery.person_id,
+        comment_id=delivery.comment_id,
+        data=data,
+    )
+
+
+def _ref(delivery_id: uuid.UUID, stage: str) -> str:
+    return f"{REF_PREFIX}:{delivery_id}:{stage}"
+
+
+def _parse_ref(ref: str) -> tuple[uuid.UUID, str] | None:
+    prefix, _, rest = ref.partition(":")
+    delivery, _, stage = rest.partition(":")
+    if prefix != REF_PREFIX or not stage:
+        return None
+    try:
+        return uuid.UUID(delivery), stage
+    except ValueError:
+        return None
 
 
 async def _candidates(
