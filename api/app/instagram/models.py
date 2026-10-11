@@ -39,8 +39,8 @@ class MetaApp(Base):
 
 
 class InboxEvent(Base):
-    """Вебхук Meta, принятый, но ещё не разобранный. Вебхук только кладёт сюда
-    и сразу отвечает 200, разбирает worker. Разобранные стираем через неделю:
+    """Вебхук Meta. Вебхук только кладёт сюда и сразу отвечает 200, разбирает
+    worker по одному событию в транзакции. Разобранные стираем через неделю:
     в payload текст коммента и id человека."""
 
     __tablename__ = "inbox"
@@ -50,6 +50,11 @@ class InboxEvent(Base):
             "ix_inbox_pending",
             "received_at",
             postgresql_where=text("processed_at IS NULL"),
+        ),
+        CheckConstraint("outcome IN ('done', 'skipped', 'failed')", name="outcome_known"),
+        # итог есть ровно у разобранного: «разобрано, но непонятно чем» не бывает
+        CheckConstraint(
+            "(processed_at IS NULL) = (outcome IS NULL)", name="outcome_when_processed"
         ),
         {"schema": "instagram"},
     )
@@ -61,7 +66,7 @@ class InboxEvent(Base):
     # id аккаунта Instagram из entry[].id: чей это вебхук. Длину чужих id Meta не
     # обещает, поэтому без ограничения: лишние символы не должны ронять вебхук
     ig_account_id: Mapped[str] = mapped_column(Text)
-    # comment, message, postback
+    # comment, message, postback, read
     kind: Mapped[str] = mapped_column(String(16))
     # Meta повторяет вебхуки: id коммента или mid сообщения, второй раз не ляжет
     dedup_key: Mapped[str] = mapped_column(String(128), unique=True)
@@ -70,6 +75,15 @@ class InboxEvent(Base):
     # id запроса вебхука: worker поднимает его в логи, цепочка читается по одному id
     request_id: Mapped[str | None] = mapped_column(String(64))
     processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # done: разобрано; skipped: не для нас (чужой аккаунт, свой коммент); failed: сдались
+    outcome: Mapped[str | None] = mapped_column(String(16))
+    # почему skipped или почему падало: наш код причины или имя класса ошибки.
+    # Текст ошибки не храним: в нём бывают куски payload с личными данными
+    reason: Mapped[str | None] = mapped_column(String(64))
+    # сколько раз worker брался и падал; после 5 outcome = failed
+    attempts: Mapped[int] = mapped_column(SmallInteger, server_default="0")
+    # упавшее не берём раньше этого времени, пауза растёт с attempts
+    retry_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class Account(Base):

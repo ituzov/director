@@ -1,6 +1,7 @@
 """Модели instagram: инварианты держит база, а не только код."""
 
 import uuid
+from datetime import UTC, datetime
 
 import pytest
 from sqlalchemy.exc import IntegrityError
@@ -22,11 +23,33 @@ async def test_second_row_rejected(session):
         await session.commit()
 
 
+def make_event(**kw) -> InboxEvent:
+    return InboxEvent(ig_account_id="1", kind="comment", dedup_key="c1", payload={}, **kw)
+
+
+async def test_inbox_unknown_outcome_rejected(session):
+    session.add(make_event(processed_at=datetime.now(UTC), outcome="maybe"))
+    with pytest.raises(IntegrityError, match="ck_inbox_outcome_known"):
+        await session.commit()
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [
+        # разобрано, но непонятно чем
+        {"processed_at": datetime(2026, 1, 1, tzinfo=UTC)},
+        # итог есть, а событие всё ещё в очереди
+        {"outcome": "done"},
+    ],
+)
+async def test_inbox_outcome_only_when_processed(session, fields):
+    session.add(make_event(**fields))
+    with pytest.raises(IntegrityError, match="ck_inbox_outcome_when_processed"):
+        await session.commit()
+
+
 async def test_inbox_duplicate_rejected(session):
     # Meta повторила вебхук: тот же коммент второй раз в очередь не ляжет
-    def make_event() -> InboxEvent:
-        return InboxEvent(ig_account_id="1", kind="comment", dedup_key="c1", payload={})
-
     session.add(make_event())
     await session.commit()
 
