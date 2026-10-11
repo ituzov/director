@@ -19,7 +19,8 @@ from structlog.typing import Processor
 # ключи, значения которых в лог не попадают никогда, даже если их передали по ошибке
 _SECRETS = {"authorization", "token", "access_token", "app_secret", "secret", "password"}
 
-log = structlog.get_logger(__name__)
+# имя логгера постоянное, по нему ищут в логах: при переезде файла не меняется
+log = structlog.get_logger("app.core")
 
 
 def _mask_secrets(_logger: object, _method: str, event: dict) -> dict:

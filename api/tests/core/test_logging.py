@@ -1,5 +1,6 @@
 """Логи: секреты не утекают, у каждого запроса строка с request_id."""
 
+import json
 import logging
 
 import pytest
@@ -90,3 +91,13 @@ def test_uvicorn_goes_to_common_format(real_logging, capsys):
     # своя запись uvicorn в нашем JSON, а его access-лог молчит: запросы пишем сами
     assert '"logger": "uvicorn.error"' in err
     assert "GET / 200" not in err
+
+
+async def test_request_line_logger_name_is_stable(client, real_logging, capsys):
+    # по имени логгера ищут в логах: оно не должно зависеть от имени файла
+    real_logging()
+    capsys.readouterr()
+    await client.get("/setup")
+    lines = [json.loads(line) for line in capsys.readouterr().err.splitlines()]
+    [request] = [e for e in lines if e["event"] == "request"]
+    assert request["logger"] == "app.core"
