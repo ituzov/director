@@ -4,7 +4,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,6 +24,23 @@ def add_meta_app(
     )
     session.add(meta_app)
     return meta_app
+
+
+async def claim_inbox_event(session: AsyncSession) -> InboxEvent | None:
+    """Самое старое неразобранное, чей повтор уже наступил. Запирается до конца
+    транзакции: второй worker его пропустит, а не будет ждать."""
+    return await session.scalar(
+        select(InboxEvent)
+        .where(InboxEvent.processed_at.is_(None))
+        .where(or_(InboxEvent.retry_at.is_(None), InboxEvent.retry_at <= func.now()))
+        .order_by(InboxEvent.received_at)
+        .limit(1)
+        .with_for_update(skip_locked=True)
+    )
+
+
+async def get_account_by_ig_id(session: AsyncSession, ig_user_id: str) -> Account | None:
+    return await session.scalar(select(Account).where(Account.ig_user_id == ig_user_id))
 
 
 async def add_inbox_events(session: AsyncSession, rows: list[dict]) -> int:
