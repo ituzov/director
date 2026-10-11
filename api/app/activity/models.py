@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, Index, String, func
+from sqlalchemy import CheckConstraint, DateTime, Index, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -36,8 +36,9 @@ class Event(Base):
     # наш id аккаунта Instagram; пусто у событий установки целиком
     account_id: Mapped[uuid.UUID | None]
     campaign_id: Mapped[uuid.UUID | None]
-    # id человека и коммента в Instagram; стираются вместе с data
-    person_id: Mapped[str | None] = mapped_column(String(32))
-    comment_id: Mapped[str | None] = mapped_column(String(64))
+    # id человека и коммента в Instagram; стираются вместе с data.
+    # Длину чужих id Meta не обещает, поэтому без ограничения
+    person_id: Mapped[str | None] = mapped_column(Text)
+    comment_id: Mapped[str | None] = mapped_column(Text)
     # подробности для человека: текст коммента, причина пропуска, ошибка Meta
     data: Mapped[dict] = mapped_column(JSONB, server_default="{}")

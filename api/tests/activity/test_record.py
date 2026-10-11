@@ -61,3 +61,9 @@ async def test_bad_kind_rejected_by_database(session):
     session.add(Event(kind="CommentReceived", data={}))
     with pytest.raises(IntegrityError, match="ck_event_kind_format"):
         await session.commit()
+
+
+async def test_long_external_ids_fit(session):
+    # длину id человека и коммента Meta не обещает: длинные ложатся
+    activity.record(session, "comment.received", person_id="1" * 100, comment_id="2" * 100)
+    await session.commit()
