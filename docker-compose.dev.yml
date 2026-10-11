@@ -1,4 +1,4 @@
-# Только инфраструктура для локальной разработки.
+# Только инфраструктура для локальной разработки: база и вход для туннеля.
 # api и web запускаем руками, полный стек живёт в docker-compose.yml
 name: director-dev
 
@@ -14,6 +14,17 @@ services:
     volumes:
       # с 18-й версии образ ждёт том здесь, данные ложатся в 18/docker
       - db-data:/var/lib/postgresql
+
+  # вход для туннеля: маршруты как в проде, api и web запущены на машине
+  caddy:
+    image: caddy:2
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./Caddyfile.dev:/etc/caddy/Caddyfile:ro
+    extra_hosts:
+      # на Mac это имя есть само, на Linux его надо объявить
+      - "host.docker.internal:host-gateway"
 
 volumes:
   db-data:
