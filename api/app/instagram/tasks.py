@@ -347,6 +347,47 @@ async def _now(session: AsyncSession):
     return await session.scalar(func.now().select())
 
 
+# --- токены ---
+
+# токен живёт 60 дней; обновляем, когда осталось меньше 50: Meta требует старше
+# суток, а при её сбоях у нас недели на повторы, а не часы
+REFRESH_WHEN_LEFT = timedelta(days=50)
+
+
+async def refresh_due_tokens(session: AsyncSession) -> int:
+    """Обновить токены всех аккаунтов, которым пора. Каждый в своей транзакции:
+    сбой у одного не мешает остальным, неудачный попробуем в следующий запуск."""
+    refreshed = 0
+    for account_id in await repository.accounts_due_refresh(session, left=REFRESH_WHEN_LEFT):
+        with structlog.contextvars.bound_contextvars(account_id=str(account_id)):
+            try:
+                refreshed += await _refresh_one(session, account_id)
+            except (graph.GraphError, httpx.HTTPError) as error:
+                await session.rollback()
+                reason = (
+                    str(error.code or error.status)
+                    if isinstance(error, graph.GraphError)
+                    else type(error).__name__
+                )
+                log.warning("account.token_refresh_failed", reason=reason)
+    return refreshed
+
+
+async def _refresh_one(session: AsyncSession, account_id: Any) -> int:
+    account = await repository.lock_account_due_refresh(session, account_id, left=REFRESH_WHEN_LEFT)
+    if account is None:
+        await session.rollback()
+        return 0
+    async with _http() as http:
+        fresh = await graph.refresh_token(http, token=crypto.decrypt(account.token_encrypted))
+    account.token_encrypted = crypto.encrypt(fresh.access_token)
+    expires_at = await _now(session) + timedelta(seconds=fresh.expires_in)
+    account.token_expires_at = expires_at
+    await session.commit()
+    log.info("account.token_refreshed", expires_at=expires_at.isoformat())
+    return 1
+
+
 def _finish(event: InboxEvent, outcome: str, reason: str | None) -> None:
     event.processed_at = func.now()
     event.outcome = outcome

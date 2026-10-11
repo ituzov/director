@@ -16,6 +16,9 @@ from app.db import SessionLocal, engine
 # Meta (1–9 с) почти незаметны, а пустой запрос по частичному индексу копеечный
 POLL_SECONDS = 2
 
+# редкие задачи: обновление токенов, позже уборка. Первый раз сразу при старте
+PERIODIC_SECONDS = 12 * 60 * 60
+
 # кому отдавать разобранное из входящих
 HANDLERS = instagram.InboxHandlers(
     on_comment=autoreplies.handle_comment,
@@ -37,6 +40,12 @@ async def step(make_session=SessionLocal) -> bool:
     return received or sent
 
 
+async def periodic(make_session=SessionLocal) -> None:
+    """Редкие задачи. Каждая сама решает, кому из аккаунтов пора."""
+    async with make_session() as session:
+        await instagram.refresh_due_tokens(session)
+
+
 async def main() -> None:
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()
@@ -45,8 +54,15 @@ async def main() -> None:
         loop.add_signal_handler(sig, stop.set)
 
     log.info("worker.started")
+    next_periodic = loop.time()
     # stop проверяем после каждого события: остановка не ждёт конца очереди
     while not stop.is_set():
+        if loop.time() >= next_periodic:
+            next_periodic = loop.time() + PERIODIC_SECONDS
+            try:
+                await periodic()
+            except Exception:
+                log.exception("worker.periodic_failed")
         try:
             busy = await step()
         except Exception:

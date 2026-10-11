@@ -67,6 +67,43 @@ async def private_replies_last_hour(
     return count, oldest
 
 
+async def accounts_due_refresh(session: AsyncSession, *, left: timedelta) -> list[uuid.UUID]:
+    """Активные аккаунты, чей токен истекает раньше, чем через left."""
+    return list(
+        await session.scalars(
+            select(Account.id)
+            .where(Account.status == "active", Account.token_encrypted.is_not(None))
+            .where(
+                or_(
+                    Account.token_expires_at.is_(None),
+                    Account.token_expires_at < func.now() + left,
+                )
+            )
+            .order_by(Account.token_expires_at.nulls_first())
+        )
+    )
+
+
+async def lock_account_due_refresh(
+    session: AsyncSession, account_id: uuid.UUID, *, left: timedelta
+) -> Account | None:
+    """Аккаунт под замком, если ему всё ещё пора: соседний worker мог обновить его
+    между выборкой и замком."""
+    return await session.scalar(
+        select(Account)
+        .where(Account.id == account_id, Account.status == "active")
+        .where(Account.token_encrypted.is_not(None))
+        .where(
+            or_(
+                Account.token_expires_at.is_(None),
+                Account.token_expires_at < func.now() + left,
+            )
+        )
+        .with_for_update(skip_locked=True)
+        .execution_options(populate_existing=True)
+    )
+
+
 async def get_account(session: AsyncSession, account_id: uuid.UUID) -> Account | None:
     return await session.get(Account, account_id)
 

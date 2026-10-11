@@ -23,7 +23,7 @@ from app.instagram.outbox import (
 )
 from app.instagram.routes import instagram_error_handler, router, webhook_router
 from app.instagram.service import get_account
-from app.instagram.tasks import process_inbox_event, send_outbox_task
+from app.instagram.tasks import process_inbox_event, refresh_due_tokens, send_outbox_task
 
 __all__ = [
     # HTTP модуля, подключает main
@@ -50,4 +50,5 @@ __all__ = [
     "PostbackRef",
     "send_outbox_task",
     "OutboxResult",
+    "refresh_due_tokens",
 ]

@@ -90,6 +90,17 @@ async def long_lived_token(
     return LongToken(access_token=data["access_token"], expires_in=int(data["expires_in"]))
 
 
+async def refresh_token(http: httpx.AsyncClient, *, token: str) -> LongToken:
+    """Долгий токен в новый долгий на 60 дней. Meta требует: старше суток и не истёк."""
+    data = _json(
+        await http.get(
+            f"{GRAPH}/refresh_access_token",
+            params={"grant_type": "ig_refresh_token", "access_token": token},
+        )
+    )
+    return LongToken(access_token=data["access_token"], expires_in=int(data["expires_in"]))
+
+
 async def get_me(http: httpx.AsyncClient, *, token: str) -> Me:
     data = _json(
         await http.get(
