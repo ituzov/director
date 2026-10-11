@@ -40,5 +40,13 @@ services:
     depends_on:
       migrate: { condition: service_completed_successfully }
 
+  # тот же образ, что api: разбирает входящие и отправляет исходящие
+  worker:
+    <<: *api
+    restart: unless-stopped
+    command: ["python", "-m", "app.worker"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
 volumes:
   db-data:
