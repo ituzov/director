@@ -30,9 +30,12 @@ class MetaApp(Base):
     app_secret_encrypted: Mapped[str]
     # пароль проверки адреса вебхука: генерирует Директор, владелец копирует в Meta
     verify_token: Mapped[str] = mapped_column(String(64))
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-    )
+    # когда меняли ключи. Ставит save_meta_app, а не onupdate: подтверждение вебхука
+    # тоже обновляет строку, но ключи от этого не меняются
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    # когда Meta последний раз подтвердила адрес вебхука нашим маркером.
+    # Самопроверка админки сюда не пишет: это знак, что владелец прошёл шаг в кабинете
+    webhook_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class InboxEvent(Base):

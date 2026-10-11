@@ -1,5 +1,7 @@
 """Ручки ключей приложения Meta: только владелец, секрет наружу не уходит."""
 
+from datetime import UTC, datetime
+
 import pytest
 
 from app.config import settings
@@ -9,6 +11,7 @@ from app.instagram import repository
 APP_ID = "1571874044224461"
 SECRET = "0123456789abcdef0123456789abcdef"
 OTHER_SECRET = "f" * 32
+OLD = datetime(2000, 1, 1, tzinfo=UTC)
 
 
 @pytest.fixture
@@ -119,3 +122,16 @@ async def test_meta_urls_without_public_url(client, owner, monkeypatch, public_u
         "/instagram/app", headers=owner, json={"app_id": APP_ID, "app_secret": SECRET}
     )
     assert r.json()["webhook_url"] is None
+
+
+async def test_resave_moves_updated_at(client, session, owner):
+    await client.put("/instagram/app", headers=owner, json={"app_id": APP_ID, "app_secret": SECRET})
+    # тест целиком в одной транзакции, а now() в ней не движется: состарим время руками
+    meta_app = await repository.get_meta_app(session)
+    meta_app.updated_at = OLD
+    await session.commit()
+
+    r = await client.put("/instagram/app", headers=owner, json={"app_id": APP_ID})
+    # время считает база и отдаёт в том же ответе: без лишнего запроса и без ошибки async
+    assert r.status_code == 200
+    assert datetime.fromisoformat(r.json()["updated_at"]) > OLD

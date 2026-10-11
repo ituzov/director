@@ -1,8 +1,10 @@
 """Сценарии instagram. Одна функция это одна операция и один commit."""
 
 import secrets
+from datetime import UTC, datetime
 
 import structlog
+from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -52,6 +54,7 @@ async def save_meta_app(session: AsyncSession, *, app_id: str, app_secret: str |
         if app_secret is not None:
             meta_app.app_secret_encrypted = crypto.encrypt(app_secret)
         # verify_token не трогаем: он уже прописан в Meta, новый сломает вебхук
+        meta_app.updated_at = func.now()
 
     try:
         await session.commit()
@@ -64,18 +67,27 @@ async def save_meta_app(session: AsyncSession, *, app_id: str, app_secret: str |
     return meta_app
 
 
+# Meta проверяет адрес с mode=subscribe, самопроверка админки с mode=check.
+# Подделать subscribe нельзя: без маркера успеха нет, а маркер знают только Meta и мы
+META_MODE = "subscribe"
+CHECK_MODE = "check"
+
+
 async def verify_webhook(session: AsyncSession, *, mode: str | None, token: str | None) -> bool:
-    """Проверка адреса вебхука из кабинета Meta: подписка и наш маркер."""
+    """Проверка адреса вебхука: от Meta из кабинета или самопроверка админки."""
     meta_app = await repository.get_meta_app(session)
     if meta_app is None:
         reason = "no_app"
-    elif mode != "subscribe":
+    elif mode not in (META_MODE, CHECK_MODE):
         reason = "bad_mode"
     # сравнение за постоянное время: по скорости ответа маркер не подобрать
     elif token is None or not secrets.compare_digest(token, meta_app.verify_token):
         reason = "bad_token"
     else:
-        log.info("webhook.verified")
+        if mode == META_MODE:
+            meta_app.webhook_verified_at = datetime.now(UTC)
+            await session.commit()
+        log.info("webhook.verified", mode=mode)
         return True
     log.warning("webhook.verify_failed", reason=reason)
     return False

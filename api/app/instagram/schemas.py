@@ -26,6 +26,8 @@ class MetaAppOut(BaseModel):
     app_id: str
     verify_token: str
     updated_at: datetime
+    # Meta подтвердила адрес вебхука; None, пока владелец не нажал «Подтвердить» в кабинете
+    webhook_verified_at: datetime | None
     # строки для кабинета Meta. None, пока не задан адрес сервера
     webhook_url: str | None
     redirect_uri: str | None

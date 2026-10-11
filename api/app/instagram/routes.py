@@ -31,6 +31,7 @@ def _meta_app_out(meta_app: MetaApp) -> MetaAppOut:
         app_id=meta_app.app_id,
         verify_token=meta_app.verify_token,
         updated_at=meta_app.updated_at,
+        webhook_verified_at=meta_app.webhook_verified_at,
         webhook_url=service.public_url(service.WEBHOOK_PATH),
         redirect_uri=service.public_url(service.OAUTH_CALLBACK_PATH),
         privacy_url=service.public_url(service.PRIVACY_PATH),
