@@ -1,4 +1,4 @@
-"""Круг worker: разбирает входящие пачкой не больше BATCH, каждое в своей сессии."""
+"""Шаг worker: одно входящее за раз, в своей сессии."""
 
 import uuid
 from contextlib import asynccontextmanager
@@ -11,7 +11,7 @@ from app.instagram.models import InboxEvent
 
 
 def sessions(session):
-    """Фабрика сессий для круга: отдаёт песочницу теста и не закрывает её."""
+    """Фабрика сессий для шага: отдаёт песочницу теста и не закрывает её."""
 
     @asynccontextmanager
     async def make():
@@ -40,19 +40,16 @@ async def pending(session) -> int:
 
 
 async def test_nothing_to_do(session):
-    assert await worker.run_once(sessions(session)) == 0
+    assert await worker.step(sessions(session)) is False
 
 
-async def test_handles_all_waiting(session):
-    await add_events(session, 3)
-    assert await worker.run_once(sessions(session)) == 3
+async def test_one_event_per_step(session):
+    await add_events(session, 2)
+    assert await worker.step(sessions(session)) is True
+    assert await pending(session) == 1
+    assert await worker.step(sessions(session)) is True
     assert await pending(session) == 0
-
-
-async def test_stops_at_batch(session):
-    await add_events(session, worker.BATCH + 2)
-    assert await worker.run_once(sessions(session)) == worker.BATCH
-    assert await pending(session) == 2
+    assert await worker.step(sessions(session)) is False
 
 
 def test_nobody_gets_events_yet():

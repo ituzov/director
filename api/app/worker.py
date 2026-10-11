@@ -14,8 +14,6 @@ from app.db import SessionLocal, engine
 
 # входящих нет: спим. Meta сама доставляет за 1–9 с, 5 с поверх незаметны
 POLL_SECONDS = 5
-# событий за круг, потом проверяем, не просят ли остановиться
-BATCH = 10
 
 # кому отдавать разобранное. Автоответов ещё нет: комменты только в журнал
 HANDLERS = instagram.InboxHandlers()
@@ -23,15 +21,10 @@ HANDLERS = instagram.InboxHandlers()
 log = structlog.get_logger("app.worker")
 
 
-async def run_once(make_session=SessionLocal) -> int:
-    """Один круг: до BATCH входящих, каждое в своей сессии и транзакции."""
-    handled = 0
-    for _ in range(BATCH):
-        async with make_session() as session:
-            if not await instagram.process_inbox_event(session, HANDLERS):
-                break
-        handled += 1
-    return handled
+async def step(make_session=SessionLocal) -> bool:
+    """Один шаг: одно входящее в своей сессии и транзакции. False: делать нечего."""
+    async with make_session() as session:
+        return await instagram.process_inbox_event(session, HANDLERS)
 
 
 async def main() -> None:
@@ -42,14 +35,15 @@ async def main() -> None:
         loop.add_signal_handler(sig, stop.set)
 
     log.info("worker.started")
+    # stop проверяем после каждого события: остановка не ждёт конца очереди
     while not stop.is_set():
         try:
-            handled = await run_once()
+            busy = await step()
         except Exception:
             # база недоступна и прочее вне события: не падаем, ждём и пробуем снова
-            log.exception("worker.cycle_failed")
-            handled = 0
-        if handled == 0:
+            log.exception("worker.step_failed")
+            busy = False
+        if not busy:
             # спим, но SIGTERM будит сразу, а не через 5 секунд
             with suppress(TimeoutError):
                 await asyncio.wait_for(stop.wait(), POLL_SECONDS)
