@@ -3,7 +3,17 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, Index, SmallInteger, String, Text, func, text
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    SmallInteger,
+    String,
+    Text,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -121,3 +131,50 @@ class Account(Base):
         DateTime(timezone=True), server_default=func.now()
     )
     disconnected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class OutboxTask(Base):
+    """Исходящее в Meta: Private Reply, сообщение или ответ под комментом. Кладут
+    той же транзакцией, что и решение, отправляет worker. Сеть только здесь."""
+
+    __tablename__ = "outbox"
+    __table_args__ = (
+        CheckConstraint("kind IN ('private_reply', 'message', 'comment_reply')", name="kind_known"),
+        CheckConstraint("outcome IN ('sent', 'failed', 'expired')", name="outcome_known"),
+        # итог есть ровно у завершённой задачи
+        CheckConstraint("(finished_at IS NULL) = (outcome IS NULL)", name="outcome_when_finished"),
+        # очередь worker: незавершённые по времени, завершённые индекс не раздувают
+        Index("ix_outbox_due", "run_at", postgresql_where=text("outcome IS NULL")),
+        # лимит 750 Private Reply в час на аккаунт считается по этому индексу
+        Index(
+            "ix_outbox_private_replies_sent",
+            "account_id",
+            "finished_at",
+            postgresql_where=text("kind = 'private_reply' AND outcome = 'sent'"),
+        ),
+        {"schema": "instagram"},
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid7)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    account_id: Mapped[uuid.UUID] = mapped_column(ForeignKey(Account.id))
+    kind: Mapped[str] = mapped_column(String(16))
+    # кому и что: comment_id или recipient_id, text, button {title, payload}
+    payload: Mapped[dict] = mapped_column(JSONB)
+    # метка вызывающего («autoreplies:<id выдачи>»): instagram её не читает,
+    # только возвращает с итогом отправки
+    ref: Mapped[str | None] = mapped_column(String(128))
+    # один Private Reply на коммент, одно сообщение на нажатие: второй не ляжет
+    dedup_key: Mapped[str] = mapped_column(String(128), unique=True)
+    # раньше не отправлять: перенос по лимиту и пауза между повторами
+    run_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    # позже Meta не примет: Private Reply 7 дней от коммента, сообщение 24 часа
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    attempts: Mapped[int] = mapped_column(SmallInteger, server_default="0")
+    # sent, failed, expired
+    outcome: Mapped[str | None] = mapped_column(String(16))
+    # код ошибки Meta или имя класса ошибки, без текста
+    reason: Mapped[str | None] = mapped_column(String(64))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # id запроса вебхука, из-за которого задача появилась: логи склеиваются
+    request_id: Mapped[str | None] = mapped_column(String(64))

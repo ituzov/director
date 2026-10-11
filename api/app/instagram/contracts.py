@@ -38,6 +38,14 @@ class CommentRef:
 
 
 @dataclass(frozen=True, slots=True)
+class Button:
+    """Кнопка под сообщением. payload Meta вернёт вебхуком нажатия как есть."""
+
+    title: str
+    payload: str
+
+
+@dataclass(frozen=True, slots=True)
 class InboxHandlers:
     """Кому отдать разобранное из входящих. Собирает worker, порядок
     «сначала автоответы, потом ассистент» тоже его. None: этот вид пока
