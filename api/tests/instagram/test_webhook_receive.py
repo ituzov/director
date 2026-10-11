@@ -8,7 +8,7 @@ import pytest
 from sqlalchemy import func, select
 from structlog.testing import capture_logs
 
-from app.instagram import service
+from app.instagram import service, webhook
 from app.instagram.models import InboxEvent
 
 URL = "/webhooks/instagram"
@@ -51,7 +51,7 @@ async def test_stored(client, session, meta_app):
     [event] = await inbox(session)
     assert (event.kind, event.dedup_key, event.ig_account_id) == (
         "comment",
-        "comment:180001",
+        webhook.dedup_key("comment", "180001"),
         "17841400000000000",
     )
     assert event.payload["text"] == TEXT
@@ -112,3 +112,24 @@ async def test_not_json_accepted_empty(client, session, meta_app):
     r = await client.post(URL, content=body, headers=sign(body))
     assert r.status_code == 200
     assert await inbox(session) == []
+
+
+async def test_real_length_mid_stored(client, session, meta_app):
+    # mid настоящего прочтения длиннее колонки ключа: пачка всё равно ложится
+    body = json.dumps(
+        {
+            "object": "instagram",
+            "entry": [
+                {
+                    "id": "17841400000000000",
+                    "messaging": [
+                        {"sender": {"id": "1000000000000042"}, "read": {"mid": "aWdf" + "Z" * 200}}
+                    ],
+                }
+            ],
+        }
+    ).encode()
+    r = await client.post(URL, content=body, headers=sign(body))
+    assert r.status_code == 200
+    [event] = await inbox(session)
+    assert event.kind == "read"

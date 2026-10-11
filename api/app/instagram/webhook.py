@@ -5,6 +5,7 @@
 кривой кусок пропускаем, а не роняем весь вебхук, иначе Meta повторяет его бесконечно.
 """
 
+import hashlib
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -22,7 +23,7 @@ _ENVELOPE = {"sender", "recipient", "timestamp"}
 class InboxItem:
     ig_account_id: str
     kind: str
-    # с префиксом вида: id коммента и mid сообщения из разных пространств
+    # вид и хэш id: mid у Instagram под 200 символов, а ключ нужен короткий и одной длины
     dedup_key: str
     payload: dict[str, Any]
 
@@ -53,7 +54,7 @@ def parse_webhook(body: Any) -> Parsed:
 def _parse_change(parsed: Parsed, account: str, change: dict) -> None:
     value = _dict(change.get("value"))
     if change.get("field") == "comments" and value.get("id"):
-        parsed.items.append(InboxItem(account, COMMENT, f"{COMMENT}:{value['id']}", value))
+        parsed.items.append(InboxItem(account, COMMENT, dedup_key(COMMENT, value["id"]), value))
     else:
         parsed.skipped.append(str(change.get("field")))
 
@@ -66,15 +67,23 @@ def _parse_messaging(parsed: Parsed, account: str, event: dict) -> None:
         # наши же исходящие: Meta возвращает их эхом
         parsed.skipped.append("echo")
     elif message.get("mid"):
-        parsed.items.append(InboxItem(account, MESSAGE, f"{MESSAGE}:{message['mid']}", event))
+        parsed.items.append(InboxItem(account, MESSAGE, dedup_key(MESSAGE, message["mid"]), event))
     elif postback.get("mid"):
-        parsed.items.append(InboxItem(account, POSTBACK, f"{POSTBACK}:{postback['mid']}", event))
+        parsed.items.append(
+            InboxItem(account, POSTBACK, dedup_key(POSTBACK, postback["mid"]), event)
+        )
     elif read.get("mid"):
         # в ключе и человек: стоит копейки, а уникальность mid между людьми мы не проверяли
         sender = _dict(event.get("sender")).get("id")
-        parsed.items.append(InboxItem(account, READ, f"{READ}:{sender}:{read['mid']}", event))
+        parsed.items.append(InboxItem(account, READ, dedup_key(READ, sender, read["mid"]), event))
     else:
         parsed.skipped.append(next((key for key in event if key not in _ENVELOPE), "unknown"))
+
+
+def dedup_key(kind: str, *ids: object) -> str:
+    """Ключ повтора: вид читаемо, id хэшем. Префикс вида разводит пространства id."""
+    digest = hashlib.sha256(":".join(str(i) for i in ids).encode()).hexdigest()
+    return f"{kind}:{digest}"
 
 
 def _dict(value: Any) -> dict:
