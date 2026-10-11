@@ -7,6 +7,11 @@
 from fastapi import FastAPI
 
 from app import identity, instagram
+from app.config import settings
+from app.core.logging import log_requests, setup_logging
+
+# до создания приложения: uvicorn уже настроил свои логи, перехватываем их
+setup_logging(settings.log_level, settings.log_json)
 
 app = FastAPI(
     title="Director API",
@@ -17,6 +22,7 @@ app = FastAPI(
 )
 app.include_router(identity.router)
 app.include_router(instagram.router)
+app.middleware("http")(log_requests)
 
 
 @app.get("/health")

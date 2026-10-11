@@ -9,6 +9,8 @@ x-api: &api
     DATABASE_URL: postgresql+psycopg://director:${POSTGRES_PASSWORD}@db:5432/director
     SECRET_KEY: ${SECRET_KEY:?задай SECRET_KEY в .env}
     PUBLIC_URL: ${PUBLIC_URL:-}
+    # в контейнере нет терминала, но не полагаемся на угадывание
+    LOG_JSON: "true"
 
 services:
   db:

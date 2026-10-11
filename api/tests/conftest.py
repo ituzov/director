@@ -9,6 +9,7 @@
 после прерванного прогона.
 """
 
+import logging
 import os
 import subprocess
 import sys
@@ -21,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from app.config import settings
+from app.core.logging import setup_logging
 from app.db import get_session
 from app.identity import repository as identity_repository
 from app.identity import service as identity_service
@@ -114,3 +116,13 @@ def login_as(session):
         return {"Authorization": f"Bearer {token}"}
 
     return login
+
+
+@pytest.fixture
+def real_logging():
+    """Настоящая цепочка логов в JSON на время теста, потом прежние обработчики.
+    Читать вывод через capsys.readouterr().err."""
+    root = logging.getLogger()
+    handlers, level = root.handlers[:], root.level
+    yield lambda: setup_logging("INFO", json=True)
+    root.handlers, root.level = handlers, level
