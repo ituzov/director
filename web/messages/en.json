@@ -44,6 +44,7 @@
         "settings": "Settings"
       },
       "overview": "Overview",
+      "accounts": "Accounts",
       "metaApp": "Meta app"
     },
     "overview": {
@@ -109,6 +110,27 @@
         "bad_status": "The URL responded with an error, so the request didn't reach Director.",
         "bad_body": "Something other than Director responded: check that /webhooks/ leads to the api."
       }
+    }
+  },
+  "Accounts": {
+    "title": "Instagram accounts",
+    "description": "Accounts Director replies from to comments and messages.",
+    "connect": "Connect Instagram",
+    "empty": "None yet. Connect an account with the button at the top right.",
+    "connectedAt": "Connected {date}",
+    "status": {
+      "active": "Active",
+      "token_expired": "Sign in again",
+      "disconnected": "Disconnected"
+    },
+    "result": {
+      "connected": "Account @{username} is connected.",
+      "denied": "You cancelled the connection on the Instagram screen.",
+      "expired": "The connection didn't finish in time. Start again.",
+      "failed": "Instagram responded with an error. Try again in a minute.",
+      "forbidden": "Accounts can be connected by the owner or a member with that permission.",
+      "MetaAppRequired": "Save the keys in “Meta app” first.",
+      "PublicUrlRequired": "The server address (PUBLIC_URL) isn't set, so Instagram has nowhere to send you back."
     }
   }
 }

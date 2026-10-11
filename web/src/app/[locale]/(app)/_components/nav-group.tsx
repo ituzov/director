@@ -1,6 +1,6 @@
 "use client";
 
-import { KeyRound, LayoutDashboard } from "lucide-react";
+import { AtSign, KeyRound, LayoutDashboard } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import {
@@ -16,7 +16,10 @@ import { Link, usePathname } from "@/i18n/navigation";
 // Пункты по группам: пункт появляется вместе со своей страницей.
 // Здесь, а не на сервере: иконки это компоненты, через границу в браузер их не передать
 const GROUPS = {
-  work: [{ href: "/", key: "overview", icon: LayoutDashboard }],
+  work: [
+    { href: "/", key: "overview", icon: LayoutDashboard },
+    { href: "/accounts", key: "accounts", icon: AtSign },
+  ],
   settings: [{ href: "/settings/meta", key: "metaApp", icon: KeyRound }],
 } as const;
 
