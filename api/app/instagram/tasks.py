@@ -228,6 +228,8 @@ async def _send(session: AsyncSession, task: OutboxTask) -> Result | None:
         return _finish_task(task, "failed", "account_inactive")
 
     if task.kind == "private_reply":
+        # до конца транзакции: счёт и сама отправка не разойдутся с соседним отправителем
+        await repository.lock_private_replies(session, account.id)
         count, oldest = await repository.private_replies_last_hour(session, account.id)
         if count >= PRIVATE_REPLIES_PER_HOUR:
             # не ждём, а переносим: остальные аккаунты не стоят за этим в очереди

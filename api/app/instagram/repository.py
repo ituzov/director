@@ -50,6 +50,14 @@ async def claim_outbox_task(session: AsyncSession) -> OutboxTask | None:
     )
 
 
+async def lock_private_replies(session: AsyncSession, account_id: uuid.UUID) -> None:
+    """Private Reply одного аккаунта по очереди до конца транзакции: иначе два
+    отправителя разом увидят 749 за час и оба отправят. Своя приставка ключа:
+    блокировки других модулей на тот же аккаунт с этой не пересекаются."""
+    key = f"instagram.private_reply:{account_id}"
+    await session.execute(select(func.pg_advisory_xact_lock(func.hashtextextended(key, 0))))
+
+
 async def private_replies_last_hour(
     session: AsyncSession, account_id: uuid.UUID
 ) -> tuple[int, datetime | None]:
