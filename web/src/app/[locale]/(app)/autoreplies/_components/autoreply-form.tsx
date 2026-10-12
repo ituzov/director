@@ -3,6 +3,7 @@
 import { Field } from "@base-ui/react/field";
 import { Form } from "@base-ui/react/form";
 import { MessageCircle, MousePointerClick, Package, Send, UserCheck } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { startTransition, useActionState, useEffect, useRef, useState } from "react";
 
@@ -27,7 +28,15 @@ const TEXTAREA =
 
 type Props = { autoreply: Autoreply | null };
 
-export function AutoreplyForm({ autoreply }: Props) {
+/** Next прячет страницу при уходе, а не убирает (Activity), и вернувшись по ссылке
+ * человек увидел бы недописанное. Новый переход даёт новый bfcacheId и чистую форму;
+ * «Назад» в браузере id не меняет, введённое остаётся. */
+export function AutoreplyForm(props: Props) {
+  const { bfcacheId } = useRouter();
+  return <AutoreplyFormFields key={bfcacheId} {...props} />;
+}
+
+function AutoreplyFormFields({ autoreply }: Props) {
   const t = useTranslations("AutoreplyForm");
   const [state, action, pending] = useActionState(saveAutoreply, INITIAL);
   const [scope, setScope] = useState(autoreply?.scope ?? "all");
