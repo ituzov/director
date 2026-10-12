@@ -192,7 +192,10 @@
     "conflict": {
       "keyword": "Can’t restore: the word “{value}” is already used by “{name}”.",
       "post": "Can’t restore: this post is already used by “{name}”."
-    }
+    },
+    "moreWords": "{count} more",
+    "keywords": "Keywords",
+    "word": "“{word}”"
   },
   "AutoreplyForm": {
     "archivedNotice": "This auto-reply is archived. Restore it from the list to edit.",

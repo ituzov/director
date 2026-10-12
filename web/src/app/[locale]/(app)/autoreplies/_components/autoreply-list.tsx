@@ -16,10 +16,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Link } from "@/i18n/navigation";
 import type { Autoreply, AutoreplyConflict } from "@/lib/autoreplies";
+import { cn } from "@/lib/utils";
 
 import { archive, setEnabled, unarchive } from "../actions";
 
 type Props = { autoreplies: Autoreply[]; archived: boolean };
+
+const MAX_WORDS = 6;
 
 export function AutoreplyList({ autoreplies, archived }: Props) {
   const t = useTranslations("Autoreplies");
@@ -46,6 +49,11 @@ function AutoreplyCard({ autoreply, archived }: { autoreply: Autoreply; archived
   // переключатель щёлкает сразу, не дожидаясь api
   const [enabled, setOptimistic] = useOptimistic(autoreply.enabled);
   const [conflict, setConflict] = useState<AutoreplyConflict | null>(null);
+  // выключенный в архиве и так не работает: приглушаем только активные
+  const off = !archived && !enabled;
+  // слов бывает до 50: в карточке первые, остальное числом
+  const words = autoreply.keywords.slice(0, MAX_WORDS);
+  const hidden = autoreply.keywords.length - words.length;
 
   function toggle(next: boolean) {
     startTransition(async () => {
@@ -68,32 +76,16 @@ function AutoreplyCard({ autoreply, archived }: { autoreply: Autoreply; archived
       className="relative flex flex-col gap-3 rounded-xl border p-4 transition-colors hover:bg-muted/40"
       aria-busy={pending}
     >
-      <div className="flex items-start justify-between gap-3">
-        {/* flex-1: колонка занимает всё место до переключателя, иначе бейджи
-            переносились по одному, хотя ряд свободен */}
-        <div className="grid min-w-0 flex-1 gap-2">
-          <Link
-            href={`/autoreplies/${autoreply.id}`}
-            className="truncate font-medium after:absolute after:inset-0 after:rounded-xl"
-          >
-            {autoreply.name}
-          </Link>
-          <div className="flex flex-wrap gap-1.5">
-            {autoreply.keywords.map((word) => (
-              <Badge key={word} variant="secondary">
-                {word}
-              </Badge>
-            ))}
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            <Badge variant="outline">
-              {autoreply.scope === "all"
-                ? t("allPosts")
-                : t("posts", { count: autoreply.media_ids.length })}
-            </Badge>
-            {autoreply.follow_gate && <Badge variant="outline">{t("followGate")}</Badge>}
-          </div>
-        </div>
+      <div className="flex items-center justify-between gap-3">
+        <Link
+          href={`/autoreplies/${autoreply.id}`}
+          className={cn(
+            "min-w-0 truncate font-medium after:absolute after:inset-0 after:rounded-xl",
+            off && "text-muted-foreground",
+          )}
+        >
+          {autoreply.name}
+        </Link>
         <div className="relative z-10 flex shrink-0 items-center gap-2">
           {!archived && (
             <Switch
@@ -126,6 +118,27 @@ function AutoreplyCard({ autoreply, archived }: { autoreply: Autoreply; archived
               )}
             </DropdownMenuContent>
           </DropdownMenu>
+        </div>
+      </div>
+
+      {/* под шапкой на всю ширину карточки: рядом с переключателем бейджам было тесно */}
+      <div className={cn("grid gap-2", off && "opacity-60")}>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-xs text-muted-foreground">{t("keywords")}</span>
+          {words.map((word) => (
+            <Badge key={word} variant="secondary">
+              {t("word", { word })}
+            </Badge>
+          ))}
+          {hidden > 0 && <Badge variant="secondary">{t("moreWords", { count: hidden })}</Badge>}
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          <Badge variant="outline">
+            {autoreply.scope === "all"
+              ? t("allPosts")
+              : t("posts", { count: autoreply.media_ids.length })}
+          </Badge>
+          {autoreply.follow_gate && <Badge variant="outline">{t("followGate")}</Badge>}
         </div>
       </div>
       {conflict && (
