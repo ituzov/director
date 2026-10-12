@@ -10,8 +10,10 @@ from typing import Any
 
 import httpx
 
+from app.config import settings
+
 OAUTH = "https://api.instagram.com/oauth/access_token"
-GRAPH = "https://graph.instagram.com"
+GRAPH = settings.graph_url.rstrip("/")
 # версия API: та же, что выбрана у вебхуков в кабинете Meta
 VERSION = "v26.0"
 

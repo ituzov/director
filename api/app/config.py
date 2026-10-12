@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     # Адрес сервера снаружи, https://... без / в конце: из него ссылки для
     # кабинета Meta и адрес возврата OAuth. Не задан: ссылок нет
     public_url: str | None = None
+    # Graph API Instagram. Меняют только нагрузочный тест и e2e: там вместо Meta
+    # заглушка, чтобы не слать настоящие сообщения людям
+    graph_url: str = "https://graph.instagram.com"
     # DEBUG, INFO, WARNING. JSON не задан: в терминале строки, иначе JSON
     log_level: str = "INFO"
     log_json: bool | None = None
