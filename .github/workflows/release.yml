@@ -1,0 +1,85 @@
+# Релиз по тегу vX.Y.Z: проверки, образы под amd64 и arm64 в GHCR,
+# черновик GitHub Release с файлами для установки
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    uses: ./.github/workflows/ci.yml
+
+  # docker/github-builder: каждая платформа на своём нативном раннере,
+  # потом одно оглавление под тегами версии
+  api:
+    needs: checks
+    uses: docker/github-builder/.github/workflows/build.yml@v1
+    permissions:
+      contents: read
+      # подпись происхождения образа через OIDC GitHub
+      id-token: write
+      packages: write
+    with:
+      output: image
+      push: true
+      context: api
+      platforms: linux/amd64,linux/arm64
+      cache: true
+      cache-scope: api
+      meta-images: ghcr.io/ituzov/director-api
+      # v0.1.0 даёт 0.1.0, 0.1 и latest; пре-релиз v0.1.0-rc.1 только свой тег
+      meta-tags: |
+        type=semver,pattern={{version}}
+        type=semver,pattern={{major}}.{{minor}}
+    secrets:
+      registry-auths: |
+        - registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+  web:
+    needs: checks
+    uses: docker/github-builder/.github/workflows/build.yml@v1
+    permissions:
+      contents: read
+      id-token: write
+      packages: write
+    with:
+      output: image
+      push: true
+      context: web
+      platforms: linux/amd64,linux/arm64
+      cache: true
+      cache-scope: web
+      # версия запекается в меню при сборке
+      build-args: APP_VERSION={{meta.version}}
+      meta-images: ghcr.io/ituzov/director-web
+      meta-tags: |
+        type=semver,pattern={{version}}
+        type=semver,pattern={{major}}.{{minor}}
+    secrets:
+      registry-auths: |
+        - registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+  # черновик: заметки пишутся руками, публикует владелец репо
+  release:
+    needs: [api, web]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: softprops/action-gh-release@v3
+        with:
+          draft: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          # установщик и апдейтер берут файлы ровно этой версии, а не из main
+          files: |
+            docker-compose.yml
+            Caddyfile
