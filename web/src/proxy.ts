@@ -22,5 +22,6 @@ export default function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: "/((?!api|_next|_vercel|.*\\..*).*)",
+  // icon и apple-icon: картинки иконок без расширения в адресе, язык им не нужен
+  matcher: "/((?!api|_next|_vercel|icon|apple-icon|.*\\..*).*)",
 };
