@@ -14,7 +14,9 @@ RUN npm run build
 
 FROM node:24-trixie-slim
 WORKDIR /app
-ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 HOSTNAME=0.0.0.0 PORT=3000
+# и здесь: динамические страницы читают версию при запросе, а не при сборке
+ARG APP_VERSION=dev
+ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 HOSTNAME=0.0.0.0 PORT=3000 APP_VERSION=$APP_VERSION
 COPY --from=build --chown=node:node /app/.next/standalone ./
 # standalone не копирует статику сам
 COPY --from=build --chown=node:node /app/.next/static ./.next/static
