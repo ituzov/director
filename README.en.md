@@ -1,10 +1,11 @@
 <p align="center"><b>Director</b></p>
 <p align="center">They drop a keyword in the comments and get a reply in DMs.</p>
-<p align="center"><a href="README.md">Русский</a></p>
+<p align="center"><a href="docs/self-hosting.en.md">Install</a> · <a href="README.md">Русский</a></p>
 
 <p align="center"><img src=".github/assets/demo.en.gif" alt="Director" width="800"></p>
 
-> Under active development. One-command install is not ready yet.
+> Early 0.x version: breaking changes between versions are possible. The
+> first release, 0.1.0, is on its way, and the install command will work from it.
 
 ## What it is
 
@@ -13,23 +14,31 @@ under a post, Director replies in the comments and sends them a DM with a
 button. They tap the button and get the guide. Followers and non-followers can
 get different replies.
 
-It runs on your server through your own Meta app. Data, tokens and messages
-stay with you.
+Director runs on your server through your own Meta app. Standard Access is
+enough for your own accounts: no App Review, business verification or
+registered company needed. Data, tokens and messages stay with you.
 
 ## Features
 
 - Campaigns: a post, keywords, a reply in the comments and in DMs
 - Follow check: one reply for followers, another for everyone else
 - Multiple Instagram accounts in one install
-- Users and roles: owner, members, access to specific accounts
 - A queue that stays within Instagram limits (750 replies per hour per
   account) when a post goes viral
+- One-command updates with a database backup and rollback if something goes
+  wrong
 
-## Why self-hosted
+## Install
 
-Each install runs through its own Meta app. Standard Access is enough for
-your own accounts: no App Review, business verification or registered company
-needed.
+You need a server with Ubuntu or Debian and a public IP:
+
+```sh
+curl -fsSL https://github.com/ituzov/director/releases/latest/download/install.sh | sudo bash
+```
+
+In a couple of minutes the script prints a link to the first sign-in, already
+over HTTPS. Server requirements, your own domain, updates and backups are in
+the [install guide](docs/self-hosting.en.md).
 
 ## Stack
 
