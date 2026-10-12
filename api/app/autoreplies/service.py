@@ -216,6 +216,9 @@ async def handle_comment(session: AsyncSession, comment: instagram.CommentRef) -
     if match is None:
         return False
 
+    # под замком: выбор ответа по очереди не должен разойтись с соседним комментом
+    autoreply = await repository.lock_autoreply(session, match.autoreply_id)
+    reply_index, reply_text = _choose_comment_reply(autoreply, comment.username)
     delivery_id = await repository.add_delivery(
         session,
         autoreply_id=match.autoreply_id,
@@ -224,9 +227,13 @@ async def handle_comment(session: AsyncSession, comment: instagram.CommentRef) -
         media_id=comment.media_id,
         person_id=comment.person_id,
         keyword=match.keyword,
+        comment_reply=reply_text,
     )
     if delivery_id:
-        await _enqueue_replies(session, comment, match.autoreply_id, delivery_id)
+        # очередь вариантов сдвигаем, только если выдача правда новая, а не повтор
+        if reply_index is not None:
+            autoreply.last_comment_reply = reply_index
+        await _enqueue_private_reply(session, comment, autoreply, delivery_id)
     activity.record(
         session,
         "autoreply.matched" if delivery_id else "autoreply.repeat_comment",
@@ -243,15 +250,14 @@ async def handle_comment(session: AsyncSession, comment: instagram.CommentRef) -
     return True
 
 
-async def _enqueue_replies(
+async def _enqueue_private_reply(
     session: AsyncSession,
     comment: instagram.CommentRef,
-    autoreply_id: uuid.UUID,
+    autoreply: Autoreply,
     delivery_id: uuid.UUID,
 ) -> None:
-    """Письма на выдачу: директ с кнопкой и, если заданы варианты, ответ под комментом.
-    В той же транзакции, что и выдача: решение и письма ложатся вместе."""
-    autoreply = await repository.lock_autoreply(session, autoreply_id)
+    """Директ с кнопкой на выдачу, в той же транзакции: решение и письмо ложатся вместе.
+    Ответ под комментом ждёт, пока директ уйдёт (handle_send_result)."""
     await instagram.enqueue_private_reply(
         session,
         account_id=comment.account_id,
@@ -263,21 +269,21 @@ async def _enqueue_replies(
         ),
         ref=_ref(delivery_id, INTRO),
     )
+
+
+def _choose_comment_reply(
+    autoreply: Autoreply, username: str | None
+) -> tuple[int | None, str | None]:
+    """Номер и текст ответа под комментом с подставленным ником, ничего не меняя.
+    (None, None), если вариантов нет."""
     index = replies.pick(
         len(autoreply.comment_replies),
         autoreply.last_comment_reply,
         autoreply.comment_reply_mode,
     )
     if index is None:
-        return
-    autoreply.last_comment_reply = index
-    await instagram.enqueue_comment_reply(
-        session,
-        account_id=comment.account_id,
-        comment_id=comment.comment_id,
-        text=replies.fill(autoreply.comment_replies[index], comment.username),
-        ref=_ref(delivery_id, COMMENT),
-    )
+        return None, None
+    return index, replies.fill(autoreply.comment_replies[index], username)
 
 
 async def handle_postback(session: AsyncSession, postback: instagram.PostbackRef) -> bool:
@@ -361,6 +367,15 @@ async def handle_send_result(session: AsyncSession, result: instagram.OutboxResu
     elif stage == INTRO:
         delivery.sent_at = func.now()
         kind = "autoreply.sent"
+        # директ ушёл, теперь правда «отправили в директ». Не ушёл: ответа не будет
+        if delivery.comment_reply:
+            await instagram.enqueue_comment_reply(
+                session,
+                account_id=delivery.account_id,
+                comment_id=delivery.comment_id,
+                text=delivery.comment_reply,
+                ref=_ref(delivery.id, COMMENT),
+            )
     elif stage == COMMENT:
         delivery.commented_at = func.now()
         kind = "autoreply.commented"

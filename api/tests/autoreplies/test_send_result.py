@@ -8,6 +8,7 @@ from sqlalchemy import select
 from app import autoreplies, instagram
 from app.activity.models import Event
 from app.autoreplies.models import Autoreply, Delivery
+from app.instagram.models import Account, OutboxTask
 
 
 @pytest.fixture
@@ -108,3 +109,40 @@ async def test_foreign_or_unknown_ignored(session, delivery, ref):
     await session.refresh(delivery)
     assert delivery.sent_at is None
     assert await journal(session) == []
+
+
+async def comment_replies(session) -> list[OutboxTask]:
+    return list(await session.scalars(select(OutboxTask).where(OutboxTask.kind == "comment_reply")))
+
+
+async def test_comment_reply_after_direct_sent(session, delivery):
+    # «отправили в директ» под комментом только когда директ правда ушёл
+    account = Account(
+        ig_user_id="17841400000000000",
+        username="shop",
+        token_encrypted="x",
+        connected_by=uuid.uuid7(),
+    )
+    session.add(account)
+    await session.flush()
+    delivery.account_id = account.id
+    delivery.comment_reply = "@vasya, лови в директе"
+    await session.commit()
+    await report(session, f"autoreplies:{delivery.id}:intro")
+    [task] = await comment_replies(session)
+    assert task.payload == {"comment_id": "c1", "text": "@vasya, лови в директе"}
+    assert task.ref == f"autoreplies:{delivery.id}:comment"
+    assert task.account_id == delivery.account_id
+
+
+@pytest.mark.parametrize("outcome", ["failed", "expired"])
+async def test_no_comment_reply_when_direct_failed(session, delivery, outcome):
+    delivery.comment_reply = "@vasya, лови в директе"
+    await session.commit()
+    await report(session, f"autoreplies:{delivery.id}:intro", outcome=outcome, reason="x")
+    assert await comment_replies(session) == []
+
+
+async def test_no_comment_reply_without_variants(session, delivery):
+    await report(session, f"autoreplies:{delivery.id}:intro")
+    assert await comment_replies(session) == []

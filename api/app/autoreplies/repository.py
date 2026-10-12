@@ -62,6 +62,7 @@ async def add_delivery(
     media_id: str,
     person_id: str,
     keyword: str,
+    comment_reply: str | None = None,
 ) -> uuid.UUID | None:
     """Новая выдача. None: уже выдавали (тот же человек под тем же постом или тот же
     коммент). Одним запросом: между проверкой и вставкой нет щели для второго worker."""
@@ -74,6 +75,7 @@ async def add_delivery(
             media_id=media_id,
             person_id=person_id,
             keyword=keyword,
+            comment_reply=comment_reply,
         )
         .on_conflict_do_nothing()
         .returning(Delivery.id)

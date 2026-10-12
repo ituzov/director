@@ -217,9 +217,9 @@ async def test_comment_reply_with_username(session):
     c = comment()
     await handle(session, c)
     [delivery] = await deliveries(session)
-    comment_task = next(t for t in await outbox(session) if t.kind == "comment_reply")
-    assert comment_task.payload == {"comment_id": c.comment_id, "text": "@vasya, лови в директе"}
-    assert comment_task.ref == f"autoreplies:{delivery.id}:comment"
+    # ответ выбран и запомнен, но в очередь встанет, только когда уйдёт директ
+    assert delivery.comment_reply == "@vasya, лови в директе"
+    assert [t.kind for t in await outbox(session)] == ["private_reply"]
 
 
 async def test_comment_replies_in_sequence(session):
@@ -228,11 +228,7 @@ async def test_comment_replies_in_sequence(session):
     )
     for n in range(4):
         await handle(session, comment(person_id=f"p{n}"))
-    texts = [
-        t.payload["text"]
-        for t in sorted(await outbox(session), key=lambda t: t.id)
-        if t.kind == "comment_reply"
-    ]
+    texts = [d.comment_reply for d in sorted(await deliveries(session), key=lambda d: d.id)]
     assert texts == ["a", "b", "c", "a"]
     await session.refresh(autoreply)
     assert autoreply.last_comment_reply == 0
@@ -242,11 +238,7 @@ async def test_comment_replies_random_without_repeat(session):
     await make(session, "гайд", comment_replies=["a", "b", "c"])
     for n in range(20):
         await handle(session, comment(person_id=f"p{n}"))
-    texts = [
-        t.payload["text"]
-        for t in sorted(await outbox(session), key=lambda t: t.id)
-        if t.kind == "comment_reply"
-    ]
+    texts = [d.comment_reply for d in sorted(await deliveries(session), key=lambda d: d.id)]
     assert len(texts) == 20
     assert all(a != b for a, b in itertools.pairwise(texts))
 
@@ -261,7 +253,17 @@ async def test_repeat_queues_nothing(session):
     await make(session, "гайд", comment_replies=["a"])
     await handle(session, comment())
     await handle(session, comment("гайд ещё"))
-    assert len(await outbox(session)) == 2
+    assert len(await outbox(session)) == 1
+
+
+async def test_repeat_does_not_move_sequence(session):
+    # повтор выдачу не создаёт и вариант «по очереди» не съедает
+    await make(session, "гайд", comment_replies=["a", "b"], comment_reply_mode="sequence")
+    await handle(session, comment(person_id="p1"))
+    await handle(session, comment("гайд ещё", person_id="p1"))
+    await handle(session, comment(person_id="p2"))
+    texts = [d.comment_reply for d in sorted(await deliveries(session), key=lambda d: d.id)]
+    assert texts == ["a", "b"]
 
 
 async def test_no_match_queues_nothing(session):
