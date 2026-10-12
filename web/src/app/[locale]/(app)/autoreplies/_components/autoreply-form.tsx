@@ -18,6 +18,7 @@ import { type Autoreply, LIMITS, normalizeKeyword } from "@/lib/autoreplies";
 import { cn } from "@/lib/utils";
 
 import { type SaveState, saveAutoreply } from "../actions";
+import { type PreviewTexts, AutoreplyPreview } from "./autoreply-preview";
 import { ChipsInput } from "./chips-input";
 import { PostPicker } from "./post-picker";
 
@@ -27,7 +28,11 @@ const INITIAL: SaveState = {};
 const TEXTAREA =
   "min-h-20 w-full rounded-lg border border-input bg-transparent px-2.5 py-2 text-base transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 md:text-sm";
 
-type Props = { autoreply: Autoreply | null };
+type Props = {
+  autoreply: Autoreply | null;
+  // ник аккаунта для превью; null, если аккаунт не нашёлся
+  username: string | null;
+};
 
 /** Next прячет страницу при уходе, а не убирает (Activity), и вернувшись по ссылке
  * человек увидел бы недописанное. Новый переход даёт новый bfcacheId и чистую форму;
@@ -37,12 +42,23 @@ export function AutoreplyForm(props: Props) {
   return <AutoreplyFormFields key={bfcacheId} {...props} />;
 }
 
-function AutoreplyFormFields({ autoreply }: Props) {
+function AutoreplyFormFields({ autoreply, username }: Props) {
   const t = useTranslations("AutoreplyForm");
   const [state, action, pending] = useActionState(saveAutoreply, INITIAL);
   const [scope, setScope] = useState(autoreply?.scope ?? "all");
   const [gate, setGate] = useState(autoreply?.follow_gate ?? false);
   const archived = Boolean(autoreply?.archived_at);
+  // тексты для превью: поля сообщают их сюда по мере ввода
+  const [texts, setTexts] = useState<Omit<PreviewTexts, "gate">>(() => ({
+    keyword: autoreply?.keywords[0] ?? "",
+    intro: autoreply?.intro_text ?? t("defaults.intro"),
+    button: autoreply?.button_text ?? t("defaults.button"),
+    reply: autoreply?.reply_text ?? "",
+    notFollowing: autoreply?.not_following_text ?? t("defaults.notFollowing"),
+    commentReply: autoreply ? (autoreply.comment_replies[0] ?? "") : t("defaults.reply1"),
+  }));
+  const setText = (key: keyof typeof texts) => (value: string) =>
+    setTexts((prev) => ({ ...prev, [key]: value }));
   const formRef = useRef<HTMLFormElement>(null);
 
   // api вернул ошибку: форма длинная, ведём к самой верхней, иначе её не видно под кнопкой
@@ -76,7 +92,7 @@ function AutoreplyFormFields({ autoreply }: Props) {
         startTransition(() => action(data));
       }}
     >
-      <Page>
+      <Page width="wide">
         {autoreply && <input type="hidden" name="id" value={autoreply.id} />}
         <input type="hidden" name="enabled" value={String(autoreply?.enabled ?? true)} />
 
@@ -86,134 +102,166 @@ function AutoreplyFormFields({ autoreply }: Props) {
           </p>
         )}
 
-        <Panel
-          icon={MousePointerClick}
-          title={t("trigger.title")}
-          description={t("trigger.description")}
-        >
-          <FormField name="name" label={t("name")} description={t("nameHint")} validate={required}>
-            <Input defaultValue={autoreply?.name} maxLength={LIMITS.name} autoComplete="off" />
-          </FormField>
+        {/* от lg превью справа и едет вместе с экраном, ниже уходит под форму */}
+        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
+          <div className="grid gap-6">
+            <Panel
+              icon={MousePointerClick}
+              title={t("trigger.title")}
+              description={t("trigger.description")}
+            >
+              <FormField
+                name="name"
+                label={t("name")}
+                description={t("nameHint")}
+                validate={required}
+              >
+                <Input defaultValue={autoreply?.name} maxLength={LIMITS.name} autoComplete="off" />
+              </FormField>
 
-          <Block
-            label={t("keywords")}
-            hint={t("keywordsHint")}
-            error={errors.keywords && t(`errors.${errors.keywords}`)}
-          >
-            <ChipsInput
-              name="keywords"
-              defaultValue={autoreply?.keywords ?? []}
-              placeholder={t("keywordsPlaceholder")}
-              maxItems={LIMITS.keywords}
-              maxLength={100}
-              splitOnComma
-              keyOf={normalizeKeyword}
-              removeLabel={(value) => t("remove", { value })}
-              invalid={Boolean(errors.keywords || state.conflict?.kind === "keyword")}
-            />
-            {state.conflict?.kind === "keyword" && <Conflict conflict={state.conflict} />}
-          </Block>
+              <Block
+                label={t("keywords")}
+                hint={t("keywordsHint")}
+                error={errors.keywords && t(`errors.${errors.keywords}`)}
+              >
+                <ChipsInput
+                  name="keywords"
+                  onValueChange={(words) => setText("keyword")(words[0] ?? "")}
+                  defaultValue={autoreply?.keywords ?? []}
+                  placeholder={t("keywordsPlaceholder")}
+                  maxItems={LIMITS.keywords}
+                  maxLength={100}
+                  splitOnComma
+                  keyOf={normalizeKeyword}
+                  removeLabel={(value) => t("remove", { value })}
+                  invalid={Boolean(errors.keywords || state.conflict?.kind === "keyword")}
+                />
+                {state.conflict?.kind === "keyword" && <Conflict conflict={state.conflict} />}
+              </Block>
 
-          <Block
-            label={t("scope")}
-            hint={t("scopeHint")}
-            error={errors.media_ids && t(`errors.${errors.media_ids}`)}
-          >
-            <Choice
-              name="scope"
-              value={scope}
-              onChange={(value) => setScope(value as "all" | "posts")}
-              options={[
-                { value: "all", label: t("scopeAll") },
-                { value: "posts", label: t("scopePosts") },
-              ]}
-            />
-            {scope === "posts" && (
-              <PostPicker
-                accountId={autoreply?.account_id ?? null}
-                autoreplyId={autoreply?.id ?? null}
-                initial={autoreply?.media_ids ?? []}
+              <Block
+                label={t("scope")}
+                hint={t("scopeHint")}
+                error={errors.media_ids && t(`errors.${errors.media_ids}`)}
+              >
+                <Choice
+                  name="scope"
+                  value={scope}
+                  onChange={(value) => setScope(value as "all" | "posts")}
+                  options={[
+                    { value: "all", label: t("scopeAll") },
+                    { value: "posts", label: t("scopePosts") },
+                  ]}
+                />
+                {scope === "posts" && (
+                  <PostPicker
+                    accountId={autoreply?.account_id ?? null}
+                    autoreplyId={autoreply?.id ?? null}
+                    initial={autoreply?.media_ids ?? []}
+                  />
+                )}
+                {state.conflict?.kind === "post" && <Conflict conflict={state.conflict} />}
+              </Block>
+            </Panel>
+
+            <Panel icon={Send} title={t("direct.title")} description={t("direct.description")}>
+              <Counted
+                name="intro_text"
+                onValueChange={setText("intro")}
+                label={t("introText")}
+                hint={t("usernameHint")}
+                defaultValue={autoreply?.intro_text ?? t("defaults.intro")}
+                max={LIMITS.buttonMessage}
+                validate={required}
+                multiline
               />
-            )}
-            {state.conflict?.kind === "post" && <Conflict conflict={state.conflict} />}
-          </Block>
-        </Panel>
+              <Counted
+                name="button_text"
+                onValueChange={setText("button")}
+                label={t("buttonText")}
+                defaultValue={autoreply?.button_text ?? t("defaults.button")}
+                max={LIMITS.button}
+                validate={required}
+              />
+            </Panel>
 
-        <Panel icon={Send} title={t("direct.title")} description={t("direct.description")}>
-          <Counted
-            name="intro_text"
-            label={t("introText")}
-            hint={t("usernameHint")}
-            defaultValue={autoreply?.intro_text ?? t("defaults.intro")}
-            max={LIMITS.buttonMessage}
-            validate={required}
-            multiline
-          />
-          <Counted
-            name="button_text"
-            label={t("buttonText")}
-            defaultValue={autoreply?.button_text ?? t("defaults.button")}
-            max={LIMITS.button}
-            validate={required}
-          />
-        </Panel>
+            <Panel
+              icon={Package}
+              title={t("material.title")}
+              description={t("material.description")}
+            >
+              <Counted
+                name="reply_text"
+                onValueChange={setText("reply")}
+                label={t("replyText")}
+                hint={t("replyTextHint")}
+                defaultValue={autoreply?.reply_text ?? ""}
+                max={LIMITS.messageBytes}
+                bytes
+                validate={required}
+                multiline
+              />
+            </Panel>
 
-        <Panel icon={Package} title={t("material.title")} description={t("material.description")}>
-          <Counted
-            name="reply_text"
-            label={t("replyText")}
-            hint={t("replyTextHint")}
-            defaultValue={autoreply?.reply_text ?? ""}
-            max={LIMITS.messageBytes}
-            bytes
-            validate={required}
-            multiline
-          />
-        </Panel>
+            <Panel icon={UserCheck} title={t("gate.title")} description={t("gate.description")}>
+              <div className="flex items-center gap-3">
+                <Switch
+                  id="follow_gate"
+                  name="follow_gate"
+                  checked={gate}
+                  onCheckedChange={setGate}
+                />
+                <Label htmlFor="follow_gate">{t("gateSwitch")}</Label>
+              </div>
+              {/* поле живёт и при выключенной проверке: текст не пропадает при переключении */}
+              <div className={cn(!gate && "hidden")}>
+                <Counted
+                  name="not_following_text"
+                  onValueChange={setText("notFollowing")}
+                  label={t("notFollowingText")}
+                  defaultValue={autoreply?.not_following_text ?? t("defaults.notFollowing")}
+                  max={LIMITS.buttonMessage}
+                  validate={(value) => (gate ? required(value) : null)}
+                  multiline
+                />
+              </div>
+            </Panel>
 
-        <Panel icon={UserCheck} title={t("gate.title")} description={t("gate.description")}>
-          <div className="flex items-center gap-3">
-            <Switch id="follow_gate" name="follow_gate" checked={gate} onCheckedChange={setGate} />
-            <Label htmlFor="follow_gate">{t("gateSwitch")}</Label>
+            <Panel
+              icon={MessageCircle}
+              title={t("comment.title")}
+              description={t("comment.description")}
+            >
+              <CommentReplies
+                defaultValue={
+                  autoreply
+                    ? autoreply.comment_replies
+                    : [t("defaults.reply1"), t("defaults.reply2")]
+                }
+                defaultMode={autoreply?.comment_reply_mode ?? "random"}
+                onValueChange={(replies) => setText("commentReply")(replies[0] ?? "")}
+                error={errors.comment_replies && t(`errors.${errors.comment_replies}`)}
+              />
+            </Panel>
           </div>
-          {/* поле живёт и при выключенной проверке: текст не пропадает при переключении */}
-          <div className={cn(!gate && "hidden")}>
-            <Counted
-              name="not_following_text"
-              label={t("notFollowingText")}
-              defaultValue={autoreply?.not_following_text ?? t("defaults.notFollowing")}
-              max={LIMITS.buttonMessage}
-              validate={(value) => (gate ? required(value) : null)}
-              multiline
-            />
+          {/* выше экрана колонка листается сама: иначе её низ не увидеть */}
+          <div className="grid gap-3 lg:sticky lg:top-4 lg:max-h-[calc(100dvh-2rem)] lg:overflow-y-auto">
+            <AutoreplyPreview texts={{ ...texts, gate }} account={username} />
           </div>
-        </Panel>
+        </div>
 
-        <Panel
-          icon={MessageCircle}
-          title={t("comment.title")}
-          description={t("comment.description")}
-        >
-          <CommentReplies
-            defaultValue={
-              autoreply ? autoreply.comment_replies : [t("defaults.reply1"), t("defaults.reply2")]
-            }
-            defaultMode={autoreply?.comment_reply_mode ?? "random"}
-            error={errors.comment_replies && t(`errors.${errors.comment_replies}`)}
-          />
-        </Panel>
-
-        {state.failed && (
-          <p className="text-sm text-destructive" role="alert">
-            {t(`errors.${state.failed}`)}
-          </p>
-        )}
-        <div className="flex flex-wrap gap-3">
-          <Button type="submit" disabled={pending || archived}>
-            {t("submit")}
-          </Button>
+        {/* форма длинная: сохранить можно с любого места, полоса прижата к низу экрана */}
+        <div className="sticky bottom-0 z-10 flex flex-wrap items-center justify-end gap-3 border-t bg-background/95 py-3 backdrop-blur">
+          {state.failed && (
+            <p className="mr-auto text-sm text-destructive" role="alert">
+              {t(`errors.${state.failed}`)}
+            </p>
+          )}
           <Button variant="outline" nativeButton={false} render={<Link href="/autoreplies" />}>
             {t("cancel")}
+          </Button>
+          <Button type="submit" disabled={pending || archived}>
+            {t("submit")}
           </Button>
         </div>
       </Page>
@@ -257,6 +305,7 @@ function Counted({
   bytes,
   multiline,
   validate,
+  onValueChange,
 }: {
   name: string;
   label: string;
@@ -266,6 +315,8 @@ function Counted({
   bytes?: boolean;
   multiline?: boolean;
   validate?: (value: unknown) => string | null;
+  // текст поменялся: форма показывает его в превью
+  onValueChange?: (value: string) => void;
 }) {
   const t = useTranslations("AutoreplyForm");
   const [value, setValue] = useState(defaultValue);
@@ -281,7 +332,10 @@ function Counted({
       <Field.Label render={<Label />}>{label}</Field.Label>
       <Field.Control
         value={value}
-        onValueChange={(next) => setValue(String(next))}
+        onValueChange={(next) => {
+          setValue(String(next));
+          onValueChange?.(String(next));
+        }}
         // в знаках браузер сам не даст превысить; байты считаем сами
         maxLength={bytes ? undefined : max}
         render={multiline ? <textarea className={TEXTAREA} rows={3} /> : <Input />}
@@ -338,10 +392,12 @@ function CommentReplies({
   defaultValue,
   defaultMode,
   error,
+  onValueChange,
 }: {
   defaultValue: string[];
   defaultMode: "random" | "sequence";
   error?: string;
+  onValueChange?: (value: string[]) => void;
 }) {
   const t = useTranslations("AutoreplyForm");
   const [mode, setMode] = useState(defaultMode);
@@ -357,6 +413,7 @@ function CommentReplies({
           maxLength={LIMITS.commentReply}
           removeLabel={(value) => t("remove", { value })}
           invalid={Boolean(error)}
+          onValueChange={onValueChange}
         />
       </Block>
       <Block label={t("mode")}>

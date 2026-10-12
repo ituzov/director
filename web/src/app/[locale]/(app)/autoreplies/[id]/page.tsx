@@ -3,6 +3,7 @@ import { Suspense } from "react";
 
 import { ApiError, apiFetch } from "@/lib/api";
 import type { Autoreply } from "@/lib/autoreplies";
+import { getSwitchableAccounts } from "@/lib/current-account";
 import { getToken } from "@/lib/session";
 
 import { AutoreplyForm } from "../_components/autoreply-form";
@@ -28,5 +29,7 @@ async function Edit({ params }: Props) {
     if (e instanceof ApiError && (e.status === 404 || e.status === 422)) notFound();
     throw e;
   }
-  return <AutoreplyForm autoreply={autoreply} />;
+  // ник для превью: аккаунт автоответа, а не выбранный в меню
+  const account = (await getSwitchableAccounts()).find((a) => a.id === autoreply.account_id);
+  return <AutoreplyForm autoreply={autoreply} username={account?.username ?? null} />;
 }

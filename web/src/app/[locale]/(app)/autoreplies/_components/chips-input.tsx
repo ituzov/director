@@ -18,6 +18,8 @@ type Props = {
   keyOf?: (value: string) => string;
   removeLabel: (value: string) => string;
   invalid?: boolean;
+  // чипсы поменялись: форма показывает их в превью
+  onValueChange?: (value: string[]) => void;
 };
 
 /** Поле-чипсы: пишешь, Enter, появляется плашка с крестиком. Backspace в пустом
@@ -32,23 +34,28 @@ export function ChipsInput({
   keyOf = (value) => value,
   removeLabel,
   invalid,
+  onValueChange,
 }: Props) {
   const [chips, setChips] = useState(defaultValue);
   const [draft, setDraft] = useState("");
   const full = maxItems !== undefined && chips.length >= maxItems;
 
+  // одно место, где чипсы меняются: отсюда же узнаёт и форма
+  function update(next: string[]) {
+    setChips(next);
+    onValueChange?.(next);
+  }
+
   function add(raw: string) {
     const parts = splitOnComma ? raw.split(",") : [raw];
-    setChips((current) => {
-      const next = [...current];
-      for (const part of parts) {
-        const value = part.trim();
-        if (!value || (maxItems !== undefined && next.length >= maxItems)) continue;
-        if (next.some((chip) => keyOf(chip) === keyOf(value))) continue;
-        next.push(value);
-      }
-      return next;
-    });
+    const next = [...chips];
+    for (const part of parts) {
+      const value = part.trim();
+      if (!value || (maxItems !== undefined && next.length >= maxItems)) continue;
+      if (next.some((chip) => keyOf(chip) === keyOf(value))) continue;
+      next.push(value);
+    }
+    update(next);
     setDraft("");
   }
 
@@ -58,7 +65,7 @@ export function ChipsInput({
       event.preventDefault();
       add(draft);
     } else if (event.key === "Backspace" && !draft && chips.length) {
-      setChips((current) => current.slice(0, -1));
+      update(chips.slice(0, -1));
     }
   }
 
@@ -77,7 +84,7 @@ export function ChipsInput({
           <span className="truncate">{chip}</span>
           <button
             type="button"
-            onClick={() => setChips((current) => current.filter((c) => c !== chip))}
+            onClick={() => update(chips.filter((c) => c !== chip))}
             aria-label={removeLabel(chip)}
             className="rounded-sm p-0.5 text-muted-foreground hover:bg-background hover:text-foreground"
           >

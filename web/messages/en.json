@@ -296,6 +296,24 @@
       "noAccount": "Connect an Instagram account first.",
       "AccountUnavailable": "The account is disconnected or needs reconnecting.",
       "AutoreplyArchived": "The auto-reply is archived: restore it first."
+    },
+    "preview": {
+      "sampleUser": "anna",
+      "you": "You",
+      "tapped": "{user} tapped the button",
+      "ifNotFollowing": "If she doesn’t follow you",
+      "empty": {
+        "keyword": "keyword",
+        "intro": "Message text",
+        "button": "Button",
+        "notFollowing": "Ask to follow",
+        "reply": "Material"
+      },
+      "commentMeta": "1m · Reply",
+      "followed": "{user} followed and tapped again",
+      "underPost": "Under the post",
+      "direct": "In DMs",
+      "label": "Preview, sample username anna"
     }
   },
   "Overview": {

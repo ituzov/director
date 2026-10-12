@@ -296,6 +296,24 @@
       "noAccount": "Сначала подключите аккаунт Instagram.",
       "AccountUnavailable": "Аккаунт отключён или требует переподключения.",
       "AutoreplyArchived": "Автоответ в архиве: сначала верните его."
+    },
+    "preview": {
+      "sampleUser": "anna",
+      "you": "Вы",
+      "tapped": "{user} нажала кнопку",
+      "ifNotFollowing": "Если не подписана",
+      "empty": {
+        "keyword": "кодовое слово",
+        "intro": "Текст сообщения",
+        "button": "Кнопка",
+        "notFollowing": "Просьба подписаться",
+        "reply": "Материал"
+      },
+      "commentMeta": "1 мин · Ответить",
+      "followed": "{user} подписалась и нажала снова",
+      "underPost": "Под постом",
+      "direct": "В директе",
+      "label": "Предпросмотр, ник в примере anna"
     }
   },
   "Overview": {
