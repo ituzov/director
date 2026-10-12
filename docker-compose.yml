@@ -43,6 +43,10 @@ services:
   api:
     <<: *api
     restart: unless-stopped
+    # кнопка «Обновить»: просьба в request/, статус и лог в run/ (только чтение)
+    volumes:
+      - ./request:/director/request
+      - ./run:/director/run:ro
     depends_on:
       migrate: { condition: service_completed_successfully }
     # по нему апдейтер поймёт, что новая версия поднялась

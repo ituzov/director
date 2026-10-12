@@ -19,8 +19,13 @@ KEEP_BACKUPS=3
 say() { printf '\033[1m==> %s\033[0m\n' "$*"; }
 fail() {
   printf '\033[31mError: %s\033[0m\n' "$*" >&2
+  # кнопка в админке ждёт итога в run/update-status: пишем, если его ещё нет
+  if [ -n "${DIRECTOR_REQUEST:-}" ] && ! finished; then status "error: $*"; fi
   exit 1
 }
+
+# на доске уже итог: done, failed (после отката) или error
+finished() { grep -qE '^[^ ]+ (done|failed|error)' "$DIR/run/update-status" 2>/dev/null; }
 
 # Переменные .env, которые нужны этой версии. Список полный, а не «что нового»:
 # скрипт, перепрыгнувший через несколько версий, создаст всё пропущенное.
@@ -150,10 +155,13 @@ resolve_host() {
 # Файлы релиза во временную папку: рабочие не трогаем, пока всё не скачано
 download_release() {
   local base="https://github.com/$REPO/releases/download/v$VERSION" file
-  for file in docker-compose.yml Caddyfile; do
+  for file in docker-compose.yml Caddyfile install.sh; do
     curl -fsSL -o "$1/$file" "$base/$file" || fail "cannot download $file of $VERSION"
   done
   grep -q '^services:' "$1/docker-compose.yml" || fail "broken docker-compose.yml in $VERSION"
+  # кнопку в админке выполняет этот файл: systemd запускает его напрямую
+  grep -q '^main() {' "$1/install.sh" || fail "broken install.sh in $VERSION"
+  chmod 755 "$1/install.sh"
 }
 
 # api здоров и HTTPS отвечает. Не падает сам: при обновлении после него откат
@@ -203,6 +211,10 @@ install() {
     printf 'DIRECTOR_HOST=%s\nDIRECTOR_VERSION=%s\n' "$HOST" "$VERSION" >"$DIR/.env"
   )
   required_env
+
+  # до compose up: папку request/ иначе создаст Docker, от root, и api не сможет писать
+  install_units
+  write_readme
 
   say "Starting Director"
   cd "$DIR"
@@ -279,10 +291,14 @@ update() {
     fail "the new script lost settings in .env, restored it, nothing else was changed"
   fi
   local file
-  for file in docker-compose.yml Caddyfile; do
-    cp -p "$DIR/$file" "$DIR/$file.prev"
+  for file in docker-compose.yml Caddyfile install.sh; do
+    # install.sh лежит на сервере с появлением кнопки: при первом обновлении его нет
+    [ ! -e "$DIR/$file" ] || cp -p "$DIR/$file" "$DIR/$file.prev"
     mv "$TMP/$file" "$DIR/$file"
   done
+  # до compose up: папку request/ иначе создаст Docker, от root, и api не сможет писать
+  install_units
+  write_readme
 
   status "start $VERSION"
   if ! docker compose up -d || ! wait_healthy; then
@@ -304,8 +320,8 @@ rollback() {
   status "rollback $VERSION -> $OLD"
   set_version "$OLD"
   local file
-  for file in docker-compose.yml Caddyfile; do
-    mv "$DIR/$file.prev" "$DIR/$file"
+  for file in docker-compose.yml Caddyfile install.sh; do
+    [ ! -e "$DIR/$file.prev" ] || mv "$DIR/$file.prev" "$DIR/$file"
   done
   # пишущих в базу останавливаем, чтобы восстановление не смешалось с записью
   docker compose stop api worker web >/dev/null 2>&1 || true
@@ -328,10 +344,137 @@ rollback() {
   fail "rollback did not start, backup is in $BACKUP, see: cd $DIR && docker compose logs"
 }
 
+# --- кнопка «Обновить» в админке -----------------------------------------------
+# api кладёт версию в request/update, systemd на хосте видит файл и запускает
+# этот скрипт от root. У api нет ни Docker-сокета, ни root: худшее, что он может,
+# попросить одну из опубликованных версий
+
+# шапка юнитов: агент или человек, чистящий сервер, должен понять, что это
+unit_header() {
+  cat <<EOF
+# Director (https://github.com/ituzov/director): "Update" button in the admin panel.
+# Created by install.sh. $1
+# Without it the button silently does nothing, the site keeps working.
+# Remove only together with Director:
+#   systemctl disable --now director-update.path
+#   rm /etc/systemd/system/director-update.path /etc/systemd/system/director-update.service
+#
+# Директор: кнопка «Обновить» в админке. Создан install.sh. $2
+# Без него кнопка молча не сработает, сам сайт продолжит работать.
+# Удалять только вместе с Директором, команды выше.
+EOF
+}
+
+install_units() {
+  install -d -m 755 "$DIR/run"
+  # единственная папка на хосте, куда пишет api (uid 1000 в образе). root здесь
+  # только читает и удаляет: запись по подложенной ссылке переписала бы файл хоста
+  install -d -m 700 -o 1000 -g 1000 "$DIR/request"
+  {
+    unit_header "Watches for the update request from api." \
+      "Следит за просьбой об обновлении от api."
+    cat <<EOF
+[Unit]
+Description=Director: start update when the admin panel asks (created by install.sh)
+
+[Path]
+PathExists=$DIR/request/update
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  } >/etc/systemd/system/director-update.path
+  {
+    unit_header "Runs install.sh update with the requested version." \
+      "Запускает install.sh update с запрошенной версией."
+    cat <<EOF
+[Unit]
+Description=Director: update requested from the admin panel (created by install.sh)
+
+[Service]
+# пока работает, второй запуск не стартует; обновление идёт минуты, лимита нет
+Type=oneshot
+ExecStart=$DIR/install.sh request
+EOF
+  } >/etc/systemd/system/director-update.service
+  systemctl daemon-reload
+  systemctl enable --now director-update.path >/dev/null 2>&1
+}
+
+# что лежит в папке установки: человек или агент на сервере читает это первым
+write_readme() {
+  cat >"$DIR/README.md" <<EOF
+# Director
+
+Self-hosted Director: Instagram comment → direct message.
+https://github.com/$REPO
+
+- \`.env\`: settings and secrets. Do not delete it and do not lose SECRET_KEY:
+  tokens in the database are encrypted with it.
+- \`docker-compose.yml\`, \`Caddyfile\`, \`install.sh\`: files of the current
+  version, replaced on update. \`*.prev\`: the previous version, for rollback.
+- \`backups/\`: database dump and \`.env\` before each update, the last $KEEP_BACKUPS.
+- \`request/\`: the admin panel asks for an update here (written by api).
+- \`run/\`: update status and log (written by install.sh).
+- systemd \`director-update.path\` and \`director-update.service\`: run the
+  update when the admin panel asks. Created by install.sh.
+
+Update: \`curl -fsSL https://opendirector.dev/install.sh | sudo bash -s update\`
+Logs: \`cd $DIR && docker compose logs\`, \`journalctl -u director-update\`
+Remove everything, including the database:
+\`cd $DIR && docker compose down -v\`,
+\`systemctl disable --now director-update.path\`, delete
+\`/etc/systemd/system/director-update.*\` and this folder.
+
+---
+
+# Директор
+
+Директор на своём сервере: коммент в Instagram → директ.
+
+- \`.env\`: настройки и секреты. Не удаляй его и не теряй SECRET_KEY:
+  им зашифрованы токены в базе.
+- \`docker-compose.yml\`, \`Caddyfile\`, \`install.sh\`: файлы текущей версии,
+  при обновлении заменяются. \`*.prev\`: прошлая версия, для отката.
+- \`backups/\`: дамп базы и \`.env\` перед каждым обновлением, последние $KEEP_BACKUPS.
+- \`request/\`: сюда админка кладёт просьбу обновиться (пишет api).
+- \`run/\`: статус и лог обновления (пишет install.sh).
+- systemd \`director-update.path\` и \`director-update.service\`: запускают
+  обновление по просьбе из админки. Созданы install.sh.
+
+Обновить: \`curl -fsSL https://opendirector.dev/install.sh | sudo bash -s update\`
+Логи: \`cd $DIR && docker compose logs\`, \`journalctl -u director-update\`
+Удалить всё вместе с базой:
+\`cd $DIR && docker compose down -v\`,
+\`systemctl disable --now director-update.path\`, удалить
+\`/etc/systemd/system/director-update.*\` и эту папку.
+EOF
+}
+
+request() {
+  local file="$DIR/request/update" version=""
+  # файл пишет api, а мы root: по ссылке не идём, больше 64 байт не читаем
+  if [ -f "$file" ] && [ ! -L "$file" ]; then
+    version="$(head -c 64 "$file" | head -n 1)"
+  fi
+  # удаляем до обновления: пока файл есть, systemd запускал бы нас снова
+  rm -f "$file"
+  [ -n "$version" ] || fail "empty update request"
+  # нажали, пока идёт другое обновление: его статус и лог не трогаем
+  exec 9>"$DIR/.update.lock"
+  flock -n 9 || fail "another update is running"
+  flock -u 9
+  status "requested $version"
+  export DIRECTOR_REQUEST=1
+  update "$version" >"$DIR/run/update.log" 2>&1
+}
+
 main() {
   case "${1:-install}" in
     install) install ;;
     update) update "${2:-}" ;;
+    # запускает systemd по просьбе из админки, руками не нужен
+    request) request ;;
     *) fail "usage: install.sh [install | update [VERSION]]" ;;
   esac
 }

@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # проверки в одинарных кавычках нарочно: их выполняет eval в check
 # shellcheck disable=SC2016
-# Тесты работы install.sh с .env: секреты не теряются и не меняются при обновлении,
-# недостающее дописывается, повтор ничего не меняет. Запуск: bash install.test.sh
+# Тесты install.sh: .env (секреты не теряются и не меняются при обновлении,
+# недостающее дописывается, повтор ничего не меняет) и просьба из админки.
+# Запуск: bash install.test.sh, на Linux (нужен flock)
 set -euo pipefail
 
 DIRECTOR_TEST=1
@@ -54,5 +55,46 @@ grep -v "^SECRET_KEY=" "$DIR/after" >"$DIR/.env"
 check "сверка ловит потерянную строку" '! check_env "$DIR/before"'
 sed "s/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=new/" "$DIR/after" >"$DIR/.env"
 check "сверка ловит изменённое значение" '! check_env "$DIR/before"'
+
+# --- просьба из админки ----------------------------------------------------------
+# настоящий update не нужен: проверяем, что request передал и чего не тронул
+update() { printf '%s %s\n' "$1" "${DIRECTOR_REQUEST:-}" >"$DIR/called"; }
+mkdir -p "$DIR/request"
+ask() { rm -f "$DIR/called"; (request) >/dev/null 2>&1 || true; }
+
+printf '0.2.0\nrm -rf /\n' >"$DIR/request/update"
+ask
+check "просьба: версия из первой строки" '[ "$(cat "$DIR/called")" = "0.2.0 1" ]'
+check "просьба: файл удалён" '[ ! -e "$DIR/request/update" ]'
+check "просьба: статус сброшен" 'grep -q " requested 0.2.0$" "$DIR/run/update-status"'
+
+printf '9.9.9\n' >"$DIR/secret"
+ln -s "$DIR/secret" "$DIR/request/update"
+ask
+check "ссылку не читаем" '[ ! -e "$DIR/called" ]'
+check "ссылку удаляем, цель цела" '[ ! -L "$DIR/request/update" ] && [ "$(cat "$DIR/secret")" = 9.9.9 ]'
+
+# идёт другое обновление: его статус и лог на месте
+printf '2026-01-01T00:00:00Z pull 0.3.0\n' >"$DIR/run/update-status"
+printf 'pulling\n' >"$DIR/run/update.log"
+flock "$DIR/.update.lock" sleep 3 &
+sleep 0.5
+printf '0.4.0\n' >"$DIR/request/update"
+ask
+kill $! 2>/dev/null || true
+check "занято: update не запущен" '[ ! -e "$DIR/called" ]'
+check "занято: статус чужого обновления цел" 'grep -q " pull 0.3.0$" "$DIR/run/update-status"'
+check "занято: лог чужого обновления цел" '[ "$(cat "$DIR/run/update.log")" = pulling ]'
+
+# итог на доске от fail: пишется, но не поверх отката
+printf '2026-01-01T00:00:00Z pull 0.3.0\n' >"$DIR/run/update-status"
+(DIRECTOR_REQUEST=1 fail "no network") >/dev/null 2>&1 || true
+check "ошибка попала на доску" 'grep -q " error: no network$" "$DIR/run/update-status"'
+printf '2026-01-01T00:00:00Z failed 0.3.0, rolled back to 0.2.0\n' >"$DIR/run/update-status"
+(DIRECTOR_REQUEST=1 fail "update to 0.3.0 failed") >/dev/null 2>&1 || true
+check "итог отката не затёрт" 'grep -q " failed 0.3.0, rolled back to 0.2.0$" "$DIR/run/update-status"'
+printf '2026-01-01T00:00:00Z pull 0.3.0\n' >"$DIR/run/update-status"
+(fail "from console") >/dev/null 2>&1 || true
+check "из консоли доску не трогаем" 'grep -q " pull 0.3.0$" "$DIR/run/update-status"'
 
 exit "$failed"
