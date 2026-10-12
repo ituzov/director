@@ -55,10 +55,6 @@
       "connect": "Connect account",
       "none": "Connect an account"
     },
-    "overview": {
-      "title": "Overview",
-      "empty": "Auto-replies and their stats will show up here."
-    },
     "logout": "Sign out",
     "roles": {
       "owner": "Owner",
@@ -295,6 +291,32 @@
       "noAccount": "Connect an Instagram account first.",
       "AccountUnavailable": "The account is disconnected or needs reconnecting.",
       "AutoreplyArchived": "The auto-reply is archived: restore it first."
+    }
+  },
+  "Overview": {
+    "setup": {
+      "title": "Finish setting up",
+      "description": "Go through the steps in order and autoreplies will start working.",
+      "metaApp": "Create a Meta app and verify the webhook",
+      "account": "Connect an Instagram account",
+      "autoreply": "Create your first autoreply",
+      "done": "Done"
+    },
+    "stats": {
+      "title": "{days, plural, one {Last # day} other {Last # days}}",
+      "description": "Autoreplies of @{username}: from comment to material.",
+      "triggered": "Triggered",
+      "sent": "Sent to DMs",
+      "clicked": "Tapped the button",
+      "delivered": "Got the material",
+      "ofPrevious": "{value} of the previous step",
+      "empty": "No autoreplies triggered in the last {days, plural, one {# day} other {# days}}.",
+      "top": "Triggered most often",
+      "topRow": "{triggered, plural, one {# trigger} other {# triggers}}, {delivered} got it"
+    },
+    "alerts": {
+      "tokenExpired": "Access to @{username} has expired, so its autoreplies are off. <link>Connect the account again</link>.",
+      "undelivered": "{count, plural, one {# message wasn’t delivered} other {# messages weren’t delivered}} in the last {days, plural, one {# day} other {# days}}: Meta refused or the reply window closed."
     }
   }
 }

@@ -51,3 +51,15 @@ export const LIMITS = {
   keywords: 50,
   name: 100,
 } as const;
+
+/** Сводка для обзора: GET /autoreplies/stats. */
+export type AutoreplyStats = {
+  // сработало, ушёл директ с кнопкой, нажали кнопку, получили материал
+  triggered: number;
+  sent: number;
+  clicked: number;
+  delivered: number;
+  // отправки, которые так и не ушли: Meta отказала или окно ответа закрылось
+  undelivered: number;
+  top: { id: string; name: string; triggered: number; delivered: number }[];
+};
