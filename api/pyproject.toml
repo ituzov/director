@@ -45,7 +45,7 @@ extend-exclude = ["alembic/versions"]
 # B bugbear (частые баги), SIM упрощения
 select = ["E", "F", "I", "UP", "B", "SIM"]
 
-# Границы модулей. Почему так и что куда можно: docs/api/modules.md
+# Границы модулей. Почему так и что куда можно: docs/development/modules.md
 [tool.importlinter]
 root_packages = ["app"]
 

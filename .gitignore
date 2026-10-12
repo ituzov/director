@@ -1,7 +1,8 @@
 .idea/
 .DS_Store
 .claude/
-docs/
+# внутренние решения и заметки;
+internal/
 
 # секреты (шаблоны .env.example в git)
 .env
