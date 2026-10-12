@@ -21,7 +21,12 @@ export function AppSidebar() {
   const tApp = useTranslations("App");
 
   return (
-    <Sidebar variant="floating" collapsible="icon">
+    <Sidebar
+      variant="floating"
+      collapsible="icon"
+      mobileTitle={tApp("sidebar.title")}
+      mobileDescription={tApp("sidebar.description")}
+    >
       <SidebarHeader>
         {/* аккаунты приходят из api: в оболочке скелет, сам переключатель потоком */}
         <Suspense fallback={<ProfileSkeleton />}>
@@ -44,7 +49,7 @@ export function AppSidebar() {
           {tApp("version", { version: APP_VERSION })}
         </p>
       </SidebarFooter>
-      <SidebarRail />
+      <SidebarRail aria-label={tApp("sidebar.toggle")} title={tApp("sidebar.toggle")} />
     </Sidebar>
   );
 }

@@ -1,3 +1,5 @@
+import { useTranslations } from "next-intl";
+
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -11,13 +13,14 @@ import { CurrentPageTitle } from "./_components/nav-group";
  * Состояние «свёрнут» не запоминаем: его cookie пришлось бы читать здесь же.
  */
 export default function AppLayout({ children }: LayoutProps<"/[locale]">) {
+  const t = useTranslations("App");
   return (
     <TooltipProvider>
       <SidebarProvider>
         <AppSidebar />
         <SidebarInset>
           <header className="flex h-14 shrink-0 items-center gap-2 border-b px-4">
-            <SidebarTrigger />
+            <SidebarTrigger aria-label={t("sidebar.toggle")} />
             <Separator orientation="vertical" className="my-4" />
             <CurrentPageTitle />
           </header>

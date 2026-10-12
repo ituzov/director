@@ -64,7 +64,12 @@
       "owner": "Owner",
       "member": "Member"
     },
-    "version": "Version {version}"
+    "version": "Version {version}",
+    "sidebar": {
+      "title": "Menu",
+      "description": "Admin sections and account switcher.",
+      "toggle": "Collapse or expand the menu"
+    }
   },
   "MetaApp": {
     "description": "Director connects Instagram accounts and receives comments through this app. Create it in the Meta dashboard and copy its two keys here.",
