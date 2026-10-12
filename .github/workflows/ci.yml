@@ -39,7 +39,7 @@ jobs:
         with:
           working-directory: api
           enable-cache: true
-          cache-dependency-glob: api/uv.lock
+          cache-dependency-glob: uv.lock
       - run: uv sync --locked
       - run: uv run ruff check .
       - run: uv run ruff format --check .
