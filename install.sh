@@ -15,6 +15,8 @@ SCRIPT_VERSION="dev"
 DOCKER_VERSION="29.9"
 # бэкапы перед обновлением: нужны для отката, а не для хранения
 KEEP_BACKUPS=3
+# юниты кнопки «Обновить»; тесты подставляют свою папку
+UNIT_DIR="${DIRECTOR_UNIT_DIR:-/etc/systemd/system}"
 
 say() { printf '\033[1m==> %s\033[0m\n' "$*"; }
 fail() {
@@ -282,6 +284,10 @@ update() {
     cp -p "$DIR/.env" "$BACKUP/.env"
   )
   [ -s "$BACKUP/db.dump" ] || fail "database backup is empty, nothing was changed"
+  # до переключения: упадут, и ничего ещё не тронуто. И до compose up: папку
+  # request/ иначе создаст Docker, от root, и api не сможет писать
+  install_units
+  write_readme
 
   status "switch $OLD -> $VERSION"
   required_env
@@ -296,9 +302,6 @@ update() {
     [ ! -e "$DIR/$file" ] || cp -p "$DIR/$file" "$DIR/$file.prev"
     mv "$TMP/$file" "$DIR/$file"
   done
-  # до compose up: папку request/ иначе создаст Docker, от root, и api не сможет писать
-  install_units
-  write_readme
 
   status "start $VERSION"
   if ! docker compose up -d || ! wait_healthy; then
@@ -366,10 +369,11 @@ EOF
 }
 
 install_units() {
-  install -d -m 755 "$DIR/run"
+  # command: утилита install, а не наша функция install() с тем же именем
+  command install -d -m 755 "$DIR/run"
   # единственная папка на хосте, куда пишет api (uid 1000 в образе). root здесь
   # только читает и удаляет: запись по подложенной ссылке переписала бы файл хоста
-  install -d -m 700 -o 1000 -g 1000 "$DIR/request"
+  command install -d -m 700 -o 1000 -g 1000 "$DIR/request"
   {
     unit_header "Watches for the update request from api." \
       "Следит за просьбой об обновлении от api."
@@ -383,7 +387,7 @@ PathExists=$DIR/request/update
 [Install]
 WantedBy=multi-user.target
 EOF
-  } >/etc/systemd/system/director-update.path
+  } >"$UNIT_DIR/director-update.path"
   {
     unit_header "Runs install.sh update with the requested version." \
       "Запускает install.sh update с запрошенной версией."
@@ -396,7 +400,7 @@ Description=Director: update requested from the admin panel (created by install.
 Type=oneshot
 ExecStart=$DIR/install.sh request
 EOF
-  } >/etc/systemd/system/director-update.service
+  } >"$UNIT_DIR/director-update.service"
   systemctl daemon-reload
   systemctl enable --now director-update.path >/dev/null 2>&1
 }

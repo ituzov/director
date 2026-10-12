@@ -90,5 +90,6 @@ jobs:
       # shellcheck уже стоит на раннере GitHub
       - name: Линтер
         run: shellcheck -x install.sh install.test.sh
-      - name: Работа с .env
-        run: bash install.test.sh
+      - name: Тесты install.sh
+        # sudo: тесты меняют владельца папки, как установщик на сервере
+        run: sudo bash install.test.sh

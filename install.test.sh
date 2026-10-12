@@ -3,12 +3,13 @@
 # shellcheck disable=SC2016
 # Тесты install.sh: .env (секреты не теряются и не меняются при обновлении,
 # недостающее дописывается, повтор ничего не меняет) и просьба из админки.
-# Запуск: bash install.test.sh, на Linux (нужен flock)
+# Запуск: sudo bash install.test.sh, на Linux (нужны flock и root для владельца папок)
 set -euo pipefail
 
 DIRECTOR_TEST=1
 DIRECTOR_DIR="$(mktemp -d)"
-trap 'rm -rf "$DIRECTOR_DIR"' EXIT
+DIRECTOR_UNIT_DIR="$(mktemp -d)"
+trap 'rm -rf "$DIRECTOR_DIR" "$DIRECTOR_UNIT_DIR"' EXIT
 # shellcheck source=install.sh
 . "$(dirname "$0")/install.sh"
 
@@ -96,5 +97,19 @@ check "итог отката не затёрт" 'grep -q " failed 0.3.0, rolled 
 printf '2026-01-01T00:00:00Z pull 0.3.0\n' >"$DIR/run/update-status"
 (fail "from console") >/dev/null 2>&1 || true
 check "из консоли доску не трогаем" 'grep -q " pull 0.3.0$" "$DIR/run/update-status"'
+
+# --- юниты и папки кнопки ----------------------------------------------------------
+# владелец папки меняется только от root: в CI тесты идут через sudo
+if [ "$(id -u)" -eq 0 ]; then
+  systemctl() { printf '%s\n' "$*" >>"$DIR/systemctl"; }
+  (install_units) >/dev/null 2>&1 || true
+  check "юниты: следят за просьбой" 'grep -qx "PathExists=$DIR/request/update" "$UNIT_DIR/director-update.path"'
+  check "юниты: запускают request" 'grep -qx "ExecStart=$DIR/install.sh request" "$UNIT_DIR/director-update.service"'
+  check "юниты: слежка включена" 'grep -qx "enable --now director-update.path" "$DIR/systemctl"'
+  check "request/ у api (uid 1000), 700" '[ "$(stat -c %u:%a "$DIR/request")" = 1000:700 ]'
+  check "run/ у root, 755" '[ "$(stat -c %u:%a "$DIR/run")" = 0:755 ]'
+else
+  printf 'skip юниты и папки: нужен root\n'
+fi
 
 exit "$failed"
