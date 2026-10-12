@@ -225,6 +225,46 @@ async def test_hour_limit_defers(session, account, meta, monkeypatch):
     assert task.run_at == sent_at + timedelta(hours=1)
 
 
+async def test_hour_limit_gives_each_its_own_slot(session, account, meta, monkeypatch):
+    # отложенные не просыпаются разом: каждому своё место через 4,8 с
+    monkeypatch.setattr(tasks, "PRIVATE_REPLIES_PER_HOUR", 1)
+    sent_at = datetime.now(UTC) - timedelta(minutes=30)
+    session.add(
+        OutboxTask(
+            account_id=account.id,
+            kind="private_reply",
+            payload={},
+            dedup_key="old",
+            outcome="sent",
+            finished_at=sent_at,
+        )
+    )
+    # забытая отложенная с ранним временем: место всё равно не раньше первого свободного
+    session.add(
+        OutboxTask(
+            account_id=account.id,
+            kind="private_reply",
+            payload={},
+            dedup_key="stale",
+            run_at=datetime.now(UTC) + timedelta(minutes=1),
+        )
+    )
+    for n in range(3):
+        await private_reply(session, account, comment_id=f"c{n}")
+    for _ in range(3):
+        await instagram.send_outbox_task(session)
+    assert meta.requests == []
+    deferred = await session.scalars(
+        select(OutboxTask.run_at)
+        .where(OutboxTask.outcome.is_(None), OutboxTask.dedup_key != "stale")
+        .order_by(OutboxTask.run_at)
+    )
+    first = sent_at + timedelta(hours=1)
+    slot = tasks.PRIVATE_REPLY_SLOT
+    assert list(deferred) == [first, first + slot, first + 2 * slot]
+    assert slot == timedelta(seconds=4.8)
+
+
 async def test_hour_limit_counts_only_last_hour(session, account, meta, monkeypatch):
     monkeypatch.setattr(tasks, "PRIVATE_REPLIES_PER_HOUR", 1)
     session.add(

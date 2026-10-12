@@ -166,6 +166,8 @@ OnResult = Callable[[AsyncSession, OutboxResult], Awaitable[None]]
 
 # лимит Meta на Private Reply в час на аккаунт
 PRIVATE_REPLIES_PER_HOUR = 750
+# место одного Private Reply внутри часа: 4,8 с
+PRIVATE_REPLY_SLOT = timedelta(hours=1) / PRIVATE_REPLIES_PER_HOUR
 SEND_TIMEOUT = 15.0
 # пауза перед повтором отправки: Meta легла или притормозила нас
 SEND_RETRY_DELAYS = (
@@ -232,8 +234,12 @@ async def _send(session: AsyncSession, task: OutboxTask) -> Result | None:
         await repository.lock_private_replies(session, account.id)
         count, oldest = await repository.private_replies_last_hour(session, account.id)
         if count >= PRIVATE_REPLIES_PER_HOUR:
-            # не ждём, а переносим: остальные аккаунты не стоят за этим в очереди
-            task.run_at = oldest + timedelta(hours=1)
+            # не ждём, а переносим: остальные аккаунты не стоят за этим в очереди.
+            # Каждому своё место через SLOT после предыдущего отложенного: иначе все
+            # проснулись бы разом и пересчитывали лимит по кругу ради одного места
+            last = await repository.last_planned_private_reply(session, account.id)
+            first_free = oldest + timedelta(hours=1)
+            task.run_at = max(first_free, last + PRIVATE_REPLY_SLOT) if last else first_free
             log.info("outbox.deferred", kind=task.kind, reason="rate_limit")
             return None
 

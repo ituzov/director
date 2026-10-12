@@ -75,6 +75,21 @@ async def private_replies_last_hour(
     return count, oldest
 
 
+async def last_planned_private_reply(
+    session: AsyncSession, account_id: uuid.UUID
+) -> datetime | None:
+    """Самое позднее время среди ждущих Private Reply аккаунта: за ним следующее место."""
+    return await session.scalar(
+        select(func.max(OutboxTask.run_at)).where(
+            OutboxTask.account_id == account_id,
+            OutboxTask.kind == "private_reply",
+            # на результат не влияет (у завершённых run_at в прошлом), но так запрос
+            # идёт по частичному индексу ждущих, а не по всем отправленным
+            OutboxTask.outcome.is_(None),
+        )
+    )
+
+
 async def count_undelivered(
     session: AsyncSession, account_id: uuid.UUID, *, since: datetime, ref_prefix: str
 ) -> int:
