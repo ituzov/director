@@ -70,9 +70,10 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-  # черновик: заметки пишутся руками, публикует владелец репо
+  # релиз черновиком: заметки пишутся руками, публикует владелец репо.
+  # Пре-релиз сразу опубликован: черновик анонимно не скачать, а им ставят тестовый сервер
   release:
-    name: Черновик релиза
+    name: Релиз
     needs: [api, web]
     runs-on: ubuntu-24.04
     permissions:
@@ -80,12 +81,13 @@ jobs:
     steps:
       - name: Код
         uses: actions/checkout@v7
-      - name: Черновик с файлами установки
+      - name: Релиз с файлами установки
         uses: softprops/action-gh-release@v3
         with:
-          draft: true
+          draft: ${{ !contains(github.ref_name, '-') }}
           prerelease: ${{ contains(github.ref_name, '-') }}
           # установщик и апдейтер берут файлы ровно этой версии, а не из main
           files: |
+            install.sh
             docker-compose.yml
             Caddyfile
