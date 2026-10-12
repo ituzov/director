@@ -309,10 +309,17 @@ rollback() {
   done
   # пишущих в базу останавливаем, чтобы восстановление не смешалось с записью
   docker compose stop api worker web >/dev/null 2>&1 || true
-  docker compose exec -T db pg_restore -U director -d director --clean --if-exists \
-    <"$BACKUP/db.dump" ||
+  # в пустую базу: --clean убрал бы только то, что есть в дампе, а таблицы
+  # новой версии остались бы и сломали её миграции при следующем обновлении
+  if ! {
+    docker compose exec -T db dropdb -U director --force director &&
+      docker compose exec -T db createdb -U director director &&
+      docker compose exec -T db pg_restore -U director -d director <"$BACKUP/db.dump"
+  }; then
     fail "rollback: cannot restore the database, backup is in $BACKUP"
+  fi
   docker compose up -d
+  docker image rm "ghcr.io/$REPO-api:$VERSION" "ghcr.io/$REPO-web:$VERSION" >/dev/null 2>&1 || true
   if wait_healthy; then
     status "failed $VERSION, rolled back to $OLD"
     fail "update to $VERSION failed, Director $OLD is back, backup is in $BACKUP"
