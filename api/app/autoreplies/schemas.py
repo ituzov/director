@@ -108,3 +108,24 @@ class AutoreplyOut(BaseModel):
     archived_at: datetime | None
     created_at: datetime
     updated_at: datetime
+
+
+class TopAutoreplyOut(BaseModel):
+    id: uuid.UUID
+    name: str
+    triggered: int
+    delivered: int
+
+
+class StatsOut(BaseModel):
+    """Сводка для обзора: воронка выдач за период."""
+
+    # сработало, ушёл директ с кнопкой, нажали кнопку, получили материал
+    triggered: int
+    sent: int
+    clicked: int
+    delivered: int
+    # отправки, которые так и не ушли: упали после повторов или опоздали к окну Meta
+    undelivered: int
+    # чаще всего срабатывавшие, до пяти
+    top: list[TopAutoreplyOut]

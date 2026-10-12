@@ -2,9 +2,10 @@
 
 import uuid
 from dataclasses import dataclass
+from datetime import timedelta
 
 import structlog
-from sqlalchemy import func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import activity, identity, instagram
@@ -413,3 +414,43 @@ async def _candidates(
         autoreplies = await repository.enabled_general_autoreplies(session, comment.account_id)
     keywords = await repository.keywords_by_autoreply(session, [a.id for a in autoreplies])
     return [matching.Candidate(a.id, tuple(keywords.get(a.id, ()))) for a in autoreplies]
+
+
+@dataclass(frozen=True, slots=True)
+class TopAutoreply:
+    id: uuid.UUID
+    name: str
+    triggered: int
+    delivered: int
+
+
+@dataclass(frozen=True, slots=True)
+class Stats:
+    # сработало, ушёл директ с кнопкой, нажали кнопку, получили материал
+    triggered: int
+    sent: int
+    clicked: int
+    delivered: int
+    # отправки автоответов, которые так и не ушли
+    undelivered: int
+    top: list[TopAutoreply]
+
+
+async def stats(session: AsyncSession, account_id: uuid.UUID, *, days: int) -> Stats:
+    """Сводка для обзора за последние days дней, прямо по выдачам."""
+    since = await session.scalar(select(func.now() - timedelta(days=days)))
+    triggered, sent, clicked, delivered = await repository.delivery_counts(
+        session, account_id, since=since
+    )
+    top = await repository.top_autoreplies(session, account_id, since=since, limit=5)
+    undelivered = await instagram.count_undelivered(
+        session, account_id, since=since, ref_prefix=f"{REF_PREFIX}:"
+    )
+    return Stats(
+        triggered=triggered,
+        sent=sent,
+        clicked=clicked,
+        delivered=delivered,
+        undelivered=undelivered,
+        top=[TopAutoreply(*row) for row in top],
+    )

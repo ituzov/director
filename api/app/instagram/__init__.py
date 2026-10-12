@@ -22,7 +22,7 @@ from app.instagram.outbox import (
     enqueue_private_reply,
 )
 from app.instagram.routes import instagram_error_handler, router, webhook_router
-from app.instagram.service import get_account
+from app.instagram.service import count_undelivered, get_account
 from app.instagram.tasks import process_inbox_event, refresh_due_tokens, send_outbox_task
 
 __all__ = [
@@ -34,6 +34,7 @@ __all__ = [
     # для соседей
     "AccountRef",
     "get_account",
+    "count_undelivered",
     # исходящие: соседи ставят в своей транзакции, отправляет worker
     "Button",
     "enqueue_comment_reply",

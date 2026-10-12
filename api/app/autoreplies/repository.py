@@ -3,6 +3,7 @@
 
 import uuid
 from collections import defaultdict
+from datetime import datetime
 
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert
@@ -239,3 +240,37 @@ async def get_delivery(
 ) -> Delivery | None:
     """lock: выдача под замком до конца транзакции, два нажатия разом идут по очереди."""
     return await session.get(Delivery, delivery_id, with_for_update=lock, populate_existing=lock)
+
+
+async def delivery_counts(
+    session: AsyncSession, account_id: uuid.UUID, *, since: datetime
+) -> tuple[int, int, int, int]:
+    """Воронка выдач аккаунта: сработало, ушёл директ, нажали кнопку, получили материал."""
+    row = (
+        await session.execute(
+            select(
+                func.count(),
+                func.count(Delivery.sent_at),
+                func.count(Delivery.clicked_at),
+                func.count(Delivery.delivered_at),
+            ).where(Delivery.account_id == account_id, Delivery.created_at >= since)
+        )
+    ).one()
+    return row[0], row[1], row[2], row[3]
+
+
+async def top_autoreplies(
+    session: AsyncSession, account_id: uuid.UUID, *, since: datetime, limit: int
+) -> list[tuple[uuid.UUID, str, int, int]]:
+    """Чаще всего срабатывавшие автоответы: id, имя, сработал, выдал материал."""
+    triggered = func.count(Delivery.id)
+    rows = await session.execute(
+        select(Autoreply.id, Autoreply.name, triggered, func.count(Delivery.delivered_at))
+        .join(Delivery, Delivery.autoreply_id == Autoreply.id)
+        .where(Delivery.account_id == account_id, Delivery.created_at >= since)
+        .group_by(Autoreply.id)
+        # при равенстве порядок не должен прыгать между обновлениями страницы
+        .order_by(triggered.desc(), Autoreply.name)
+        .limit(limit)
+    )
+    return [(r[0], r[1], r[2], r[3]) for r in rows]

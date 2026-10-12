@@ -67,6 +67,23 @@ async def private_replies_last_hour(
     return count, oldest
 
 
+async def count_undelivered(
+    session: AsyncSession, account_id: uuid.UUID, *, since: datetime, ref_prefix: str
+) -> int:
+    """Сколько отправок соседа так и не ушло: упали после повторов или опоздали к окну Meta."""
+    return (
+        await session.scalar(
+            select(func.count()).where(
+                OutboxTask.account_id == account_id,
+                OutboxTask.outcome.in_(("failed", "expired")),
+                OutboxTask.finished_at >= since,
+                OutboxTask.ref.startswith(ref_prefix, autoescape=True),
+            )
+        )
+        or 0
+    )
+
+
 async def accounts_due_refresh(session: AsyncSession, *, left: timedelta) -> list[uuid.UUID]:
     """Активные аккаунты, чей токен истекает раньше, чем через left."""
     return list(

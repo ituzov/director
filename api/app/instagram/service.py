@@ -134,6 +134,16 @@ async def _media_failed(
     raise MetaUnavailable from error
 
 
+async def count_undelivered(
+    session: AsyncSession, account_id: uuid.UUID, *, since: datetime, ref_prefix: str
+) -> int:
+    """Для соседей: сколько их отправок не дошло. ref_prefix это метка соседа
+    («autoreplies:»), по ней отделяем свои задачи от чужих."""
+    return await repository.count_undelivered(
+        session, account_id, since=since, ref_prefix=ref_prefix
+    )
+
+
 async def get_account(session: AsyncSession, account_id: uuid.UUID) -> AccountRef | None:
     """Аккаунт для соседей: справка без токена, None если такого нет."""
     account = await repository.get_account(session, account_id)

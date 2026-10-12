@@ -1,8 +1,10 @@
 """HTTP-ручки autoreplies. Тонкие: разобрать запрос, позвать сервис, собрать ответ."""
 
 import uuid
+from dataclasses import asdict
+from typing import Annotated
 
-from fastapi import APIRouter, Request, status
+from fastapi import APIRouter, Query, Request, status
 from fastapi.responses import JSONResponse
 
 from app import identity
@@ -14,7 +16,14 @@ from app.autoreplies.exceptions import (
     AutoreplyError,
     AutoreplyNotFound,
 )
-from app.autoreplies.schemas import AutoreplyForm, AutoreplyIn, AutoreplyOut, EnabledIn
+from app.autoreplies.schemas import (
+    AutoreplyForm,
+    AutoreplyIn,
+    AutoreplyOut,
+    EnabledIn,
+    StatsOut,
+    TopAutoreplyOut,
+)
 from app.db import SessionDep
 
 router = APIRouter(prefix="/autoreplies", tags=["autoreplies"])
@@ -77,6 +86,26 @@ async def create_autoreply(
     body: AutoreplyIn, session: SessionDep, user: identity.CanConnectAccounts
 ) -> AutoreplyOut:
     return _out(await service.create(session, body, user))
+
+
+# выше /{autoreply_id}: иначе «stats» разбирался бы как id
+@router.get("/stats")
+async def get_stats(
+    account_id: uuid.UUID,
+    session: SessionDep,
+    user: identity.CurrentUserRef,
+    days: Annotated[int, Query(ge=1, le=90)] = 7,
+) -> StatsOut:
+    """Воронка выдач аккаунта за days дней. Выдачи хранятся 90 дней, дальше считать нечего."""
+    result = await service.stats(session, account_id, days=days)
+    return StatsOut(
+        triggered=result.triggered,
+        sent=result.sent,
+        clicked=result.clicked,
+        delivered=result.delivered,
+        undelivered=result.undelivered,
+        top=[TopAutoreplyOut(**asdict(t)) for t in result.top],
+    )
 
 
 @router.get("/{autoreply_id}")
