@@ -110,15 +110,17 @@ class AutoreplyOut(BaseModel):
     updated_at: datetime
 
 
-class TopAutoreplyOut(BaseModel):
+class AutoreplyCountsOut(BaseModel):
     id: uuid.UUID
     name: str
     triggered: int
     delivered: int
+    # последнее срабатывание
+    last_at: datetime
 
 
 class StatsOut(BaseModel):
-    """Сводка для обзора: воронка выдач за период."""
+    """Сводка аккаунта за период: воронка выдач, топ и цифры по каждому автоответу."""
 
     # сработало, ушёл директ с кнопкой, нажали кнопку, получили материал
     triggered: int
@@ -127,5 +129,7 @@ class StatsOut(BaseModel):
     delivered: int
     # отправки, которые так и не ушли: упали после повторов или опоздали к окну Meta
     undelivered: int
-    # чаще всего срабатывавшие, до пяти
-    top: list[TopAutoreplyOut]
+    # чаще всего срабатывавшие, до пяти: для обзора
+    top: list[AutoreplyCountsOut]
+    # все срабатывавшие за период: для карточек. Кого нет, тот не срабатывал
+    by_autoreply: list[AutoreplyCountsOut]

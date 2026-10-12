@@ -11,6 +11,8 @@ from app.instagram.models import Account, OutboxTask
 
 NOW = datetime.now(UTC)
 OLD = NOW - timedelta(days=10)
+# самая свежая выдача: её время карточка покажет как «последний раз»
+LATEST = NOW + timedelta(minutes=1)
 
 
 @pytest.fixture
@@ -86,7 +88,7 @@ async def test_funnel_and_top(client, owner, account, session):
     session.add_all(
         [
             delivery(guide, sent=True, clicked=True, delivered=True),
-            delivery(guide, sent=True, clicked=True),
+            delivery(guide, created_at=LATEST, sent=True, clicked=True),
             delivery(guide, sent=True),
             delivery(guide),
             delivery(price, sent=True, clicked=True, delivered=True),
@@ -106,6 +108,9 @@ async def test_funnel_and_top(client, owner, account, session):
         ("Прайс", 1, 1),
     ]
     assert body["top"][0]["id"] == str(guide.id)
+    # карточкам те же цифры и когда сработал последний раз; старая выдача не в счёт
+    assert body["by_autoreply"] == body["top"]
+    assert datetime.fromisoformat(body["by_autoreply"][0]["last_at"]) == LATEST
 
 
 async def test_period(client, owner, account, session):
@@ -120,8 +125,10 @@ async def test_top_five(client, owner, account, session):
         a = await autoreply(session, account.id, f"Автоответ {i}")
         session.add_all([delivery(a) for _ in range(i + 1)])
     await session.commit()
-    top = (await stats(client, owner, account)).json()["top"]
-    assert [t["triggered"] for t in top] == [6, 5, 4, 3, 2]
+    body = (await stats(client, owner, account)).json()
+    assert [t["triggered"] for t in body["top"]] == [6, 5, 4, 3, 2]
+    # карточкам нужны все, а не только пятёрка
+    assert [t["triggered"] for t in body["by_autoreply"]] == [6, 5, 4, 3, 2, 1]
 
 
 async def test_undelivered(client, owner, account, session):
@@ -147,6 +154,7 @@ async def test_empty(client, owner, account):
         "delivered": 0,
         "undelivered": 0,
         "top": [],
+        "by_autoreply": [],
     }
 
 

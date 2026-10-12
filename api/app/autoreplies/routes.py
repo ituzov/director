@@ -17,12 +17,12 @@ from app.autoreplies.exceptions import (
     AutoreplyNotFound,
 )
 from app.autoreplies.schemas import (
+    AutoreplyCountsOut,
     AutoreplyForm,
     AutoreplyIn,
     AutoreplyOut,
     EnabledIn,
     StatsOut,
-    TopAutoreplyOut,
 )
 from app.db import SessionDep
 
@@ -98,13 +98,15 @@ async def get_stats(
 ) -> StatsOut:
     """Воронка выдач аккаунта за days дней. Выдачи хранятся 90 дней, дальше считать нечего."""
     result = await service.stats(session, account_id, days=days)
+    counts = [AutoreplyCountsOut(**asdict(c)) for c in result.by_autoreply]
     return StatsOut(
         triggered=result.triggered,
         sent=result.sent,
         clicked=result.clicked,
         delivered=result.delivered,
         undelivered=result.undelivered,
-        top=[TopAutoreplyOut(**asdict(t)) for t in result.top],
+        top=counts[:5],
+        by_autoreply=counts,
     )
 
 

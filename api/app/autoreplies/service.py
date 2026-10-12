@@ -2,7 +2,7 @@
 
 import uuid
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import structlog
 from sqlalchemy import func, select
@@ -417,11 +417,12 @@ async def _candidates(
 
 
 @dataclass(frozen=True, slots=True)
-class TopAutoreply:
+class AutoreplyCounts:
     id: uuid.UUID
     name: str
     triggered: int
     delivered: int
+    last_at: datetime
 
 
 @dataclass(frozen=True, slots=True)
@@ -433,16 +434,17 @@ class Stats:
     delivered: int
     # отправки автоответов, которые так и не ушли
     undelivered: int
-    top: list[TopAutoreply]
+    # все срабатывавшие за период, чаще первыми: топ обзора и цифры на карточках
+    by_autoreply: list[AutoreplyCounts]
 
 
 async def stats(session: AsyncSession, account_id: uuid.UUID, *, days: int) -> Stats:
-    """Сводка для обзора за последние days дней, прямо по выдачам."""
+    """Сводка аккаунта за последние days дней, прямо по выдачам."""
     since = await session.scalar(select(func.now() - timedelta(days=days)))
     triggered, sent, clicked, delivered = await repository.delivery_counts(
         session, account_id, since=since
     )
-    top = await repository.top_autoreplies(session, account_id, since=since, limit=5)
+    counts = await repository.autoreply_counts(session, account_id, since=since)
     undelivered = await instagram.count_undelivered(
         session, account_id, since=since, ref_prefix=f"{REF_PREFIX}:"
     )
@@ -452,5 +454,5 @@ async def stats(session: AsyncSession, account_id: uuid.UUID, *, days: int) -> S
         clicked=clicked,
         delivered=delivered,
         undelivered=undelivered,
-        top=[TopAutoreply(*row) for row in top],
+        by_autoreply=[AutoreplyCounts(*row) for row in counts],
     )

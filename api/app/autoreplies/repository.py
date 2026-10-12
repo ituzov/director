@@ -259,18 +259,24 @@ async def delivery_counts(
     return row[0], row[1], row[2], row[3]
 
 
-async def top_autoreplies(
-    session: AsyncSession, account_id: uuid.UUID, *, since: datetime, limit: int
-) -> list[tuple[uuid.UUID, str, int, int]]:
-    """Чаще всего срабатывавшие автоответы: id, имя, сработал, выдал материал."""
+async def autoreply_counts(
+    session: AsyncSession, account_id: uuid.UUID, *, since: datetime
+) -> list[tuple[uuid.UUID, str, int, int, datetime]]:
+    """Автоответы, которые срабатывали с since, чаще первыми: id, имя, сработал,
+    выдал материал, последнее срабатывание."""
     triggered = func.count(Delivery.id)
     rows = await session.execute(
-        select(Autoreply.id, Autoreply.name, triggered, func.count(Delivery.delivered_at))
+        select(
+            Autoreply.id,
+            Autoreply.name,
+            triggered,
+            func.count(Delivery.delivered_at),
+            func.max(Delivery.created_at),
+        )
         .join(Delivery, Delivery.autoreply_id == Autoreply.id)
         .where(Delivery.account_id == account_id, Delivery.created_at >= since)
         .group_by(Autoreply.id)
         # при равенстве порядок не должен прыгать между обновлениями страницы
         .order_by(triggered.desc(), Autoreply.name)
-        .limit(limit)
     )
-    return [(r[0], r[1], r[2], r[3]) for r in rows]
+    return [(r[0], r[1], r[2], r[3], r[4]) for r in rows]
