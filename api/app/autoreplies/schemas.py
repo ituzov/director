@@ -43,7 +43,8 @@ class AutoreplyForm(BaseModel):
 
     name: Name
     scope: Literal["all", "posts"]
-    media_ids: list[MediaId] = []
+    # столько форма показывает выбранными: ручка постов по id берёт до 50
+    media_ids: list[MediaId] = Field(default=[], max_length=50)
     keywords: list[Word] = Field(min_length=1, max_length=50)
     # уходят с кнопкой
     intro_text: ButtonMessageText

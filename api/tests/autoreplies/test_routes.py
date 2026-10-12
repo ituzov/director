@@ -81,6 +81,7 @@ async def test_text_trimmed(client, owner, account):
         ({"scope": "posts"}, "posts_required"),
         ({"media_ids": ["m1"]}, "posts_not_allowed"),
         ({"scope": "posts", "media_ids": ["m1", "m1"]}, "post_duplicate"),
+        ({"scope": "posts", "media_ids": [f"m{i}" for i in range(51)]}, "too_long"),
         ({"follow_gate": True}, "not_following_text_required"),
         ({"button_text": "x" * 21}, None),
         # материал: 501 кириллическая буква это 1002 байта
