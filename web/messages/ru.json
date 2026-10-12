@@ -195,7 +195,9 @@
     },
     "moreWords": "ещё {count}",
     "keywords": "Кодовые слова",
-    "word": "«{word}»"
+    "word": "«{word}»",
+    "counts": "{triggered, plural, one {# срабатывание} few {# срабатывания} many {# срабатываний} other {# срабатывания}}, получили {delivered}",
+    "noCounts": "{days, plural, one {За # день} few {За # дня} many {За # дней} other {За # дня}} не срабатывал"
   },
   "AutoreplyForm": {
     "archivedNotice": "Автоответ в архиве. Верните его из архива в списке, чтобы править.",

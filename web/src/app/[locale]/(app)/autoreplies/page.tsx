@@ -1,12 +1,13 @@
 import { MessageSquareReply, Plus } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { getNow } from "next-intl/server";
 import { Suspense } from "react";
 
 import { Page, Panel } from "@/components/page";
 import { Button } from "@/components/ui/button";
 import { Link } from "@/i18n/navigation";
 import { apiFetch } from "@/lib/api";
-import type { Autoreply } from "@/lib/autoreplies";
+import { type Autoreply, type AutoreplyStats, STATS_DAYS } from "@/lib/autoreplies";
 import { getCurrentAccount } from "@/lib/current-account";
 import { getToken } from "@/lib/session";
 
@@ -47,14 +48,27 @@ async function Autoreplies({ searchParams }: Props) {
   const account = await getCurrentAccount();
   if (!account) return <NoAccount />;
 
+  const token = await getToken();
   const query = new URLSearchParams({ account_id: account.id, archived: String(archived) });
-  const autoreplies = await apiFetch<Autoreply[]>(`/autoreplies?${query}`, {
-    token: await getToken(),
-  });
+  // один момент на запрос: «2 ч назад» в браузере совпадёт с серверным
+  const [autoreplies, stats, now] = await Promise.all([
+    apiFetch<Autoreply[]>(`/autoreplies?${query}`, { token }),
+    // цифры на карточках не главное: сводка упала, список всё равно показываем
+    apiFetch<AutoreplyStats>(
+      `/autoreplies/stats?${new URLSearchParams({ account_id: account.id, days: String(STATS_DAYS) })}`,
+      { token },
+    ).catch(() => null),
+    getNow(),
+  ]);
   return (
     <>
       <ArchiveTabs archived={archived} />
-      <AutoreplyList autoreplies={autoreplies} archived={archived} />
+      <AutoreplyList
+        autoreplies={autoreplies}
+        archived={archived}
+        counts={stats && Object.fromEntries(stats.by_autoreply.map((c) => [c.id, c]))}
+        now={now.getTime()}
+      />
     </>
   );
 }

@@ -195,7 +195,9 @@
     },
     "moreWords": "{count} more",
     "keywords": "Keywords",
-    "word": "“{word}”"
+    "word": "“{word}”",
+    "counts": "{triggered, plural, one {# trigger} other {# triggers}}, {delivered} got it",
+    "noCounts": "No triggers in the last {days, plural, one {# day} other {# days}}"
   },
   "AutoreplyForm": {
     "archivedNotice": "This auto-reply is archived. Restore it from the list to edit.",

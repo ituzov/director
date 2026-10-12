@@ -52,7 +52,10 @@ export const LIMITS = {
   name: 100,
 } as const;
 
-/** Сводка для обзора: GET /autoreplies/stats. */
+// период сводки на обзоре и карточках; переключатель 7 / 30 дней позже, api его уже умеет
+export const STATS_DAYS = 7;
+
+/** Сводка аккаунта: GET /autoreplies/stats. */
 export type AutoreplyStats = {
   // сработало, ушёл директ с кнопкой, нажали кнопку, получили материал
   triggered: number;
@@ -61,5 +64,18 @@ export type AutoreplyStats = {
   delivered: number;
   // отправки, которые так и не ушли: Meta отказала или окно ответа закрылось
   undelivered: number;
-  top: { id: string; name: string; triggered: number; delivered: number }[];
+  // до пяти чаще всех срабатывавших: для обзора
+  top: AutoreplyCounts[];
+  // все срабатывавшие за период: для карточек. Кого нет, тот не срабатывал
+  by_autoreply: AutoreplyCounts[];
+};
+
+/** Цифры одного автоответа за период. */
+export type AutoreplyCounts = {
+  id: string;
+  name: string;
+  triggered: number;
+  delivered: number;
+  // последнее срабатывание
+  last_at: string;
 };

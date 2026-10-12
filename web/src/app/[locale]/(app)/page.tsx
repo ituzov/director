@@ -7,13 +7,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "@/i18n/navigation";
 import type { Account } from "@/lib/accounts";
 import { ApiError, apiFetch } from "@/lib/api";
-import type { Autoreply, AutoreplyStats } from "@/lib/autoreplies";
+import { type Autoreply, type AutoreplyStats, STATS_DAYS as DAYS } from "@/lib/autoreplies";
 import { getCurrentAccount, getSwitchableAccounts } from "@/lib/current-account";
 import type { MetaApp } from "@/lib/meta-app";
 import { getCurrentUser, getToken } from "@/lib/session";
-
-// период сводки; переключатель 7 / 30 дней появится позже, ручка его уже умеет
-const DAYS = 7;
 
 export default function OverviewPage() {
   return (
