@@ -160,15 +160,17 @@ download_release() {
 wait_healthy() {
   local api status=""
   api="$(docker compose ps -q api)"
+  status "waiting for api health check (up to 2 min)"
   for _ in $(seq 60); do
     status="$(docker inspect -f '{{.State.Health.Status}}' "$api" 2>/dev/null || true)"
     [ "$status" = healthy ] && break
     sleep 2
   done
   [ "$status" = healthy ] || return 1
+  status "waiting for https://$HOST to respond (up to 2 min)"
   # через 127.0.0.1: не все хостеры пускают сервер к своему же внешнему IP
   for _ in $(seq 60); do
-    curl -fsS -o /dev/null --resolve "$HOST:443:127.0.0.1" "https://$HOST/login" && return 0
+    curl -fs -o /dev/null --resolve "$HOST:443:127.0.0.1" "https://$HOST/login" && return 0
     sleep 2
   done
   return 1
