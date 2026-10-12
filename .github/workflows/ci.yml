@@ -13,6 +13,7 @@ permissions:
 
 jobs:
   api:
+    name: api
     runs-on: ubuntu-24.04
     services:
       postgres:
@@ -34,33 +35,48 @@ jobs:
       run:
         working-directory: api
     steps:
-      - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10.3.0
+      - name: Код
+        uses: actions/checkout@v7
+      - name: uv и кеш пакетов
+        uses: astral-sh/setup-uv@v10.3.0
         with:
           working-directory: api
           enable-cache: true
           cache-dependency-glob: uv.lock
-      - run: uv sync --locked
-      - run: uv run ruff check .
-      - run: uv run ruff format --check .
-      - run: uv run lint-imports
-      - run: uv run pytest
+      - name: Зависимости
+        run: uv sync --locked
+      - name: Линтер
+        run: uv run ruff check .
+      - name: Формат
+        run: uv run ruff format --check .
+      - name: Границы модулей
+        run: uv run lint-imports
+      - name: Тесты
+        run: uv run pytest
 
   web:
+    name: web
     runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: web
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - name: Код
+        uses: actions/checkout@v7
+      - name: Node и кеш пакетов
+        uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
           cache-dependency-path: web/package-lock.json
-      - run: npm ci
-      - run: npm run lint
-      - run: npm run format:check
-      - run: npm run build
+      - name: Зависимости
+        run: npm ci
+      - name: Линтер
+        run: npm run lint
+      - name: Формат
+        run: npm run format:check
+      - name: Сборка
+        run: npm run build
       # после сборки: типы LayoutProps и PageProps генерирует next build
-      - run: npx tsc --noEmit
+      - name: Типы
+        run: npx tsc --noEmit

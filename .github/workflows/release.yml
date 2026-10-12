@@ -11,11 +11,13 @@ permissions:
 
 jobs:
   checks:
+    name: Проверки
     uses: ./.github/workflows/ci.yml
 
   # docker/github-builder: каждая платформа на своём нативном раннере,
   # потом одно оглавление под тегами версии
   api:
+    name: Образ api
     needs: checks
     uses: docker/github-builder/.github/workflows/build.yml@v1
     permissions:
@@ -42,6 +44,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
   web:
+    name: Образ web
     needs: checks
     uses: docker/github-builder/.github/workflows/build.yml@v1
     permissions:
@@ -69,13 +72,16 @@ jobs:
 
   # черновик: заметки пишутся руками, публикует владелец репо
   release:
+    name: Черновик релиза
     needs: [api, web]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v7
-      - uses: softprops/action-gh-release@v3
+      - name: Код
+        uses: actions/checkout@v7
+      - name: Черновик с файлами установки
+        uses: softprops/action-gh-release@v3
         with:
           draft: true
           prerelease: ${{ contains(github.ref_name, '-') }}
