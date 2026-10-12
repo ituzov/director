@@ -1,0 +1,17 @@
+# Нагрузочный тест: те же образы из релиза, но Meta подменена заглушкой.
+# Из /opt/director: docker compose -f docker-compose.yml -f loadtest/docker-compose.loadtest.yml up -d
+# Вернуть настоящую Meta: docker compose up -d (только основной файл)
+services:
+  meta-stub:
+    image: python:3.14-slim
+    command: ["python", "/stub/meta_stub.py"]
+    volumes:
+      - ./loadtest/meta_stub.py:/stub/meta_stub.py:ro
+    restart: unless-stopped
+
+  api:
+    environment:
+      GRAPH_URL: http://meta-stub:8080
+  worker:
+    environment:
+      GRAPH_URL: http://meta-stub:8080
