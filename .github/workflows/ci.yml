@@ -80,3 +80,15 @@ jobs:
       # после сборки: типы LayoutProps и PageProps генерирует next build
       - name: Типы
         run: npx tsc --noEmit
+
+  install:
+    name: install.sh
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Код
+        uses: actions/checkout@v7
+      # shellcheck уже стоит на раннере GitHub
+      - name: Линтер
+        run: shellcheck -x install.sh install.test.sh
+      - name: Работа с .env
+        run: bash install.test.sh

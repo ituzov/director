@@ -81,6 +81,9 @@ jobs:
     steps:
       - name: Код
         uses: actions/checkout@v7
+      # скрипт знает свою версию: обновление на другую передаёт скрипту той версии
+      - name: Версия в install.sh
+        run: sed -i "s/^SCRIPT_VERSION=.*/SCRIPT_VERSION=\"${GITHUB_REF_NAME#v}\"/" install.sh
       - name: Релиз с файлами установки
         uses: softprops/action-gh-release@v3
         with:
