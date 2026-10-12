@@ -120,6 +120,25 @@ async def list_media(
     return MediaPage(items=items, after=cursors.get("after") if "next" in paging else None)
 
 
+# объекта нет: удалён, в архиве или не виден этому токену
+NOT_FOUND = 100
+
+
+async def get_media(http: httpx.AsyncClient, *, token: str, media_id: str) -> dict[str, Any] | None:
+    """Один пост по id, те же поля, что в списке. None: Meta такого поста не знает."""
+    try:
+        return _json(
+            await http.get(
+                f"{GRAPH}/{VERSION}/{media_id}",
+                params={"fields": MEDIA_FIELDS, "access_token": token},
+            )
+        )
+    except GraphError as error:
+        if error.code == NOT_FOUND:
+            return None
+        raise
+
+
 async def refresh_token(http: httpx.AsyncClient, *, token: str) -> LongToken:
     """Долгий токен в новый долгий на 60 дней. Meta требует: старше суток и не истёк."""
     data = _json(

@@ -1,5 +1,6 @@
 """Сценарии instagram. Одна функция это одна операция и один commit."""
 
+import asyncio
 import hashlib
 import hmac
 import json
@@ -7,6 +8,7 @@ import secrets
 import ssl
 import uuid
 from datetime import UTC, datetime, timedelta
+from typing import NoReturn
 from urllib.parse import urlencode
 
 import httpx
@@ -70,27 +72,66 @@ def expire_account(session: AsyncSession, account: Account) -> None:
 
 
 async def list_media(
-    session: AsyncSession, account_id: uuid.UUID, *, after: str | None
+    session: AsyncSession, account_id: uuid.UUID, *, after: str | None, limit: int
 ) -> graph.MediaPage:
     """Посты аккаунта страницами, прямо из Meta: ничего не храним."""
+    account, token = await _media_access(session, account_id)
+    try:
+        async with _http() as http:
+            return await graph.list_media(http, token=token, after=after, limit=limit)
+    except (graph.GraphError, httpx.HTTPError) as error:
+        await _media_failed(session, account, error)
+
+
+async def get_media(
+    session: AsyncSession, account_id: uuid.UUID, media_ids: list[str]
+) -> dict[str, dict | None]:
+    """Посты по id, для выбранных в автоответе. None у поста, которого Meta не знает:
+    его удалили или убрали в архив, а автоответ на нём ещё висит."""
+    account, token = await _media_access(session, account_id)
+    async with _http() as http:
+        # параллельно: постов у автоответа немного, а по одному это секунды ожидания.
+        # Ошибки собираем, а не бросаем сразу, чтобы не оставлять запросы висеть
+        results = await asyncio.gather(
+            *(graph.get_media(http, token=token, media_id=i) for i in media_ids),
+            return_exceptions=True,
+        )
+    errors = [r for r in results if isinstance(r, BaseException)]
+    if errors:
+        # токен истёк: это важнее, чем «Meta не ответила» у соседнего запроса
+        expired = [e for e in errors if isinstance(e, graph.GraphError) and e.code == TOKEN_INVALID]
+        failure = (expired or errors)[0]
+        if not isinstance(failure, (graph.GraphError, httpx.HTTPError)):
+            raise failure
+        await _media_failed(session, account, failure)
+    return {
+        i: r for i, r in zip(media_ids, results, strict=True) if not isinstance(r, BaseException)
+    }
+
+
+async def _media_access(session: AsyncSession, account_id: uuid.UUID) -> tuple[Account, str]:
+    """Аккаунт и его токен для чтения постов, или AccountUnavailable."""
     account = await repository.get_account(session, account_id)
     if account is None or account.status != "active" or not account.token_encrypted:
         raise AccountUnavailable
-    try:
-        async with _http() as http:
-            return await graph.list_media(
-                http, token=crypto.decrypt(account.token_encrypted), after=after
-            )
-    except graph.GraphError as error:
+    return account, crypto.decrypt(account.token_encrypted)
+
+
+async def _media_failed(
+    session: AsyncSession, account: Account, error: graph.GraphError | httpx.HTTPError
+) -> NoReturn:
+    """Ошибка Meta при чтении постов в одну из двух, понятных форме: токен истёк
+    (AccountUnavailable) или Meta не ответила (MetaUnavailable)."""
+    if isinstance(error, graph.GraphError):
         if error.code == TOKEN_INVALID:
             expire_account(session, account)
             await session.commit()
             raise AccountUnavailable from error
-        log.warning("media.list_failed", reason=str(error.code or error.status))
-        raise MetaUnavailable from error
-    except httpx.HTTPError as error:
-        log.warning("media.list_failed", reason=type(error).__name__)
-        raise MetaUnavailable from error
+        reason = str(error.code or error.status)
+    else:
+        reason = type(error).__name__
+    log.warning("media.list_failed", reason=reason)
+    raise MetaUnavailable from error
 
 
 async def get_account(session: AsyncSession, account_id: uuid.UUID) -> AccountRef | None:

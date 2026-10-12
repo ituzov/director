@@ -82,3 +82,11 @@ class MediaPageOut(BaseModel):
     items: list[MediaOut]
     # закладка следующей страницы; None, если постов больше нет
     next: str | None
+
+
+class SelectedMediaOut(BaseModel):
+    """Выбранные посты автоответа."""
+
+    items: list[MediaOut]
+    # Meta таких не знает: пост удалили или убрали в архив
+    missing: list[str]

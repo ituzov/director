@@ -5,6 +5,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response, status
 from fastapi.responses import JSONResponse, PlainTextResponse
+from pydantic import StringConstraints
 
 from app import identity
 from app.db import SessionDep
@@ -28,6 +29,7 @@ from app.instagram.schemas import (
     MetaAppOut,
     OAuthCallbackIn,
     OAuthUrlOut,
+    SelectedMediaOut,
     WebhookCheckOut,
 )
 
@@ -143,10 +145,30 @@ async def list_media(
     session: SessionDep,
     user: identity.CurrentUserRef,
     after: Annotated[str | None, Query(max_length=512)] = None,
+    limit: Annotated[int, Query(ge=1, le=50)] = 24,
 ) -> MediaPageOut:
     """Посты аккаунта для выбора в автоответе. Закладка after из прошлого ответа."""
-    page = await service.list_media(session, account_id, after=after)
+    page = await service.list_media(session, account_id, after=after, limit=limit)
     return MediaPageOut(items=[_media_out(m) for m in page.items], next=page.after)
+
+
+# id поста встаёт в путь запроса к Meta: только цифры, иначе «me/..» ушёл бы куда угодно
+MediaIdQuery = Annotated[str, StringConstraints(pattern=r"^\d{1,30}$")]
+
+
+@router.get("/accounts/{account_id}/media/selected")
+async def get_selected_media(
+    account_id: uuid.UUID,
+    session: SessionDep,
+    user: identity.CurrentUserRef,
+    ids: Annotated[list[MediaIdQuery], Query(max_length=50)],
+) -> SelectedMediaOut:
+    """Выбранные посты автоответа по id: миниатюры для формы. Удалённые в missing."""
+    found = await service.get_media(session, account_id, list(dict.fromkeys(ids)))
+    return SelectedMediaOut(
+        items=[_media_out(m) for m in found.values() if m is not None],
+        missing=[i for i, m in found.items() if m is None],
+    )
 
 
 def _media_out(media: dict) -> MediaOut:
