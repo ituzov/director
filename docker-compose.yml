@@ -1,19 +1,25 @@
-# Стек Директора. Запуск: docker compose up -d
-# Переменные из .env рядом с этим файлом (шаблон .env.example)
+# Стек Директора на сервере: docker compose up -d, переменные из .env.
+# Образы готовые из GHCR, собрать у себя: docker-compose.build.yml
 
-# общее для всех, кто работает на образе api
+# без предела docker копит логи, пока не кончится диск
+x-logging: &logging
+  logging:
+    driver: json-file
+    options: { max-size: 10m, max-file: "3" }
+
 x-api: &api
-  build: ./api
-  image: director-api
+  <<: *logging
+  image: ghcr.io/ituzov/director-api:${DIRECTOR_VERSION:?задай DIRECTOR_VERSION в .env}
   environment:
     DATABASE_URL: postgresql+psycopg://director:${POSTGRES_PASSWORD}@db:5432/director
     SECRET_KEY: ${SECRET_KEY:?задай SECRET_KEY в .env}
-    PUBLIC_URL: ${PUBLIC_URL:-}
-    # в контейнере нет терминала, но не полагаемся на угадывание
+    SETUP_TOKEN: ${SETUP_TOKEN:-}
+    PUBLIC_URL: https://${DIRECTOR_HOST:?задай DIRECTOR_HOST в .env}
     LOG_JSON: "true"
 
 services:
   db:
+    <<: *logging
     image: postgres:18
     restart: unless-stopped
     environment:
@@ -39,8 +45,12 @@ services:
     restart: unless-stopped
     depends_on:
       migrate: { condition: service_completed_successfully }
+    # по нему апдейтер поймёт, что новая версия поднялась
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      retries: 6
 
-  # тот же образ, что api: разбирает входящие и отправляет исходящие
   worker:
     <<: *api
     restart: unless-stopped
@@ -48,5 +58,38 @@ services:
     depends_on:
       migrate: { condition: service_completed_successfully }
 
+  web:
+    <<: *logging
+    image: ghcr.io/ituzov/director-web:${DIRECTOR_VERSION}
+    restart: unless-stopped
+    environment:
+      API_URL: http://api:8000
+    depends_on:
+      api: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/login').then(r => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 10s
+      retries: 6
+
+  # единственный, кто смотрит наружу
+  caddy:
+    <<: *logging
+    image: caddy:2.11
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DIRECTOR_HOST: ${DIRECTOR_HOST}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # сертификаты: без тома каждый перезапуск упирался бы в лимиты Let's Encrypt
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on: [api, web]
+
 volumes:
   db-data:
+  caddy-data:
+  caddy-config:

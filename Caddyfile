@@ -1,0 +1,14 @@
+# Сертификат Let's Encrypt на DIRECTOR_HOST Caddy получает сам
+{$DIRECTOR_HOST} {
+	# id запроса рождается на входе: по нему склеиваются логи Next, api и worker.
+	# Пришедший снаружи X-Request-ID перезаписываем: клиенту в этом не доверяем
+	request_header X-Request-ID {http.request.uuid}
+
+	# вебхуки Meta мимо Next: им не нужна сессия, и web им не нужен
+	handle /webhooks/* {
+		reverse_proxy api:8000
+	}
+	handle {
+		reverse_proxy web:3000
+	}
+}

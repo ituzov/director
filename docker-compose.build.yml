@@ -1,0 +1,15 @@
+# Собрать образы у себя, а не тянуть из GHCR:
+# docker compose -f docker-compose.yml -f docker-compose.build.yml up --build
+services:
+  # собирает один api: три сборки одного тега параллельно дерутся
+  api:
+    build: ./api
+  migrate:
+    pull_policy: never
+  worker:
+    pull_policy: never
+  web:
+    build:
+      context: ./web
+      args:
+        APP_VERSION: ${DIRECTOR_VERSION}
