@@ -1,5 +1,6 @@
-"""Шаг worker: одно входящее за раз, в своей сессии."""
+"""Циклы worker: одно событие за раз, каждое в своей сессии; остановка по сигналу."""
 
+import asyncio
 import uuid
 from contextlib import asynccontextmanager
 
@@ -13,7 +14,7 @@ from app.instagram.models import Account, InboxEvent
 
 
 def sessions(session):
-    """Фабрика сессий для шага: отдаёт песочницу теста и не закрывает её."""
+    """Фабрика сессий для цикла: отдаёт песочницу теста и не закрывает её."""
 
     @asynccontextmanager
     async def make():
@@ -42,16 +43,17 @@ async def pending(session) -> int:
 
 
 async def test_nothing_to_do(session):
-    assert await worker.step(sessions(session)) is False
+    assert await worker.inbox_once(sessions(session)) is False
+    assert await worker.outbox_once(sessions(session)) is False
 
 
-async def test_one_event_per_step(session):
+async def test_one_event_at_a_time(session):
     await add_events(session, 2)
-    assert await worker.step(sessions(session)) is True
+    assert await worker.inbox_once(sessions(session)) is True
     assert await pending(session) == 1
-    assert await worker.step(sessions(session)) is True
+    assert await worker.inbox_once(sessions(session)) is True
     assert await pending(session) == 0
-    assert await worker.step(sessions(session)) is False
+    assert await worker.inbox_once(sessions(session)) is False
 
 
 def test_comments_go_to_autoreplies():
@@ -60,8 +62,7 @@ def test_comments_go_to_autoreplies():
     assert worker.ON_RESULT is autoreplies.handle_send_result
 
 
-async def test_step_sends_outbox(session, monkeypatch):
-    # входящих нет, а исходящее есть: шаг занят, не спим
+async def test_outbox_once_sends(session, monkeypatch):
     account = Account(
         ig_user_id="17841400000000000",
         username="shop",
@@ -75,5 +76,53 @@ async def test_step_sends_outbox(session, monkeypatch):
     transport = httpx.MockTransport(lambda request: httpx.Response(200, json={"id": "r1"}))
     monkeypatch.setattr(tasks, "_http", lambda: httpx.AsyncClient(transport=transport))
 
-    assert await worker.step(sessions(session)) is True
-    assert await worker.step(sessions(session)) is False
+    assert await worker.outbox_once(sessions(session)) is True
+    assert await worker.outbox_once(sessions(session)) is False
+
+
+async def test_loop_works_while_busy_and_stops(monkeypatch):
+    # пока работа есть, без пауз: пауза в минуту здесь сорвала бы таймаут.
+    # Сигнал пришёл во время события: выходим сразу после него
+    monkeypatch.setattr(worker, "POLL_SECONDS", 60)
+    stop = asyncio.Event()
+    calls = []
+
+    async def once():
+        calls.append(1)
+        if len(calls) == 3:
+            stop.set()
+        return True
+
+    await asyncio.wait_for(worker.run_loop("test", once, stop), 1)
+    assert len(calls) == 3
+
+
+async def test_loop_survives_errors(monkeypatch):
+    # база недоступна: цикл не падает, а пробует снова
+    monkeypatch.setattr(worker, "POLL_SECONDS", 0)
+    stop = asyncio.Event()
+    calls = []
+
+    async def once():
+        calls.append(1)
+        if len(calls) == 1:
+            raise ConnectionError("db down")
+        stop.set()
+        return True
+
+    await asyncio.wait_for(worker.run_loop("test", once, stop), 1)
+    assert len(calls) == 2
+
+
+async def test_sleep_wakes_on_stop(monkeypatch):
+    # пустая очередь и долгий сон, но SIGTERM будит сразу
+    monkeypatch.setattr(worker, "POLL_SECONDS", 60)
+    stop = asyncio.Event()
+
+    async def idle():
+        return False
+
+    task = asyncio.create_task(worker.run_loop("test", idle, stop))
+    await asyncio.sleep(0.05)
+    stop.set()
+    await asyncio.wait_for(task, 1)
