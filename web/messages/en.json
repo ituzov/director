@@ -209,7 +209,29 @@
     "scopeAll": "On all posts",
     "scopePosts": "On selected posts",
     "scopeHint": "If a post has its own auto-reply, only that one works under it.",
-    "postsChosen": "{count, plural, =0 {No posts selected yet} one {# post selected} other {# posts selected}}",
+    "posts": {
+      "chosen": "{count, plural, =0 {No posts selected yet} one {# post selected} other {# posts selected}}",
+      "more": "Show more",
+      "loading": "Loading…",
+      "retry": "Try again",
+      "empty": "This account has no posts yet.",
+      "reels": "Reel",
+      "untitled": "No caption",
+      "failed": {
+        "MetaUnavailable": "Couldn’t load posts from Instagram.",
+        "AccountUnavailable": "The account is disconnected. Connect it again under Accounts."
+      },
+      "takenBy": "Autoreply “{name}”",
+      "takenByDisabled": "Autoreply “{name}”, off",
+      "choose": "Choose posts",
+      "change": "Change",
+      "title": "Posts for this autoreply",
+      "cancel": "Cancel",
+      "done": "Done",
+      "close": "Close",
+      "remove": "Remove post",
+      "deleted": "Deleted"
+    },
     "direct": {
       "title": "Direct message",
       "description": "The first message to the person, with a button. Tapping it gets them the material."

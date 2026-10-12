@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils";
 
 import { type SaveState, saveAutoreply } from "../actions";
 import { ChipsInput } from "./chips-input";
+import { PostPicker } from "./post-picker";
 
 const INITIAL: SaveState = {};
 
@@ -128,15 +129,12 @@ function AutoreplyFormFields({ autoreply }: Props) {
               ]}
             />
             {scope === "posts" && (
-              <p className="text-sm text-muted-foreground">
-                {t("postsChosen", { count: autoreply?.media_ids.length ?? 0 })}
-              </p>
+              <PostPicker
+                accountId={autoreply?.account_id ?? null}
+                autoreplyId={autoreply?.id ?? null}
+                initial={autoreply?.media_ids ?? []}
+              />
             )}
-            {/* выбор постов следующим шагом; пока сохраняем те, что уже были */}
-            {scope === "posts" &&
-              autoreply?.media_ids.map((id) => (
-                <input key={id} type="hidden" name="media_ids" value={id} />
-              ))}
             {state.conflict?.kind === "post" && <Conflict conflict={state.conflict} />}
           </Block>
         </Panel>

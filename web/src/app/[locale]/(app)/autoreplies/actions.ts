@@ -4,7 +4,8 @@ import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { ApiError, apiFetch } from "@/lib/api";
-import type { AutoreplyConflict } from "@/lib/autoreplies";
+import type { Media } from "@/lib/accounts";
+import type { Autoreply, AutoreplyConflict } from "@/lib/autoreplies";
 import { getCurrentAccount } from "@/lib/current-account";
 import { getToken } from "@/lib/session";
 
@@ -35,6 +36,77 @@ export async function unarchive(id: string): Promise<ActionResult> {
   }
   refresh();
   return {};
+}
+
+// пост занят частным автоответом: второй на него не повесить
+export type TakenBy = { id: string; name: string; enabled: boolean };
+
+export type MediaPage =
+  | { items: Media[]; next: string | null; taken: Record<string, TakenBy> }
+  // аккаунт отключён или токен истёк: повтор не поможет. Meta не ответила: поможет
+  | { failed: "AccountUnavailable" | "MetaUnavailable" };
+
+/** Страница постов из Meta и кто из них уже занят. Без аккаунта берём выбранный
+ * в меню, как при создании; сам правимый автоответ пост не занимает. */
+export async function loadMedia(
+  accountId: string | null,
+  autoreplyId: string | null,
+  after: string | null,
+): Promise<MediaPage> {
+  const id = accountId ?? (await getCurrentAccount())?.id;
+  if (!id) return { failed: "AccountUnavailable" };
+  const token = await getToken();
+  // 8 это два ряда в окне выбора, дальше «Показать ещё»
+  const query = new URLSearchParams({ limit: "8", ...(after && { after }) });
+  try {
+    const [page, autoreplies] = await Promise.all([
+      apiFetch<{ items: Media[]; next: string | null }>(
+        `/instagram/accounts/${id}/media?${query}`,
+        {
+          token,
+        },
+      ),
+      // без архивных: архив пост не держит
+      apiFetch<Autoreply[]>(`/autoreplies?${new URLSearchParams({ account_id: id })}`, { token }),
+    ]);
+    const taken: Record<string, TakenBy> = {};
+    for (const { id: ownerId, name, enabled, media_ids } of autoreplies) {
+      if (ownerId === autoreplyId) continue;
+      for (const mediaId of media_ids) taken[mediaId] = { id: ownerId, name, enabled };
+    }
+    return { ...page, taken };
+  } catch (e) {
+    if (
+      e instanceof ApiError &&
+      (e.detail === "AccountUnavailable" || e.detail === "MetaUnavailable")
+    ) {
+      return { failed: e.detail };
+    }
+    throw e;
+  }
+}
+
+export type SelectedMedia =
+  // missing: пост удалили или убрали в архив, а автоответ на нём ещё висит
+  { items: Media[]; missing: string[] } | { failed: "AccountUnavailable" | "MetaUnavailable" };
+
+/** Миниатюры уже выбранных постов автоответа, для ряда в форме. */
+export async function loadSelectedMedia(accountId: string, ids: string[]): Promise<SelectedMedia> {
+  const query = new URLSearchParams(ids.map((id) => ["ids", id]));
+  try {
+    return await apiFetch<{ items: Media[]; missing: string[] }>(
+      `/instagram/accounts/${accountId}/media/selected?${query}`,
+      { token: await getToken() },
+    );
+  } catch (e) {
+    if (
+      e instanceof ApiError &&
+      (e.detail === "AccountUnavailable" || e.detail === "MetaUnavailable")
+    ) {
+      return { failed: e.detail };
+    }
+    throw e;
+  }
 }
 
 function conflictOf(body: unknown): AutoreplyConflict | null {
