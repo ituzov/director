@@ -35,7 +35,7 @@ jobs:
         working-directory: api
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.3.0
         with:
           working-directory: api
           enable-cache: true
