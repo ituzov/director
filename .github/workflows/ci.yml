@@ -1,0 +1,66 @@
+# Проверки: то же, что перед пушем руками в чистой копии
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # release.yml зовёт эти же проверки перед сборкой образов
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  api:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: director
+          POSTGRES_PASSWORD: director
+          POSTGRES_DB: director
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U director"
+          --health-interval 5s
+          --health-retries 10
+    env:
+      # тесты сами создают рядом базу director_test
+      DATABASE_URL: postgresql+psycopg://director:director@localhost:5432/director
+      SECRET_KEY: ci
+    defaults:
+      run:
+        working-directory: api
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+        with:
+          working-directory: api
+          enable-cache: true
+          cache-dependency-glob: api/uv.lock
+      - run: uv sync --locked
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run lint-imports
+      - run: uv run pytest
+
+  web:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm run build
+      # после сборки: типы LayoutProps и PageProps генерирует next build
+      - run: npx tsc --noEmit
