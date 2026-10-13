@@ -37,6 +37,11 @@ class Settings(BaseSettings):
     director_channel: str = "stable"
     # откуда брать список версий. Меняют только тесты
     updates_url: str = "https://opendirector.dev/versions.json"
+    # Папки обмена с хостом, смонтированы в compose. В request/ api кладёт
+    # просьбу обновиться (systemd на хосте её забирает), из run/ читает статус
+    # и лог обновления. В разработке их нет: кнопка отвечает «только на сервере»
+    updates_request_dir: Path = Path("/director/request")
+    updates_run_dir: Path = Path("/director/run")
     # DEBUG, INFO, WARNING. JSON не задан: в терминале строки, иначе JSON
     log_level: str = "INFO"
     log_json: bool | None = None

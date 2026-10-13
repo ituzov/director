@@ -19,6 +19,7 @@ app = FastAPI(
         identity.IdentityError: identity.identity_error_handler,
         instagram.InstagramError: instagram.instagram_error_handler,
         autoreplies.AutoreplyError: autoreplies.autoreply_error_handler,
+        updates.UpdatesError: updates.updates_error_handler,
     },
 )
 app.include_router(identity.router)

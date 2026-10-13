@@ -1,8 +1,9 @@
 """Схемы HTTP: что отдаёт ручка updates. Повторяют справки service, без логики."""
 
+from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class _Out(BaseModel):
@@ -37,3 +38,15 @@ class UpdatesOut(_Out):
     available: AvailableOut | None
     message: TextOut | None
     error: Literal["unreachable", "invalid"] | None
+
+
+class UpdateIn(BaseModel):
+    # формат сверяет сервис: версия должна совпасть с последней доступной
+    version: str = Field(min_length=1, max_length=64)
+
+
+class StatusOut(_Out):
+    phase: Literal["idle", "queued", "stuck", "running", "done", "failed"]
+    step: str | None
+    at: datetime | None
+    log: list[str]
