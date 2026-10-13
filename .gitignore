@@ -16,3 +16,6 @@ __pycache__/
 
 # отчёты нагрузочного теста: результат прогона, не код
 loadtest-report*.html
+
+# next dev сам пишет подсказку для агентов: у нас она в .claude/rules/frontend.md
+web/AGENTS.md
