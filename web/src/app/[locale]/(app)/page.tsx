@@ -34,7 +34,7 @@ async function Setup() {
     getSwitchableAccounts(),
     getCurrentAccount(),
   ]);
-  const [metaApp, autoreplies] = await Promise.all([
+  const [metaApp, autoreplyDone] = await Promise.all([
     // приложение Meta видит только владелец: участнику этот шаг не показываем
     user.role === "owner"
       ? apiFetch<MetaApp | null>("/instagram/app", { token }).catch((e) => {
@@ -42,21 +42,28 @@ async function Setup() {
           throw e;
         })
       : undefined,
-    account
-      ? apiFetch<Autoreply[]>(`/autoreplies?${new URLSearchParams({ account_id: account.id })}`, {
-          token,
-        })
-      : [],
+    account ? hasAutoreply(account.id, token) : false,
   ]);
 
   const all: Step[] = [
     { key: "metaApp", href: "/settings/meta", done: Boolean(metaApp?.webhook_verified_at) },
     { key: "account", href: "/accounts", done: accounts.some((a) => a.status === "active") },
-    { key: "autoreply", href: "/autoreplies/new", done: autoreplies.length > 0 },
+    { key: "autoreply", href: "/autoreplies/new", done: autoreplyDone },
   ];
   const steps = all.filter((s) => s.key !== "metaApp" || metaApp !== undefined);
   if (steps.every((s) => s.done)) return null;
   return <SetupPanel steps={steps} />;
+}
+
+/** Создавал ли автоответ: архивный тоже считается, чек-лист про пройденную настройку. */
+async function hasAutoreply(accountId: string, token: string | undefined) {
+  const list = (archived: boolean) =>
+    apiFetch<Autoreply[]>(
+      `/autoreplies?${new URLSearchParams({ account_id: accountId, archived: String(archived) })}`,
+      { token },
+    );
+  // архив спрашиваем, только если активных нет: обычно хватает одного запроса
+  return (await list(false)).length > 0 || (await list(true)).length > 0;
 }
 
 type Step = { key: "metaApp" | "account" | "autoreply"; href: string; done: boolean };
