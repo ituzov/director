@@ -159,7 +159,7 @@
     },
     "retention": {
       "title": "How long we keep it",
-      "body": "Incoming events are deleted one week after processing. The reply log is kept for one year, but text, IDs and usernames are erased from it after 90 days."
+      "body": "We keep it on the server until the account owner deletes it. There is no automatic deletion after a set period yet."
     },
     "sharing": {
       "title": "Who we share it with",
@@ -167,7 +167,7 @@
     },
     "deletion": {
       "title": "How to delete your data",
-      "body": "Send a direct message to the account you interacted with and ask to delete your data. We will delete everything linked to your Instagram ID within 30 days and let you know when it's done."
+      "body": "Send a direct message to the account you interacted with and ask to delete your data. The account owner will delete everything linked to your Instagram ID from the server and let you know when it's done."
     }
   },
   "Autoreplies": {
