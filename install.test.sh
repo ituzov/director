@@ -98,6 +98,23 @@ printf '2026-01-01T00:00:00Z pull 0.3.0\n' >"$DIR/run/update-status"
 (fail "from console") >/dev/null 2>&1 || true
 check "из консоли доску не трогаем" 'grep -q " pull 0.3.0$" "$DIR/run/update-status"'
 
+# --- итог установки на доске ---------------------------------------------------------
+# всё внешнее заглушками: проверяем только, чем установка заканчивает доску
+(
+  check_system() { :; }
+  check_fresh() { :; }
+  install_docker() { :; }
+  resolve_host() { HOST=1-2-3-4.sslip.io; }
+  download_release() { :; }
+  install_units() { :; }
+  write_readme() { :; }
+  docker() { :; }
+  wait_healthy() { status "waiting for https://$HOST to respond (up to 2 min)"; }
+  DIRECTOR_VERSION=0.2.0 install
+) >/dev/null 2>&1 || true
+check "установка заканчивает доску итогом" 'tail -n 1 "$DIR/run/update-status" | grep -q " done 0.2.0: installed$"'
+check "итог установки понятен как законченный" 'finished'
+
 # --- юниты и папки кнопки ----------------------------------------------------------
 # владелец папки меняется только от root: в CI тесты идут через sudo
 if [ "$(id -u)" -eq 0 ]; then

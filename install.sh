@@ -224,6 +224,9 @@ install() {
   docker compose up -d
   say "Waiting for the API and the HTTPS certificate"
   wait_healthy || fail "Director did not start, see: cd $DIR && docker compose logs"
+  # итог на доску: иначе там висит «waiting for https…», и окно обновления
+  # в админке приняло бы его за идущее обновление
+  status "done $VERSION: installed"
 
   cat <<EOF
 
