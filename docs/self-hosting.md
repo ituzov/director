@@ -15,13 +15,13 @@
 ## Установка
 
 ```sh
-curl -fsSL https://github.com/ituzov/director/releases/latest/download/install.sh | sudo bash
+curl -fsSL https://opendirector.dev/install.sh | sudo bash
 ```
 
 Если хотите сначала прочитать скрипт:
 
 ```sh
-curl -fsSLO https://github.com/ituzov/director/releases/latest/download/install.sh
+curl -fsSLO https://opendirector.dev/install.sh
 less install.sh
 sudo bash install.sh
 ```
@@ -46,7 +46,7 @@ sudo bash install.sh
 Направьте A-запись домена на IP сервера и укажите домен при установке:
 
 ```sh
-curl -fsSL https://github.com/ituzov/director/releases/latest/download/install.sh | sudo DIRECTOR_HOST=director.example.com bash
+curl -fsSL https://opendirector.dev/install.sh | sudo DIRECTOR_HOST=director.example.com bash
 ```
 
 Если Директор уже стоит: поменяйте `DIRECTOR_HOST` в `/opt/director/.env` и
@@ -55,16 +55,27 @@ curl -fsSL https://github.com/ituzov/director/releases/latest/download/install.s
 
 ## Обновление
 
+Когда выходит новая версия, в админке над профилем появляется кнопка «Есть
+обновление». В окне видно, что нового, а кнопка «Обновить» делает остальное:
+скачивает новую версию, сохраняет дамп базы и `.env`, переключает и
+проверяет, что всё поднялось. Если новая версия не поднялась, Директор сам
+возвращает прошлую вместе с базой. Админка в это время недоступна пару минут.
+
+Обновить можно и из консоли на сервере:
+
 ```sh
-curl -fsSL https://github.com/ituzov/director/releases/latest/download/install.sh | sudo bash -s update
+curl -fsSL https://opendirector.dev/install.sh | sudo bash -s update
 ```
 
 Конкретная версия: `… | sudo bash -s update 0.2.0`.
 
-Пока скачиваются образы, работает старая версия. Перед переключением скрипт
-сохраняет дамп базы и `.env`. Если новая версия не поднялась, он сам
-возвращает прошлую вместе с базой и пишет, где лежит бэкап. Ход обновления
-пишется в `/opt/director/run/update.log`.
+Ход обновления пишется в `/opt/director/run/update.log`. Кнопку выполняет
+служба systemd `director-update`, её ставит установщик. Если кнопка не
+срабатывает, смотрите `journalctl -u director-update`.
+
+Тестовому серверу можно предлагать и пре-релизы: допишите
+`DIRECTOR_CHANNEL=rc` в `/opt/director/.env` и выполните
+`cd /opt/director && docker compose up -d`.
 
 ## Бэкапы
 

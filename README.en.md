@@ -4,8 +4,7 @@
 
 <p align="center"><img src=".github/assets/demo.en.gif" alt="Director" width="800"></p>
 
-> Early 0.x version: breaking changes between versions are possible. The
-> first release, 0.1.0, is on its way, and the install command will work from it.
+> Early 0.x version: breaking changes between versions are possible.
 
 ## What it is
 
@@ -20,20 +19,21 @@ registered company needed. Data, tokens and messages stay with you.
 
 ## Features
 
-- Campaigns: a post, keywords, a reply in the comments and in DMs
+- Autoreplies: keywords under a post, a reply in the comments and in DMs
 - Follow check: one reply for followers, another for everyone else
+- A weekly funnel: from the comment to the delivered material
 - Multiple Instagram accounts in one install
 - A queue that stays within Instagram limits (750 replies per hour per
   account) when a post goes viral
-- One-command updates with a database backup and rollback if something goes
-  wrong
+- Updates with a button in the admin panel, with a database backup and
+  rollback if something goes wrong
 
 ## Install
 
 You need a server with Ubuntu or Debian and a public IP:
 
 ```sh
-curl -fsSL https://github.com/ituzov/director/releases/latest/download/install.sh | sudo bash
+curl -fsSL https://opendirector.dev/install.sh | sudo bash
 ```
 
 In a couple of minutes the script prints a link to the first sign-in, already

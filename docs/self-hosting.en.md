@@ -15,13 +15,13 @@ where. A detailed guide for the Meta app is on its way.
 ## Install
 
 ```sh
-curl -fsSL https://github.com/ituzov/director/releases/latest/download/install.sh | sudo bash
+curl -fsSL https://opendirector.dev/install.sh | sudo bash
 ```
 
 To read the script first:
 
 ```sh
-curl -fsSLO https://github.com/ituzov/director/releases/latest/download/install.sh
+curl -fsSLO https://opendirector.dev/install.sh
 less install.sh
 sudo bash install.sh
 ```
@@ -45,7 +45,7 @@ To install a specific version: `sudo DIRECTOR_VERSION=0.1.0 bash install.sh`.
 Point the domain's A record to the server IP and pass the domain on install:
 
 ```sh
-curl -fsSL https://github.com/ituzov/director/releases/latest/download/install.sh | sudo DIRECTOR_HOST=director.example.com bash
+curl -fsSL https://opendirector.dev/install.sh | sudo DIRECTOR_HOST=director.example.com bash
 ```
 
 If Director is already installed: change `DIRECTOR_HOST` in
@@ -55,16 +55,27 @@ in your Meta app.
 
 ## Updates
 
+When a new version comes out, an "Update available" button appears above
+your profile in the admin panel. The window shows what's new, and the "Update"
+button does the rest: downloads the new version, saves a database dump and
+`.env`, switches over and checks that everything is up. If the new version
+does not start, Director brings back the previous one together with the
+database. The admin panel is unavailable for a couple of minutes meanwhile.
+
+You can also update from the server console:
+
 ```sh
-curl -fsSL https://github.com/ituzov/director/releases/latest/download/install.sh | sudo bash -s update
+curl -fsSL https://opendirector.dev/install.sh | sudo bash -s update
 ```
 
 A specific version: `… | sudo bash -s update 0.2.0`.
 
-The old version keeps running while the images download. Before switching,
-the script saves a database dump and `.env`. If the new version does not
-start, it brings back the previous one together with the database and tells
-you where the backup is. The update log is in `/opt/director/run/update.log`.
+The update log is in `/opt/director/run/update.log`. The button is run by the
+`director-update` systemd service, which the installer sets up. If the button
+does nothing, check `journalctl -u director-update`.
+
+A test server can be offered pre-releases too: add `DIRECTOR_CHANNEL=rc` to
+`/opt/director/.env` and run `cd /opt/director && docker compose up -d`.
 
 ## Backups
 
