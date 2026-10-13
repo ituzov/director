@@ -56,6 +56,12 @@ uv run pytest                                    # includes module boundaries
 cd web && npm install && npm run dev             # http://localhost:3000
 ```
 
+## Thanks
+
+The admin panel is inspired by [Dokploy](https://github.com/Dokploy/dokploy):
+we learned from them how to make self-hosting simple and a panel easy to read.
+UI components come from [shadcn/ui](https://ui.shadcn.com).
+
 ## License
 
 [AGPL-3.0](LICENSE)

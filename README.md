@@ -55,6 +55,12 @@ uv run pytest                                    # включая границы
 cd web && npm install && npm run dev             # http://localhost:3000
 ```
 
+## Спасибо
+
+Админка вдохновлена [Dokploy](https://github.com/Dokploy/dokploy): у них
+подсмотрели, как сделать самохостинг простым, а панель понятной. Компоненты
+интерфейса из [shadcn/ui](https://ui.shadcn.com).
+
 ## Лицензия
 
 [AGPL-3.0](LICENSE)
