@@ -96,6 +96,53 @@ docker compose exec -T db pg_restore -U director -d director < director.dump
 docker compose up -d
 ```
 
+## Delete a person's data on request
+
+The `/privacy` page says a follower can ask to have their data deleted. There
+is no automatic deletion yet, so you do it by hand with two commands on the
+server.
+
+First find the person's Instagram id by their username (without `@`):
+
+```sh
+cd /opt/director
+docker compose exec -T db psql -U director -d director -v nick=username <<'SQL'
+SELECT DISTINCT person_id FROM activity.event
+  WHERE lower(data->>'username') = lower(:'nick');
+SQL
+```
+
+The username is found if the person left comments. Direct messages arrive
+without a username, only with an id.
+
+Then put the id into `pid` and delete everything linked to it: their comments
+and messages, replies to them, events and deliveries. It all runs in one
+transaction: if something goes wrong, the database stays as it was.
+
+```sh
+docker compose exec -T db psql -U director -d director -v ON_ERROR_STOP=1 -v pid=1234567890 <<'SQL'
+BEGIN;
+-- all of the person's comments: replies under them are found by these ids
+CREATE TEMP TABLE forget_comments AS
+SELECT comment_id FROM autoreplies.delivery WHERE person_id = :'pid'
+UNION SELECT comment_id FROM activity.event WHERE person_id = :'pid'
+UNION SELECT payload->>'id' FROM instagram.inbox
+  WHERE kind = 'comment' AND payload->'from'->>'id' = :'pid';
+
+DELETE FROM instagram.outbox
+  WHERE payload->>'recipient_id' = :'pid'
+     OR payload->>'comment_id' IN (SELECT comment_id FROM forget_comments);
+DELETE FROM instagram.inbox
+  WHERE payload->'from'->>'id' = :'pid' OR payload->'sender'->>'id' = :'pid';
+DELETE FROM activity.event
+  WHERE person_id = :'pid' OR comment_id IN (SELECT comment_id FROM forget_comments);
+DELETE FROM autoreplies.delivery WHERE person_id = :'pid';
+COMMIT;
+SQL
+```
+
+If the person writes again, Director treats them as new.
+
 ## Server tips
 
 **Firewall.** The installer does not touch it: a firewall turned on without

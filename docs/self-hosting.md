@@ -95,6 +95,53 @@ docker compose exec -T db pg_restore -U director -d director < director.dump
 docker compose up -d
 ```
 
+## Удалить данные человека по просьбе
+
+На странице `/privacy` написано, что подписчик может попросить удалить его
+данные. Автоматического удаления пока нет, поэтому это делается вручную,
+двумя командами на сервере.
+
+Сначала найдите id человека в Instagram по нику (без `@`):
+
+```sh
+cd /opt/director
+docker compose exec -T db psql -U director -d director -v nick=ник <<'SQL'
+SELECT DISTINCT person_id FROM activity.event
+  WHERE lower(data->>'username') = lower(:'nick');
+SQL
+```
+
+Ник находится, если человек оставлял комментарии. Сообщения в директ
+приходят без ника, только с id.
+
+Затем подставьте id в `pid` и удалите всё, что с ним связано: его комменты и
+сообщения, ответы ему, события и доставки. Всё удаляется одной транзакцией:
+если что-то пошло не так, база останется как была.
+
+```sh
+docker compose exec -T db psql -U director -d director -v ON_ERROR_STOP=1 -v pid=1234567890 <<'SQL'
+BEGIN;
+-- все комменты человека: по ним же ищем ответы под комментами
+CREATE TEMP TABLE forget_comments AS
+SELECT comment_id FROM autoreplies.delivery WHERE person_id = :'pid'
+UNION SELECT comment_id FROM activity.event WHERE person_id = :'pid'
+UNION SELECT payload->>'id' FROM instagram.inbox
+  WHERE kind = 'comment' AND payload->'from'->>'id' = :'pid';
+
+DELETE FROM instagram.outbox
+  WHERE payload->>'recipient_id' = :'pid'
+     OR payload->>'comment_id' IN (SELECT comment_id FROM forget_comments);
+DELETE FROM instagram.inbox
+  WHERE payload->'from'->>'id' = :'pid' OR payload->'sender'->>'id' = :'pid';
+DELETE FROM activity.event
+  WHERE person_id = :'pid' OR comment_id IN (SELECT comment_id FROM forget_comments);
+DELETE FROM autoreplies.delivery WHERE person_id = :'pid';
+COMMIT;
+SQL
+```
+
+Если человек напишет снова, Директор ответит ему как новому.
+
 ## Советы по серверу
 
 **Файрвол.** Установщик его не трогает: включённый без правила для SSH
