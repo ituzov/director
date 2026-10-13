@@ -30,6 +30,13 @@ class Settings(BaseSettings):
     # Graph API Instagram. Меняют только нагрузочный тест и e2e: там вместо Meta
     # заглушка, чтобы не слать настоящие сообщения людям
     graph_url: str = "https://graph.instagram.com"
+    # Версия установки. CI вшивает её в образ, в разработке dev: тогда новых
+    # версий нет, сравнивать не с чем
+    app_version: str = "dev"
+    # stable или rc: какие версии предлагать. rc только для тестовых серверов
+    director_channel: str = "stable"
+    # откуда брать список версий. Меняют только тесты
+    updates_url: str = "https://opendirector.dev/versions.json"
     # DEBUG, INFO, WARNING. JSON не задан: в терминале строки, иначе JSON
     log_level: str = "INFO"
     log_json: bool | None = None

@@ -16,6 +16,8 @@ x-api: &api
     SETUP_TOKEN: ${SETUP_TOKEN:-}
     PUBLIC_URL: https://${DIRECTOR_HOST:?задай DIRECTOR_HOST в .env}
     LOG_JSON: "true"
+    # rc только на тестовых серверах: им предлагаются и пре-релизы
+    DIRECTOR_CHANNEL: ${DIRECTOR_CHANNEL:-stable}
 
 services:
   db:

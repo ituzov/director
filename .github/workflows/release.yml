@@ -32,6 +32,8 @@ jobs:
       platforms: linux/amd64,linux/arm64
       cache: true
       cache-scope: api
+      # версия нужна api, чтобы сравнивать себя с вышедшими
+      build-args: APP_VERSION={{meta.version}}
       meta-images: ghcr.io/ituzov/director-api
       # v0.1.0 даёт 0.1.0, 0.1 и latest; пре-релиз v0.1.0-rc.1 только свой тег
       meta-tags: |

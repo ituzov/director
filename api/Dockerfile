@@ -11,6 +11,9 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 # Итог: чистый Python, готовый .venv и код
 FROM python:3.14-slim-trixie
+# версию вшивает CI: по ней api сравнивает установку с вышедшими версиями
+ARG APP_VERSION=dev
+ENV APP_VERSION=$APP_VERSION
 # не root: если api взломают, у процесса не будет прав в контейнере
 RUN useradd --create-home --uid 1000 app
 WORKDIR /app

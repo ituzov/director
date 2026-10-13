@@ -6,7 +6,7 @@
 
 from fastapi import FastAPI
 
-from app import autoreplies, identity, instagram
+from app import autoreplies, identity, instagram, updates
 from app.config import settings
 from app.core.logging import log_requests, setup_logging
 
@@ -25,6 +25,7 @@ app.include_router(identity.router)
 app.include_router(instagram.router)
 app.include_router(instagram.webhook_router)
 app.include_router(autoreplies.router)
+app.include_router(updates.router)
 app.middleware("http")(log_requests)
 
 
