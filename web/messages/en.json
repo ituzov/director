@@ -65,6 +65,60 @@
       "title": "Menu",
       "description": "Admin sections and account switcher.",
       "toggle": "Collapse or expand the menu"
+    },
+    "updates": {
+      "version": "Version {version}",
+      "available": "Update {version} available",
+      "title": "Director update",
+      "current": "Installed version: {version}.",
+      "latest": "Version {version} is available.",
+      "upToDate": "You're on the latest version.",
+      "error": "Couldn't check for updates: opendirector.dev didn't respond. Try again later.",
+      "breaking": "breaking",
+      "security": "security",
+      "blocked": {
+        "dev": "This is a development build: there's nothing to update.",
+        "channel": "DIRECTOR_CHANNEL is set to an unknown channel. Use stable or rc.",
+        "min_from": "Update to {version} first: you can't jump straight to the latest version."
+      },
+      "to": "Update to {version}",
+      "close": "Close",
+      "update": "Update to {version}",
+      "confirm": {
+        "backup": "Director backs up the database before updating.",
+        "downtime": "The admin panel is unavailable for a couple of minutes. Comments from that time aren't lost: Meta sends them again.",
+        "rollback": "If the new version doesn't start, Director brings back the previous one.",
+        "back": "Back",
+        "start": "Update"
+      },
+      "errors": {
+        "Busy": "An update is already running.",
+        "NotAvailable": "This version is no longer available. Close the window and open it again.",
+        "NotInstalled": "Updating from the admin panel works only on a server installed by the script."
+      },
+      "progress": {
+        "steps": {
+          "download": "Downloading the new version's files",
+          "pull": "Downloading images",
+          "backup": "Backing up the database",
+          "switch": "Switching to the new version",
+          "start": "Starting the new version",
+          "waiting": "Checking everything is up",
+          "cleanup": "Cleaning up"
+        },
+        "done": "Done, you're on {version} now. The page will reload.",
+        "failed": {
+          "error": "The update didn't go through, the version stayed the same.",
+          "rolledBack": "The new version didn't start. Director brought back the previous one, everything works as before.",
+          "rollbackFailed": "The new version didn't start, and bringing back the previous one failed. Log in to the server and check the log."
+        },
+        "log": "What the script printed",
+        "stuck": "The server isn't picking up the update request. Update from the server console:",
+        "stalled": "The update has made no progress for 10 minutes. Check the log on the server:"
+      },
+      "availableShort": "Update available",
+      "whatsNew": "What's new in {version}",
+      "onGithub": "More on GitHub"
     }
   },
   "MetaApp": {

@@ -24,6 +24,9 @@
   --accent: oklch(0.97 0 0);
   --accent-foreground: #101010;
   --destructive: oklch(0.577 0.245 27.325);
+  /* «важно перед обновлением»: мягкий жёлтый фон, тёмный текст */
+  --warning: oklch(0.97 0.06 95);
+  --warning-foreground: oklch(0.38 0.08 70);
   --border: rgba(16, 16, 16, 0.12);
   --input: rgba(16, 16, 16, 0.12);
   /* фирменный синий: фокус, активный пункт меню, логотип */
@@ -64,6 +67,8 @@
   --accent: oklch(0.269 0 0);
   --accent-foreground: oklch(0.985 0 0);
   --destructive: oklch(0.704 0.191 22.216);
+  --warning: oklch(0.3 0.06 85);
+  --warning-foreground: oklch(0.92 0.08 95);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);
@@ -106,6 +111,8 @@
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
