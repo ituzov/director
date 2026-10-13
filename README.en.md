@@ -1,6 +1,10 @@
 <p align="center"><b>Director</b></p>
 <p align="center">They drop a keyword in the comments and get a reply in DMs.</p>
 <p align="center"><a href="docs/self-hosting.en.md">Install</a> · <a href="README.md">Русский</a></p>
+<p align="center">
+  <a href="https://github.com/ituzov/director/releases"><img src="https://img.shields.io/github/v/release/ituzov/director?include_prereleases" alt="Release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/ituzov/director" alt="License"></a>
+</p>
 
 <p align="center"><img src=".github/assets/demo.en.gif" alt="Director" width="800"></p>
 
