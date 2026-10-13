@@ -56,6 +56,12 @@ uv run pytest                                    # включая границы
 cd web && npm install && npm run dev             # http://localhost:3000
 ```
 
+## Помочь проекту
+
+Как поднять разработку, проверить изменения и прислать pull request, написано в
+[CONTRIBUTING.md](CONTRIBUTING.md). Перед первым PR бот попросит один раз
+принять [CLA](CLA.md).
+
 ## Спасибо
 
 Админка вдохновлена [Dokploy](https://github.com/Dokploy/dokploy): у них

@@ -56,6 +56,12 @@ uv run pytest                                    # includes module boundaries
 cd web && npm install && npm run dev             # http://localhost:3000
 ```
 
+## Contributing
+
+How to set up development, check your changes and send a pull request is in
+[CONTRIBUTING.en.md](CONTRIBUTING.en.md). Before your first PR, the bot will
+ask you to accept the [CLA](CLA.md) once.
+
 ## Thanks
 
 The admin panel is inspired by [Dokploy](https://github.com/Dokploy/dokploy):
