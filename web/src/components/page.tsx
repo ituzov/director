@@ -20,7 +20,8 @@ export function Page({ width = "narrow", children }: PageProps) {
 type PanelProps = {
   icon?: LucideIcon;
   title: string;
-  description?: string;
+  // строка или разметка: в описании бывает ссылка
+  description?: React.ReactNode;
   // главная кнопка панели, справа в шапке
   actions?: React.ReactNode;
   // sm: подсобная панель (превью): шапка в одну строку, отступы меньше

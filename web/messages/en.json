@@ -68,7 +68,7 @@
     }
   },
   "MetaApp": {
-    "description": "Director connects Instagram accounts and receives comments through this app. Create it in the Meta dashboard and copy its two keys here.",
+    "description": "Director connects Instagram accounts and receives comments through this app. Create it in the <link>Meta dashboard</link> and copy its two keys here.",
     "keys": "App keys",
     "appId": "Instagram App ID",
     "appIdHint": "In the Meta dashboard: Instagram → API setup with Instagram login.",
@@ -89,7 +89,7 @@
       "description": "Copy each value into the Meta dashboard, in the place named below it.",
       "pending": "These values appear once the keys are saved.",
       "webhookUrl": "Callback URL",
-      "webhookUrlHint": "Instagram → API setup with Instagram login → 3. Configure webhooks.",
+      "webhookUrlHint": "Instagram → API setup with Instagram login → 3. Configure webhooks. In the same place, subscribe to comments, messages, messaging_postbacks and messaging_seen.",
       "verifyToken": "Verify token",
       "verifyTokenHint": "Same place, below the callback URL.",
       "redirectUri": "Redirect URL",

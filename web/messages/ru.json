@@ -68,7 +68,7 @@
     }
   },
   "MetaApp": {
-    "description": "Через это приложение Директор подключает аккаунты Instagram и получает комменты. Создайте его в кабинете Meta и перенесите сюда два ключа.",
+    "description": "Через это приложение Директор подключает аккаунты Instagram и получает комменты. Создайте его в <link>кабинете Meta</link> и перенесите сюда два ключа.",
     "keys": "Ключи приложения",
     "appId": "Instagram App ID",
     "appIdHint": "В кабинете Meta: Instagram → Настройка API со входом через Instagram.",
@@ -89,7 +89,7 @@
       "description": "Скопируйте каждую строку в кабинет Meta, на место из подсказки.",
       "pending": "Строки появятся после сохранения ключей.",
       "webhookUrl": "URL обратного вызова",
-      "webhookUrlHint": "Instagram → Настройка API со входом через Instagram → 3. Настройте Webhooks.",
+      "webhookUrlHint": "Instagram → Настройка API со входом через Instagram → 3. Настройте Webhooks. Там же отметьте поля comments, messages, messaging_postbacks и messaging_seen.",
       "verifyToken": "Подтверждение маркера",
       "verifyTokenHint": "Там же, под URL обратного вызова.",
       "redirectUri": "URL перенаправления",

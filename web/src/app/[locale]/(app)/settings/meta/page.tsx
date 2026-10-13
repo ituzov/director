@@ -12,27 +12,58 @@ import { MetaAppForm, MetaAppFormSkeleton } from "./_components/meta-app-form";
 import { MetaStrings, MetaStringsSkeleton } from "./_components/meta-strings";
 import { WebhookStatus, WebhookStatusSkeleton } from "./_components/webhook-status";
 
+// кабинет разработчика Meta: там создают приложение и берут ключи
+const META_APPS_URL = "https://developers.facebook.com/apps/";
+
 export default function MetaAppPage() {
   const t = useTranslations("MetaApp");
 
   return (
-    <Page>
-      {/* шапки панелей статические и видны сразу, содержимое приезжает потоком */}
-      <Panel icon={KeyRound} title={t("keys")} description={t("description")}>
-        <Suspense fallback={<MetaAppFormSkeleton />}>
-          <MetaAppKeys />
-        </Suspense>
-      </Panel>
-      <Panel icon={Link2} title={t("strings.title")} description={t("strings.description")}>
-        <Suspense fallback={<MetaStringsSkeleton />}>
-          <MetaAppStrings />
-        </Suspense>
-      </Panel>
-      <Panel icon={ShieldCheck} title={t("webhook.title")} description={t("webhook.description")}>
-        <Suspense fallback={<WebhookStatusSkeleton />}>
-          <MetaAppWebhook />
-        </Suspense>
-      </Panel>
+    <Page width="wide">
+      {/* Проверка справа и прилипает, как превью у автоответа: строки
+          переносишь в Meta слева, а подтвердился ли вебхук, видно всегда */}
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
+        {/* шапки панелей статические и видны сразу, содержимое приезжает потоком */}
+        <div className="grid gap-6">
+          <Panel
+            icon={KeyRound}
+            title={t("keys")}
+            description={t.rich("description", {
+              link: (chunks) => (
+                <a
+                  href={META_APPS_URL}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-foreground underline"
+                >
+                  {chunks}
+                </a>
+              ),
+            })}
+          >
+            <Suspense fallback={<MetaAppFormSkeleton />}>
+              <MetaAppKeys />
+            </Suspense>
+          </Panel>
+          <Panel icon={Link2} title={t("strings.title")} description={t("strings.description")}>
+            <Suspense fallback={<MetaStringsSkeleton />}>
+              <MetaAppStrings />
+            </Suspense>
+          </Panel>
+        </div>
+        <div className="lg:sticky lg:top-4">
+          <Panel
+            icon={ShieldCheck}
+            title={t("webhook.title")}
+            description={t("webhook.description")}
+            size="sm"
+          >
+            <Suspense fallback={<WebhookStatusSkeleton />}>
+              <MetaAppWebhook />
+            </Suspense>
+          </Panel>
+        </div>
+      </div>
     </Page>
   );
 }
