@@ -18,9 +18,13 @@ KEEP_BACKUPS=3
 # юниты кнопки «Обновить»; тесты подставляют свою папку
 UNIT_DIR="${DIRECTOR_UNIT_DIR:-/etc/systemd/system}"
 
-say() { printf '\033[1m==> %s\033[0m\n' "$*"; }
+# Цвет только в терминал: в update.log коды цвета превратились бы в мусор,
+# а его хвост показывает окно обновления в админке
+say() {
+  if [ -t 1 ]; then printf '\033[1m==> %s\033[0m\n' "$*"; else printf '==> %s\n' "$*"; fi
+}
 fail() {
-  printf '\033[31mError: %s\033[0m\n' "$*" >&2
+  if [ -t 2 ]; then printf '\033[31mError: %s\033[0m\n' "$*" >&2; else printf 'Error: %s\n' "$*" >&2; fi
   # кнопка в админке ждёт итога в run/update-status: пишем, если его ещё нет
   if [ -n "${DIRECTOR_REQUEST:-}" ] && ! finished; then status "error: $*"; fi
   exit 1
