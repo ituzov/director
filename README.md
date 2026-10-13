@@ -1,5 +1,5 @@
 <p align="center"><b>Директор</b></p>
-<p align="center">Пишут кодовое слово в комментах, получают ответ в директ.</p>
+<p align="center">Пишут кодовое слово в комментах, получают ответ в директ. </p>
 <p align="center"><a href="docs/self-hosting.md">Установка</a> · <a href="README.en.md">English</a></p>
 
 <p align="center"><img src=".github/assets/demo.gif" alt="Директор" width="800"></p>
