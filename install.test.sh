@@ -57,6 +57,41 @@ check "сверка ловит потерянную строку" '! check_env "
 sed "s/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=new/" "$DIR/after" >"$DIR/.env"
 check "сверка ловит изменённое значение" '! check_env "$DIR/before"'
 
+# --- обновление: пишущие в базу на паузе, пока снимается дамп ----------------------
+# всё внешнее заглушками, docker пишет вызовы в файл: проверяем их порядок
+upgrade() {
+  rm -f "$DIR/docker"
+  old_env
+  (
+    check_system() { :; }
+    check_installed() { :; }
+    download_release() { touch "$1/docker-compose.yml" "$1/Caddyfile" "$1/install.sh"; }
+    install_units() { :; }
+    write_readme() { :; }
+    wait_healthy() { :; }
+    docker() {
+      printf '%s\n' "$*" >>"$DIR/docker"
+      case "$*" in *pg_dump*) printf '%s' "${DUMP:-}" ;; esac
+    }
+    SCRIPT_VERSION=0.2.0
+    update 0.2.0
+  ) >/dev/null 2>&1 || true
+}
+# номер строки первого вызова docker, подходящего под шаблон. Зовут его проверки
+# через eval в check, shellcheck этого не видит
+# shellcheck disable=SC2329
+at() { grep -n -m1 -- "$1" "$DIR/docker" | cut -d: -f1; }
+
+DUMP=dump upgrade
+check "обновление дошло до конца" 'tail -n 1 "$DIR/run/update-status" | grep -q " done 0.1.0 -> 0.2.0$"'
+check "обновление: api и worker на паузе до дампа" '[ "$(at "^compose stop api worker$")" -lt "$(at pg_dump)" ]'
+check "обновление: новая версия запущена" 'grep -qx "compose up -d" "$DIR/docker"'
+check "обновление: старые после старта не возвращаются" '! grep -q "^compose start" "$DIR/docker"'
+
+DUMP="" upgrade
+check "пустой дамп: api и worker возвращены" '[ "$(at "^compose start api worker$")" -gt "$(at pg_dump)" ]'
+check "пустой дамп: новая версия не запускалась" '[ -n "$(at pg_dump)" ] && ! grep -q "^compose up" "$DIR/docker"'
+
 # --- просьба из админки ----------------------------------------------------------
 # настоящий update не нужен: проверяем, что request передал и чего не тронул
 update() { printf '%s %s\n' "$1" "${DIRECTOR_REQUEST:-}" >"$DIR/called"; }

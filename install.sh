@@ -282,6 +282,13 @@ update() {
     --project-directory "$DIR" pull --quiet
 
   status "backup $OLD"
+  # пишущих в базу на паузу до дампа: принятое после него пропало бы при откате,
+  # а отправленное ушло бы второй раз. Вебхуки, не принятые в паузу, Meta
+  # повторит. Ловушка до остановки: любой выход до старта новой версии
+  # возвращает старые api и worker. Перезагрузку посреди паузы она не переживёт:
+  # остановленные руками контейнеры unless-stopped сами не встают
+  trap 'docker compose start api worker >/dev/null 2>&1 || true; rm -rf "$TMP"' EXIT
+  docker compose stop api worker
   BACKUP="$DIR/backups/$(date -u +%Y%m%d-%H%M%S)-$OLD"
   (
     umask 077
@@ -311,6 +318,8 @@ update() {
   done
 
   status "start $VERSION"
+  # дальше старые api и worker не нужны: новая версия поднимется или откат
+  trap 'rm -rf "$TMP"' EXIT
   if ! docker compose up -d || ! wait_healthy; then
     rollback
   fi
