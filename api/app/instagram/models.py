@@ -90,6 +90,9 @@ class InboxEvent(Base):
     # почему skipped или почему падало: наш код причины или имя класса ошибки.
     # Текст ошибки не храним: в нём бывают куски payload с личными данными
     reason: Mapped[str | None] = mapped_column(String(64))
+    # кто взял событие себе: имя модуля от worker. Пусто: никто (ни один
+    # автоответ не подошёл) или событие никому не нужно
+    handled_by: Mapped[str | None] = mapped_column(String(32))
     # сколько раз worker брался и падал; после 5 outcome = failed
     attempts: Mapped[int] = mapped_column(SmallInteger, server_default="0")
     # упавшее не берём раньше этого времени, пауза растёт с attempts

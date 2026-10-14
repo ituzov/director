@@ -38,10 +38,12 @@ async def process_inbox_event(session: AsyncSession, handlers: InboxHandlers) ->
     # id запроса вебхука в логах worker: цепочка от Meta до ответа ищется по одному id
     with structlog.contextvars.bound_contextvars(request_id=event.request_id):
         try:
-            outcome, reason = await _handle(session, event, handlers)
-            _finish(event, outcome, reason)
+            outcome, reason, handled_by = await _handle(session, event, handlers)
+            _finish(event, outcome, reason, handled_by)
             await session.commit()
-            log.info("inbox.processed", kind=kind, outcome=outcome, reason=reason)
+            log.info(
+                "inbox.processed", kind=kind, outcome=outcome, reason=reason, handled_by=handled_by
+            )
         except Exception as error:
             # всё сделанное для события откатывается, в том числе журнал и outbox
             await session.rollback()
@@ -49,32 +51,34 @@ async def process_inbox_event(session: AsyncSession, handlers: InboxHandlers) ->
     return True
 
 
-async def _handle(
-    session: AsyncSession, event: InboxEvent, handlers: InboxHandlers
-) -> tuple[str, str | None]:
+# итог разбора, причина и кто взял событие себе
+Handled = tuple[str, str | None, str | None]
+
+
+async def _handle(session: AsyncSession, event: InboxEvent, handlers: InboxHandlers) -> Handled:
     account = await repository.get_account_by_ig_id(session, event.ig_account_id)
     if account is None:
         # чужой аккаунт или тестовый вебхук из кабинета Meta (id 0)
-        return "skipped", "unknown_account"
+        return "skipped", "unknown_account", None
     if account.status != "active":
-        return "skipped", "account_inactive"
+        return "skipped", "account_inactive", None
     if event.kind == webhook.COMMENT:
         return await _handle_comment(session, event, account, handlers)
     if event.kind == webhook.POSTBACK:
         return await _handle_postback(session, event, account, handlers)
     # сообщения и прочтения пока никому не нужны
-    return "done", None
+    return "done", None, None
 
 
 async def _handle_postback(
     session: AsyncSession, event: InboxEvent, account: Account, handlers: InboxHandlers
-) -> tuple[str, str | None]:
+) -> Handled:
     postback = _postback_ref(event, account)
     if postback is None:
-        return "skipped", "bad_payload"
+        return "skipped", "bad_payload", None
     if handlers.on_postback:
-        await handlers.on_postback(session, postback)
-    return "done", None
+        return "done", None, await handlers.on_postback(session, postback)
+    return "done", None, None
 
 
 def _postback_ref(event: InboxEvent, account: Account) -> PostbackRef | None:
@@ -102,14 +106,14 @@ def _postback_ref(event: InboxEvent, account: Account) -> PostbackRef | None:
 
 async def _handle_comment(
     session: AsyncSession, event: InboxEvent, account: Account, handlers: InboxHandlers
-) -> tuple[str, str | None]:
+) -> Handled:
     comment = _comment_ref(event, account)
     if comment is None:
         # повтор кривые данные не вылечит
-        return "skipped", "bad_payload"
+        return "skipped", "bad_payload", None
     if comment.person_id == account.ig_user_id:
         # аккаунт сам ответил под своим постом
-        return "skipped", "own_comment"
+        return "skipped", "own_comment", None
 
     activity.record(
         session,
@@ -121,8 +125,9 @@ async def _handle_comment(
         occurred_at=comment.received_at,
     )
     if handlers.on_comment:
-        await handlers.on_comment(session, comment)
-    return "done", None
+        # не взял никто: тоже разобрано, просто ни одному модулю коммент не подошёл
+        return "done", None, await handlers.on_comment(session, comment)
+    return "done", None, None
 
 
 def _comment_ref(event: InboxEvent, account: Account) -> CommentRef | None:
@@ -450,10 +455,13 @@ async def _refresh_one(session: AsyncSession, account_id: Any) -> int:
     return 1
 
 
-def _finish(event: InboxEvent, outcome: str, reason: str | None) -> None:
+def _finish(
+    event: InboxEvent, outcome: str, reason: str | None, handled_by: str | None = None
+) -> None:
     event.processed_at = func.now()
     event.outcome = outcome
     event.reason = reason
+    event.handled_by = handled_by
     event.retry_at = None
 
 

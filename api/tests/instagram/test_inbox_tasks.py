@@ -71,7 +71,7 @@ async def test_comment_goes_to_journal_and_handler(session, account):
 
     async def on_comment(s, comment):
         got.append(comment)
-        return True
+        return "autoreplies"
 
     handlers = instagram.InboxHandlers(on_comment=on_comment)
     assert await instagram.process_inbox_event(session, handlers) is True
@@ -88,6 +88,8 @@ async def test_comment_goes_to_journal_and_handler(session, account):
     )
     event = await stored(session, event_id)
     assert (event.outcome, event.reason, event.processed_at is not None) == ("done", None, True)
+    # кто взял, видно в ленте входящих
+    assert event.handled_by == "autoreplies"
     [entry] = await journal(session)
     assert (entry.kind, entry.account_id, entry.person_id, entry.comment_id) == (
         "comment.received",
@@ -98,6 +100,18 @@ async def test_comment_goes_to_journal_and_handler(session, account):
     # время коммента, а не разбора
     assert entry.occurred_at == RECEIVED
     assert entry.data == {"text": "хочу гайд", "media_id": "190001", "username": "vasya"}
+
+
+async def test_comment_nobody_took_still_done(session, account):
+    # ни один автоответ не подошёл: разобрано, просто никто не взял
+    event_id = await add_event(session)
+
+    async def not_mine(s, comment):
+        return None
+
+    await instagram.process_inbox_event(session, instagram.InboxHandlers(on_comment=not_mine))
+    event = await stored(session, event_id)
+    assert (event.outcome, event.reason, event.handled_by) == ("done", None, None)
 
 
 async def test_comment_without_handler_still_journaled(session, account):
@@ -120,7 +134,7 @@ async def test_unknown_account_skipped(session):
     event_id = await add_event(session, ig_id="0")
     await instagram.process_inbox_event(session, NOBODY)
     event = await stored(session, event_id)
-    assert (event.outcome, event.reason) == ("skipped", "unknown_account")
+    assert (event.outcome, event.reason, event.handled_by) == ("skipped", "unknown_account", None)
     assert await journal(session) == []
 
 
@@ -130,14 +144,14 @@ async def test_inactive_account_skipped(session, account):
     event_id = await add_event(session)
     await instagram.process_inbox_event(session, NOBODY)
     event = await stored(session, event_id)
-    assert (event.outcome, event.reason) == ("skipped", "account_inactive")
+    assert (event.outcome, event.reason, event.handled_by) == ("skipped", "account_inactive", None)
 
 
 async def test_own_comment_skipped(session, account):
     event_id = await add_event(session, payload=comment_payload(**{"from": {"id": IG_ID}}))
     await instagram.process_inbox_event(session, NOBODY)
     event = await stored(session, event_id)
-    assert (event.outcome, event.reason) == ("skipped", "own_comment")
+    assert (event.outcome, event.reason, event.handled_by) == ("skipped", "own_comment", None)
     assert await journal(session) == []
 
 
@@ -182,7 +196,7 @@ async def test_postback_goes_to_handler(session, account):
 
     async def on_postback(s, postback):
         got.append(postback)
-        return True
+        return "autoreplies"
 
     await instagram.process_inbox_event(session, instagram.InboxHandlers(on_postback=on_postback))
     assert got == [
@@ -195,7 +209,8 @@ async def test_postback_goes_to_handler(session, account):
             acted_at=RECEIVED - timedelta(seconds=2),
         )
     ]
-    assert (await stored(session, event_id)).outcome == "done"
+    event = await stored(session, event_id)
+    assert (event.outcome, event.handled_by) == ("done", "autoreplies")
 
 
 async def test_postback_without_timestamp_uses_received(session, account):
@@ -206,7 +221,7 @@ async def test_postback_without_timestamp_uses_received(session, account):
 
     async def on_postback(s, postback):
         got.append(postback)
-        return True
+        return "autoreplies"
 
     await instagram.process_inbox_event(session, instagram.InboxHandlers(on_postback=on_postback))
     assert got[0].acted_at == RECEIVED
@@ -265,7 +280,8 @@ async def test_fifth_failure_gives_up(session, account):
     await instagram.process_inbox_event(session, instagram.InboxHandlers(on_comment=failing))
     event = await stored(session, event_id)
     assert (event.outcome, event.reason, event.attempts) == ("failed", "RuntimeError", 5)
-    assert event.processed_at is not None
+    # сдались: никто не взял, даже если обработчик успел что-то сделать до падения
+    assert (event.processed_at is not None, event.handled_by) == (True, None)
     assert await instagram.process_inbox_event(session, NOBODY) is False
 
 

@@ -82,7 +82,7 @@ class InboxHandlers:
     """Кому отдать разобранное из входящих. Собирает worker, порядок
     «сначала автоответы, потом ассистент» тоже его. None: этот вид пока
     никому не нужен, событие просто отмечается разобранным.
-    Обработчик возвращает True, если взял событие себе."""
+    Обработчик возвращает имя того, кто взял событие себе, или None: не взял никто."""
 
-    on_comment: Callable[[AsyncSession, CommentRef], Awaitable[bool]] | None = None
-    on_postback: Callable[[AsyncSession, PostbackRef], Awaitable[bool]] | None = None
+    on_comment: Callable[[AsyncSession, CommentRef], Awaitable[str | None]] | None = None
+    on_postback: Callable[[AsyncSession, PostbackRef], Awaitable[str | None]] | None = None

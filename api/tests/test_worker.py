@@ -9,9 +9,11 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import httpx
+import pytest
 from sqlalchemy import func, select
 
 from app import autoreplies, instagram, worker
+from app.autoreplies.models import Autoreply, Keyword
 from app.core import crypto
 from app.instagram import tasks, webhook
 from app.instagram.models import Account, InboxEvent, OutboxTask
@@ -61,9 +63,67 @@ async def test_one_event_at_a_time(session):
     assert await worker.inbox_once(sessions(session)) is False
 
 
-def test_comments_go_to_autoreplies():
-    assert worker.HANDLERS.on_comment is autoreplies.handle_comment
-    assert worker.HANDLERS.on_postback is autoreplies.handle_postback
+@pytest.mark.parametrize(
+    ("handler", "module_fn"),
+    [("on_comment", "handle_comment"), ("on_postback", "handle_postback")],
+)
+@pytest.mark.parametrize(("taken", "name"), [(True, "autoreplies"), (False, None)])
+async def test_inbox_goes_to_autoreplies(monkeypatch, handler, module_fn, taken, name):
+    # автоответы взяли событие: в ленте входящих их имя; не взяли: никто
+    got = []
+
+    async def fake(session, ref):
+        got.append(ref)
+        return taken
+
+    monkeypatch.setattr(autoreplies, module_fn, fake)
+    assert await getattr(worker.HANDLERS, handler)(None, "ref") == name
+    assert got == ["ref"]
+
+
+@pytest.mark.parametrize(("text", "taken"), [("хочу гайд", "autoreplies"), ("класс", None)])
+async def test_comment_through_worker_knows_who_took_it(session, text, taken):
+    # вся цепочка без подмен: входящее, worker, настоящий автоответ, строка входящего
+    account = Account(
+        ig_user_id="17841400000000000",
+        username="shop",
+        token_encrypted=crypto.encrypt("t"),
+        connected_by=uuid.uuid7(),
+    )
+    session.add(account)
+    await session.flush()
+    autoreply = Autoreply(
+        account_id=account.id,
+        name="Гайд",
+        scope="all",
+        intro_text="Держи",
+        button_text="Получить",
+        reply_text="https://guide",
+        created_by=uuid.uuid7(),
+    )
+    session.add(autoreply)
+    await session.flush()
+    session.add(Keyword(autoreply_id=autoreply.id, word="гайд", normalized="гайд"))
+    event = InboxEvent(
+        ig_account_id=account.ig_user_id,
+        kind=webhook.COMMENT,
+        dedup_key="comment:1",
+        payload={
+            "id": "180001",
+            "text": text,
+            "from": {"id": "500001", "username": "vasya"},
+            "media": {"id": "190001"},
+        },
+    )
+    session.add(event)
+    await session.commit()
+
+    assert await worker.inbox_once(sessions(session)) is True
+    await session.refresh(event)
+    assert (event.outcome, event.handled_by) == ("done", taken)
+
+
+def test_send_results_go_to_autoreplies():
     assert worker.ON_RESULT is autoreplies.handle_send_result
 
 

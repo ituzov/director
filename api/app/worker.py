@@ -6,6 +6,7 @@ import signal
 from contextlib import suppress
 
 import structlog
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import autoreplies, instagram
 from app.config import settings
@@ -23,11 +24,18 @@ PERIODIC_SECONDS = 12 * 60 * 60
 # Одно письмо дважды не уйдёт: задачу запирает SKIP LOCKED
 SENDERS = 4
 
+
+async def on_comment(session: AsyncSession, comment: instagram.CommentRef) -> str | None:
+    # кто первый взял, того и имя в ленте входящих; ассистент встанет следующим
+    return "autoreplies" if await autoreplies.handle_comment(session, comment) else None
+
+
+async def on_postback(session: AsyncSession, postback: instagram.PostbackRef) -> str | None:
+    return "autoreplies" if await autoreplies.handle_postback(session, postback) else None
+
+
 # кому отдавать разобранное из входящих
-HANDLERS = instagram.InboxHandlers(
-    on_comment=autoreplies.handle_comment,
-    on_postback=autoreplies.handle_postback,
-)
+HANDLERS = instagram.InboxHandlers(on_comment=on_comment, on_postback=on_postback)
 # кому сообщать итог отправки исходящих
 ON_RESULT = autoreplies.handle_send_result
 
