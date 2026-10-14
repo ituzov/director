@@ -79,7 +79,7 @@ upgrade() {
 }
 # номер строки первого вызова docker, подходящего под шаблон. Зовут его проверки
 # через eval в check, shellcheck этого не видит
-# shellcheck disable=SC2329
+# shellcheck disable=SC2317,SC2329
 at() { grep -n -m1 -- "$1" "$DIR/docker" | cut -d: -f1; }
 
 DUMP=dump upgrade
