@@ -46,6 +46,12 @@ async def outbox_once(make_session=SessionLocal) -> bool:
         return await instagram.send_outbox_task(session, ON_RESULT)
 
 
+async def results_once(make_session=SessionLocal) -> bool:
+    """Повторить один не дошедший отчёт об итоге отправки. False: повторять нечего."""
+    async with make_session() as session:
+        return await instagram.report_outbox_result(session, ON_RESULT)
+
+
 async def periodic(make_session=SessionLocal) -> None:
     """Редкие задачи. Каждая сама решает, кому из аккаунтов пора."""
     async with make_session() as session:
@@ -96,6 +102,8 @@ async def main() -> None:
         group.create_task(run_loop("inbox", inbox_once, stop))
         for number in range(SENDERS):
             group.create_task(run_loop(f"outbox-{number}", outbox_once, stop))
+        # не дошедшие отчёты: иначе потерянный итог не узнал бы никто
+        group.create_task(run_loop("results", results_once, stop))
         group.create_task(periodic_loop(stop))
     await engine.dispose()
     log.info("worker.stopped")

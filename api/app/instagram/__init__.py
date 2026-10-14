@@ -23,7 +23,12 @@ from app.instagram.outbox import (
 )
 from app.instagram.routes import instagram_error_handler, router, webhook_router
 from app.instagram.service import count_undelivered, get_account
-from app.instagram.tasks import process_inbox_event, refresh_due_tokens, send_outbox_task
+from app.instagram.tasks import (
+    process_inbox_event,
+    refresh_due_tokens,
+    report_outbox_result,
+    send_outbox_task,
+)
 
 __all__ = [
     # HTTP модуля, подключает main
@@ -49,6 +54,7 @@ __all__ = [
     "InboxHandlers",
     "CommentRef",
     "PostbackRef",
+    "report_outbox_result",
     "send_outbox_task",
     "OutboxResult",
     "refresh_due_tokens",

@@ -1,8 +1,12 @@
 """Циклы worker: одно событие за раз, каждое в своей сессии; остановка по сигналу."""
 
 import asyncio
+import signal
 import uuid
 from contextlib import asynccontextmanager
+from datetime import timedelta
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import httpx
 from sqlalchemy import func, select
@@ -10,7 +14,7 @@ from sqlalchemy import func, select
 from app import autoreplies, instagram, worker
 from app.core import crypto
 from app.instagram import tasks, webhook
-from app.instagram.models import Account, InboxEvent
+from app.instagram.models import Account, InboxEvent, OutboxTask
 
 
 def sessions(session):
@@ -45,6 +49,7 @@ async def pending(session) -> int:
 async def test_nothing_to_do(session):
     assert await worker.inbox_once(sessions(session)) is False
     assert await worker.outbox_once(sessions(session)) is False
+    assert await worker.results_once(sessions(session)) is False
 
 
 async def test_one_event_at_a_time(session):
@@ -78,6 +83,34 @@ async def test_outbox_once_sends(session, monkeypatch):
 
     assert await worker.outbox_once(sessions(session)) is True
     assert await worker.outbox_once(sessions(session)) is False
+
+
+async def test_results_once_repeats_lost_report(session, monkeypatch):
+    # отчёт об итоге не дошёл: подборщик отдаёт его тому же обработчику
+    account = Account(
+        ig_user_id="17841400000000000",
+        username="shop",
+        token_encrypted=crypto.encrypt("t"),
+        connected_by=uuid.uuid7(),
+    )
+    session.add(account)
+    await session.flush()
+    await instagram.enqueue_comment_reply(
+        session, account_id=account.id, comment_id="c1", text="x", ref="autoreplies:d1:comment"
+    )
+    await session.commit()
+    task = await session.scalar(select(OutboxTask))
+    task.outcome, task.finished_at = "sent", func.now() - timedelta(minutes=1)
+    await session.commit()
+    got = []
+
+    async def on_result(session, result):
+        got.append(result.ref)
+
+    monkeypatch.setattr(worker, "ON_RESULT", on_result)
+    assert await worker.results_once(sessions(session)) is True
+    assert got == ["autoreplies:d1:comment"]
+    assert await worker.results_once(sessions(session)) is False
 
 
 async def test_loop_works_while_busy_and_stops(monkeypatch):
@@ -126,3 +159,25 @@ async def test_sleep_wakes_on_stop(monkeypatch):
     await asyncio.sleep(0.05)
     stop.set()
     await asyncio.wait_for(task, 1)
+
+
+async def test_main_starts_every_loop(monkeypatch):
+    # забытый цикл тихо не работал бы никогда: сверяем, что запущены все
+    names = []
+
+    async def loop(name, once, stop):
+        names.append(name)
+
+    async def periodic(stop):
+        names.append("periodic")
+
+    monkeypatch.setattr(worker, "run_loop", loop)
+    monkeypatch.setattr(worker, "periodic_loop", periodic)
+    monkeypatch.setattr(worker, "engine", SimpleNamespace(dispose=AsyncMock()))
+    try:
+        await worker.main()
+    finally:
+        for sig in (signal.SIGTERM, signal.SIGINT):
+            asyncio.get_running_loop().remove_signal_handler(sig)
+    senders = [f"outbox-{n}" for n in range(worker.SENDERS)]
+    assert sorted(names) == sorted(["inbox", *senders, "results", "periodic"])

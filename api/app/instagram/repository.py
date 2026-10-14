@@ -50,6 +50,43 @@ async def claim_outbox_task(session: AsyncSession) -> OutboxTask | None:
     )
 
 
+async def lock_unreported_outbox_task(
+    session: AsyncSession, task_id: uuid.UUID
+) -> OutboxTask | None:
+    """Завершённая задача без отчёта под замком. None: отчитался другой."""
+    return await session.scalar(
+        _unreported()
+        .where(OutboxTask.id == task_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+
+
+async def claim_unreported_outbox_task(
+    session: AsyncSession, *, older_than: timedelta, max_attempts: int
+) -> OutboxTask | None:
+    """Самый старый не дошедший отчёт. Чужие под замком пропускаем."""
+    return await session.scalar(
+        _unreported()
+        .where(
+            OutboxTask.finished_at <= func.now() - older_than,
+            OutboxTask.report_attempts < max_attempts,
+            or_(OutboxTask.report_after.is_(None), OutboxTask.report_after <= func.now()),
+        )
+        .order_by(OutboxTask.finished_at)
+        .limit(1)
+        .with_for_update(skip_locked=True)
+    )
+
+
+def _unreported():
+    return select(OutboxTask).where(
+        OutboxTask.outcome.is_not(None),
+        OutboxTask.ref.is_not(None),
+        OutboxTask.reported_at.is_(None),
+    )
+
+
 async def lock_private_replies(session: AsyncSession, account_id: uuid.UUID) -> None:
     """Private Reply одного аккаунта по очереди до конца транзакции: иначе два
     отправителя разом увидят 749 за час и оба отправят. Своя приставка ключа:

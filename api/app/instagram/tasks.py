@@ -194,7 +194,7 @@ async def send_outbox_task(session: AsyncSession, on_result: OnResult | None = N
     task = await repository.claim_outbox_task(session)
     if task is None:
         return False
-    task_id, ref, kind = task.id, task.ref, task.kind
+    task_id, ref = task.id, task.ref
     with structlog.contextvars.bound_contextvars(request_id=task.request_id):
         try:
             result = await _send(session, task)
@@ -205,14 +205,58 @@ async def send_outbox_task(session: AsyncSession, on_result: OnResult | None = N
             await _record_send_failure(session, task_id, error)
             return True
         if result is not None and ref is not None and on_result is not None:
-            try:
-                outcome, reason, variant = result
-                await on_result(session, OutboxResult(ref, kind, outcome, reason, variant))
-                await session.commit()
-            except Exception:
-                await session.rollback()
-                log.exception("outbox.result_failed", kind=kind)
+            # итог уже закоммичен: отчёт под замком строки, подборщик его не перехватит
+            task = await repository.lock_unreported_outbox_task(session, task_id)
+            if task is not None:
+                await _report(session, task, on_result)
     return True
+
+
+# отчёт, не дошедший сразу, подбирается не раньше: основной путь успевает сам
+REPORT_DELAY = timedelta(seconds=30)
+
+
+async def report_outbox_result(session: AsyncSession, on_result: OnResult) -> bool:
+    """Повторить отчёт об итоге, который не дошёл: упал обработчик, worker умер
+    между коммитами или отправку закрыли после падений нашего кода. False: нечего."""
+    task = await repository.claim_unreported_outbox_task(
+        session, older_than=REPORT_DELAY, max_attempts=MAX_ATTEMPTS
+    )
+    if task is None:
+        return False
+    with structlog.contextvars.bound_contextvars(request_id=task.request_id):
+        await _report(session, task, on_result)
+    return True
+
+
+async def _report(session: AsyncSession, task: OutboxTask, on_result: OnResult) -> None:
+    """Итог тому, кто ставил письмо. Обработчик и отметка одной транзакцией:
+    либо оба, либо ни одного, и второго отчёта не будет."""
+    task_id, kind = task.id, task.kind
+    try:
+        await on_result(
+            session, OutboxResult(task.ref, task.kind, task.outcome, task.reason, task.variant)
+        )
+        task.reported_at = func.now()
+        await session.commit()
+    except Exception as error:
+        await session.rollback()
+        await _record_report_failure(session, task_id, kind, error)
+
+
+async def _record_report_failure(
+    session: AsyncSession, task_id: Any, kind: str, error: Exception
+) -> None:
+    task = await session.get(OutboxTask, task_id, with_for_update=True)
+    task.report_attempts += 1
+    if task.report_attempts >= MAX_ATTEMPTS:
+        # дальше не повторяем: строка остаётся без отметки, по ней видно, что не дошло
+        log.error("outbox.report_dropped", kind=kind, attempts=task.report_attempts, exc_info=error)
+    else:
+        # пауза как у входящих: короткий сбой не съест все попытки разом
+        task.report_after = func.now() + RETRY_DELAYS[task.report_attempts - 1]
+        log.warning("outbox.report_retry", kind=kind, attempts=task.report_attempts, exc_info=error)
+    await session.commit()
 
 
 Result = tuple[str, str | None, str | None]
@@ -348,6 +392,7 @@ def _finish_task(
 ) -> Result:
     task.outcome = outcome
     task.reason = reason
+    task.variant = variant
     task.finished_at = func.now()
     return outcome, reason, variant
 

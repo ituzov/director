@@ -351,8 +351,9 @@ async def test_result_handler_failure_keeps_sent(session, account, meta):
     with capture_logs() as logs:
         await instagram.send_outbox_task(session, broken)
     # письмо ушло и отмечено: второй раз не уйдёт, даже если итог не записался
-    assert (await stored(session)).outcome == "sent"
-    assert "outbox.result_failed" in [e["event"] for e in logs]
+    task = await stored(session)
+    assert (task.outcome, task.reported_at, task.report_attempts) == ("sent", None, 1)
+    assert "outbox.report_retry" in [e["event"] for e in logs]
     assert await instagram.send_outbox_task(session) is False
 
 
@@ -479,3 +480,120 @@ async def test_invalid_token_expires_account(session, account, meta):
     await instagram.send_outbox_task(session, results)
     assert len(meta.requests) == 1
     assert results.got[1].reason == "account_inactive"
+
+
+# --- отчёт об итоге: ровно один раз, не дошедший повторяется -------------------------
+
+
+async def age(session, seconds: int = 60) -> None:
+    """Итог старше паузы подборщика: время в песочнице стоит, двигаем его сами."""
+    task = await stored(session)
+    task.finished_at = task.finished_at - timedelta(seconds=seconds)
+    await session.commit()
+
+
+async def due(session) -> None:
+    """Пауза после неудачного отчёта прошла."""
+    task = await stored(session)
+    task.report_after = task.report_after - timedelta(hours=2)
+    await session.commit()
+
+
+async def report(session, results) -> bool:
+    return await instagram.report_outbox_result(session, results)
+
+
+async def test_reported_once(session, account, meta):
+    await gated(session, account)
+    results = Results()
+    await instagram.send_outbox_task(session, results)
+    task = await stored(session)
+    assert (task.reported_at is not None, task.variant) == (True, "following")
+    # подборщик отчитанное не трогает, даже когда итог давно
+    await age(session)
+    assert await report(session, results) is False
+    assert len(results.got) == 1
+
+
+async def test_failed_report_repeated_with_same_result(session, account, meta):
+    meta.follow = httpx.Response(200, json={"is_user_follow_business": False, "id": "p1"})
+    await gated(session, account)
+
+    async def broken(session, result):
+        raise RuntimeError("boom")
+
+    await instagram.send_outbox_task(session, broken)
+    results = Results()
+    # свежий итог подборщик не берёт: основной путь мог ещё не закончить
+    assert await report(session, results) is False
+    await age(session)
+    # и не сразу после неудачи: пауза, как у входящих
+    assert await report(session, results) is False
+    await due(session)
+    assert await report(session, results) is True
+    assert [(r.ref, r.kind, r.outcome, r.reason, r.variant) for r in results.got] == [
+        ("autoreplies:d1:material", "message", "sent", None, "not_following")
+    ]
+    assert (await stored(session)).reported_at is not None
+    assert await report(session, results) is False
+
+
+async def test_report_given_up_after_attempts(session, account, meta):
+    await private_reply(session, account)
+
+    async def broken(session, result):
+        raise RuntimeError("boom")
+
+    await instagram.send_outbox_task(session, broken)
+    await age(session)
+    for _ in range(tasks.MAX_ATTEMPTS - 1):
+        # между попытками пауза: короткий сбой не съедает их все разом
+        assert await report(session, broken) is False
+        await due(session)
+        assert await report(session, broken) is True
+    task = await stored(session)
+    assert (task.reported_at, task.report_attempts) == (None, tasks.MAX_ATTEMPTS)
+    assert await report(session, Results()) is False
+
+
+async def test_not_reported_twice_when_picker_was_first(session, account, meta, monkeypatch):
+    # подборщик отчитался между коммитом итога и отчётом основного пути: второго нет
+    await private_reply(session, account)
+    send = tasks._send
+
+    async def send_then_picker(session, task):
+        result = await send(session, task)
+        task.reported_at = func.now()
+        return result
+
+    monkeypatch.setattr(tasks, "_send", send_then_picker)
+    results = Results()
+    await instagram.send_outbox_task(session, results)
+    assert results.got == []
+
+
+async def test_closed_after_own_errors_reported(session, account, meta, monkeypatch):
+    # наш код падал при отправке, пятая попытка закрыла задачу: итог всё равно дойдёт
+    await private_reply(session, account)
+    task = await stored(session)
+    task.attempts = tasks.MAX_ATTEMPTS - 1
+    await session.commit()
+
+    async def crash(session, task):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(tasks, "_send", crash)
+    results = Results()
+    await instagram.send_outbox_task(session, results)
+    assert results.got == []
+    await age(session)
+    assert await report(session, results) is True
+    assert [(r.outcome, r.reason) for r in results.got] == [("failed", "RuntimeError")]
+
+
+async def test_without_ref_not_reported(session, account, meta):
+    await instagram.enqueue_comment_reply(session, account_id=account.id, comment_id="c1", text="x")
+    await session.commit()
+    await instagram.send_outbox_task(session, Results())
+    await age(session)
+    assert await report(session, Results()) is False

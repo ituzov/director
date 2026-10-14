@@ -4,11 +4,11 @@
 
 import asyncio
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import httpx
 import pytest
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import async_sessionmaker
 from sqlalchemy.pool import NullPool
 
@@ -125,3 +125,42 @@ async def test_hour_limit_holds_with_two_senders(sessions, meta):
     # ушло ровно одно, второе перенесено на следующий час, а не отправлено сверх лимита
     assert len(meta.comments) == 1
     assert (await outcomes(sessions, "private_reply")).count(None) == 1
+
+
+async def test_report_once_when_picker_holds_task(sessions):
+    # подборщик взял итог и отчитывается; основной путь ждёт его замок, а дождавшись,
+    # видит отметку и второй раз не отчитывается
+    account_id = await make_account(sessions)
+    async with sessions() as session:
+        session.add(
+            OutboxTask(
+                account_id=account_id,
+                kind="message",
+                payload={},
+                ref="autoreplies:d1:material",
+                dedup_key="d1:0",
+                outcome="failed",
+                finished_at=datetime.now(UTC) - timedelta(minutes=1),
+            )
+        )
+        await session.commit()
+
+    async with sessions() as picker, sessions() as sender:
+        task = await repository.claim_unreported_outbox_task(
+            picker, older_than=tasks.REPORT_DELAY, max_attempts=tasks.MAX_ATTEMPTS
+        )
+        assert task is not None
+        # пока замок у подборщика, другой подборщик строку пропускает, а не ждёт.
+        # Ждать замок дольше секунды запрещаем базе: иначе ошибка повесила бы тест
+        async with sessions() as other:
+            await other.execute(text("SET LOCAL lock_timeout = '1s'"))
+            claim = await repository.claim_unreported_outbox_task(
+                other, older_than=tasks.REPORT_DELAY, max_attempts=tasks.MAX_ATTEMPTS
+            )
+            assert claim is None
+        waiting = asyncio.create_task(repository.lock_unreported_outbox_task(sender, task.id))
+        await asyncio.sleep(0.3)
+        assert not waiting.done()
+        task.reported_at = func.now()
+        await picker.commit()
+        assert await asyncio.wait_for(waiting, 3) is None

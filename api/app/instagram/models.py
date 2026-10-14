@@ -145,6 +145,16 @@ class OutboxTask(Base):
         CheckConstraint("(finished_at IS NULL) = (outcome IS NULL)", name="outcome_when_finished"),
         # очередь worker: незавершённые по времени, завершённые индекс не раздувают
         Index("ix_outbox_due", "run_at", postgresql_where=text("outcome IS NULL")),
+        # отчёты, которые не дошли: подборщик ищет их по этому индексу. Брошенные
+        # после MAX_ATTEMPTS (5) в него не входят
+        Index(
+            "ix_outbox_unreported",
+            "finished_at",
+            postgresql_where=text(
+                "outcome IS NOT NULL AND ref IS NOT NULL AND reported_at IS NULL"
+                " AND report_attempts < 5"
+            ),
+        ),
         # лимит 750 Private Reply в час на аккаунт считается по этому индексу
         Index(
             "ix_outbox_private_replies_sent",
@@ -175,6 +185,16 @@ class OutboxTask(Base):
     outcome: Mapped[str | None] = mapped_column(String(16))
     # код ошибки Meta или имя класса ошибки, без текста
     reason: Mapped[str | None] = mapped_column(String(64))
+    # какой вариант письма ушёл: following, not_following, unknown. Хранится,
+    # чтобы отчёт можно было повторить
+    variant: Mapped[str | None] = mapped_column(String(16))
+    # итог принял тот, кто ставил письмо (по ref). У завершённой с ref пусто:
+    # отчёт не дошёл, worker его повторит
+    reported_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # сколько раз отчёт падал; после 5 worker его бросает
+    report_attempts: Mapped[int] = mapped_column(SmallInteger, server_default="0")
+    # раньше отчёт не повторять: пауза после неудачи
+    report_after: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # id запроса вебхука, из-за которого задача появилась: логи склеиваются
     request_id: Mapped[str | None] = mapped_column(String(64))
