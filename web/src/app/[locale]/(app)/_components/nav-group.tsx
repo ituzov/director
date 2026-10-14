@@ -1,6 +1,6 @@
 "use client";
 
-import { AtSign, KeyRound, LayoutDashboard, MessageSquareReply } from "lucide-react";
+import { AtSign, Inbox, KeyRound, LayoutDashboard, MessageSquareReply } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Suspense } from "react";
 
@@ -20,6 +20,7 @@ const GROUPS = {
   work: [
     { href: "/", key: "overview", icon: LayoutDashboard },
     { href: "/autoreplies", key: "autoreplies", icon: MessageSquareReply },
+    { href: "/inbox", key: "inbox", icon: Inbox },
     { href: "/accounts", key: "accounts", icon: AtSign },
   ],
   settings: [{ href: "/settings/meta", key: "metaApp", icon: KeyRound }],

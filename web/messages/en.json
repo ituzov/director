@@ -46,7 +46,8 @@
       "overview": "Overview",
       "autoreplies": "Auto-replies",
       "accounts": "Accounts",
-      "metaApp": "Meta app"
+      "metaApp": "Meta app",
+      "inbox": "Inbox"
     },
     "account": {
       "label": "Accounts",
@@ -394,6 +395,48 @@
     "alerts": {
       "tokenExpired": "Access to @{username} has expired, so its autoreplies are off. <link>Connect the account again</link>.",
       "undelivered": "{count, plural, one {# message wasn’t delivered} other {# messages weren’t delivered}} in the last {days, plural, one {# day} other {# days}}: Meta refused or the reply window closed."
+    }
+  },
+  "Inbox": {
+    "title": "Inbox",
+    "description": "What Instagram sent to the selected account and what Director did with it, newest first.",
+    "refresh": "Refresh",
+    "more": "Show more",
+    "moreFailed": "Couldn't load more. Please try again.",
+    "empty": "Nothing has arrived yet.",
+    "emptyHint": "Comments under your posts will show up here. If there are comments but this list is empty, check the webhook in <link>Meta settings</link>.",
+    "noAccount": "<link>Connect an Instagram account</link> to see everything it receives here.",
+    "unknownPerson": "Unknown",
+    "pressed": "button “{title}”",
+    "kind": {
+      "comment": "Comment",
+      "postback": "Button tap",
+      "message": "Message"
+    },
+    "attachment": {
+      "ig_reel": "reel",
+      "image": "photo",
+      "video": "video",
+      "audio": "voice message",
+      "share": "post",
+      "story_mention": "story mention",
+      "other": "attachment"
+    },
+    "outcome": {
+      "queued": "Queued",
+      "failed": "Processing error",
+      "autoreply": "Autoreply “{name}”",
+      "autoreplies": "Autoreplies",
+      "noMatch": "No autoreply matched",
+      "foreignButton": "Not an autoreply button",
+      "noReply": "No reply",
+      "skipped": {
+        "own_comment": "Your comment",
+        "unknown_account": "Other account",
+        "account_inactive": "Account disconnected",
+        "bad_payload": "Unreadable data",
+        "other": "Skipped"
+      }
     }
   }
 }
