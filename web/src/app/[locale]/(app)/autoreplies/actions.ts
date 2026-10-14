@@ -6,7 +6,6 @@ import { redirect } from "next/navigation";
 import { ApiError, apiFetch } from "@/lib/api";
 import type { Media } from "@/lib/accounts";
 import type { Autoreply, AutoreplyConflict } from "@/lib/autoreplies";
-import { getCurrentAccount } from "@/lib/current-account";
 import { getToken } from "@/lib/session";
 
 export type ActionResult = { conflict?: AutoreplyConflict };
@@ -46,28 +45,29 @@ export type MediaPage =
   // аккаунт отключён или токен истёк: повтор не поможет. Meta не ответила: поможет
   | { failed: "AccountUnavailable" | "MetaUnavailable" };
 
-/** Страница постов из Meta и кто из них уже занят. Без аккаунта берём выбранный
- * в меню, как при создании; сам правимый автоответ пост не занимает. */
+/** Страница постов из Meta и кто из них уже занят. Аккаунт передаёт форма;
+ * сам правимый автоответ пост не занимает. */
 export async function loadMedia(
   accountId: string | null,
   autoreplyId: string | null,
   after: string | null,
 ): Promise<MediaPage> {
-  const id = accountId ?? (await getCurrentAccount())?.id;
-  if (!id) return { failed: "AccountUnavailable" };
+  if (!accountId) return { failed: "AccountUnavailable" };
   const token = await getToken();
   // 8 это два ряда в окне выбора, дальше «Показать ещё»
   const query = new URLSearchParams({ limit: "8", ...(after && { after }) });
   try {
     const [page, autoreplies] = await Promise.all([
       apiFetch<{ items: Media[]; next: string | null }>(
-        `/instagram/accounts/${id}/media?${query}`,
+        `/instagram/accounts/${accountId}/media?${query}`,
         {
           token,
         },
       ),
       // без архивных: архив пост не держит
-      apiFetch<Autoreply[]>(`/autoreplies?${new URLSearchParams({ account_id: id })}`, { token }),
+      apiFetch<Autoreply[]>(`/autoreplies?${new URLSearchParams({ account_id: accountId })}`, {
+        token,
+      }),
     ]);
     const taken: Record<string, TakenBy> = {};
     for (const { id: ownerId, name, enabled, media_ids } of autoreplies) {
@@ -152,11 +152,12 @@ export async function saveAutoreply(_prev: SaveState, form: FormData): Promise<S
     if (id) {
       await apiFetch(`/autoreplies/${id}`, { method: "PUT", body, token: await getToken() });
     } else {
-      const account = await getCurrentAccount();
-      if (!account) return { failed: "noAccount" };
+      // аккаунт из формы, а не из cookie: в другой вкладке могли выбрать другой
+      const accountId = String(form.get("account_id") ?? "");
+      if (!accountId) return { failed: "noAccount" };
       await apiFetch("/autoreplies", {
         method: "POST",
-        body: { ...body, account_id: account.id },
+        body: { ...body, account_id: accountId },
         token: await getToken(),
       });
     }

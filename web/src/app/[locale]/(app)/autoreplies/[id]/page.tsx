@@ -31,5 +31,11 @@ async function Edit({ params }: Props) {
   }
   // ник для превью: аккаунт автоответа, а не выбранный в меню
   const account = (await getSwitchableAccounts()).find((a) => a.id === autoreply.account_id);
-  return <AutoreplyForm autoreply={autoreply} username={account?.username ?? null} />;
+  return (
+    <AutoreplyForm
+      autoreply={autoreply}
+      accountId={autoreply.account_id}
+      username={account?.username ?? null}
+    />
+  );
 }

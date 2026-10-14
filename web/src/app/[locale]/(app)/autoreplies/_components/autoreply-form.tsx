@@ -30,6 +30,8 @@ const TEXTAREA =
 
 type Props = {
   autoreply: Autoreply | null;
+  // аккаунт нового автоответа; у правимого свой, в autoreply.account_id
+  accountId: string | null;
   // ник аккаунта для превью; null, если аккаунт не нашёлся
   username: string | null;
 };
@@ -42,7 +44,7 @@ export function AutoreplyForm(props: Props) {
   return <AutoreplyFormFields key={bfcacheId} {...props} />;
 }
 
-function AutoreplyFormFields({ autoreply, username }: Props) {
+function AutoreplyFormFields({ autoreply, accountId, username }: Props) {
   const t = useTranslations("AutoreplyForm");
   const [state, action, pending] = useActionState(saveAutoreply, INITIAL);
   const [scope, setScope] = useState(autoreply?.scope ?? "all");
@@ -93,7 +95,11 @@ function AutoreplyFormFields({ autoreply, username }: Props) {
       }}
     >
       <Page width="wide">
-        {autoreply && <input type="hidden" name="id" value={autoreply.id} />}
+        {autoreply ? (
+          <input type="hidden" name="id" value={autoreply.id} />
+        ) : (
+          <input type="hidden" name="account_id" value={accountId ?? ""} />
+        )}
         <input type="hidden" name="enabled" value={String(autoreply?.enabled ?? true)} />
 
         {archived && (
@@ -155,7 +161,7 @@ function AutoreplyFormFields({ autoreply, username }: Props) {
                 />
                 {scope === "posts" && (
                   <PostPicker
-                    accountId={autoreply?.account_id ?? null}
+                    accountId={autoreply?.account_id ?? accountId}
                     autoreplyId={autoreply?.id ?? null}
                     initial={autoreply?.media_ids ?? []}
                   />
