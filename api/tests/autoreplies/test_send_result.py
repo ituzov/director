@@ -76,16 +76,22 @@ async def test_material_sent(session, delivery):
     assert [e.kind for e in await journal(session)] == ["autoreply.delivered"]
 
 
+@pytest.mark.parametrize(
+    ("stage", "kind"), [("intro", "private_reply"), ("comment", "comment_reply")]
+)
 @pytest.mark.parametrize(("outcome", "reason"), [("failed", "100"), ("expired", None)])
-async def test_not_sent(session, delivery, outcome, reason):
-    await report(session, f"autoreplies:{delivery.id}:intro", outcome=outcome, reason=reason)
+async def test_not_sent(session, delivery, stage, kind, outcome, reason):
+    ref = f"autoreplies:{delivery.id}:{stage}"
+    await report(session, ref, kind=kind, outcome=outcome, reason=reason)
     await session.refresh(delivery)
-    assert delivery.sent_at is None
+    # раунд только у материала: у приветствия и ответа под комментом кнопки нет.
+    # Лишний раунд при материале в очереди дал бы второй материал
+    assert (delivery.sent_at, delivery.commented_at, delivery.gate_round) == (None, None, 0)
     [entry] = await journal(session)
     assert entry.kind == "autoreply.send_failed"
     assert entry.data == {
         "delivery_id": str(delivery.id),
-        "stage": "intro",
+        "stage": stage,
         "outcome": outcome,
         "reason": reason,
     }

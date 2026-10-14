@@ -210,6 +210,21 @@ async def test_not_following_starts_new_round(session, delivery):
     assert keys == [f"message:material:{delivery.id}:0", f"message:material:{delivery.id}:1"]
 
 
+@pytest.mark.parametrize("outcome", ["failed", "expired"])
+async def test_click_after_material_not_sent(session, delivery, outcome):
+    await press(session, click(delivery))
+    await result(session, delivery, None, outcome=outcome)
+    await session.refresh(delivery)
+    assert (delivery.delivered_at, delivery.gate_round) == (None, 1)
+
+    # ключ упавшего письма занят навсегда: новое нажатие ставит письмо нового раунда.
+    # Двойной тап в новом раунде по-прежнему даёт одно письмо
+    await press(session, click(delivery, at=CLICK + timedelta(hours=1)))
+    await press(session, click(delivery, at=CLICK + timedelta(hours=1, milliseconds=200)))
+    keys = sorted(t.dedup_key for t in await outbox(session))
+    assert keys == [f"message:material:{delivery.id}:0", f"message:material:{delivery.id}:1"]
+
+
 @pytest.mark.parametrize("variant", ["following", "unknown"])
 async def test_delivered_with_follow_note(session, delivery, variant):
     await gate_on(session, delivery)

@@ -364,6 +364,10 @@ async def handle_send_result(session: AsyncSession, result: instagram.OutboxResu
     if result.outcome != "sent":
         kind = "autoreply.send_failed"
         data |= {"outcome": result.outcome, "reason": result.reason}
+        if stage == MATERIAL:
+            # материал не ушёл, а ключ его письма занят навсегда: новое нажатие
+            # начнёт новый раунд, иначе оно не встанет в очередь
+            delivery.gate_round += 1
     elif stage == INTRO:
         delivery.sent_at = func.now()
         kind = "autoreply.sent"
