@@ -61,6 +61,8 @@ class InboxEvent(Base):
             "received_at",
             postgresql_where=text("processed_at IS NULL"),
         ),
+        # лента входящих аккаунта, свежие сверху; id второй ключ сортировки и закладки
+        Index("ix_inbox_account_time", "ig_account_id", "received_at", "id"),
         CheckConstraint("outcome IN ('done', 'skipped', 'failed')", name="outcome_known"),
         # итог есть ровно у разобранного: «разобрано, но непонятно чем» не бывает
         CheckConstraint(

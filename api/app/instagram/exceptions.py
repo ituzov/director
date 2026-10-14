@@ -25,6 +25,10 @@ class OAuthFailed(InstagramError):
     """Meta ответила ошибкой на одном из шагов подключения."""
 
 
+class AccountNotFound(InstagramError):
+    """Такого аккаунта в установке нет."""
+
+
 class AccountUnavailable(InstagramError):
     """Аккаунта нет, он отключён или его токен больше не годен."""
 

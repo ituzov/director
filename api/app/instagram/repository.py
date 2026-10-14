@@ -4,8 +4,8 @@
 import uuid
 from datetime import datetime, timedelta
 
-from sqlalchemy import func, or_, select
-from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy import func, or_, select, tuple_
+from sqlalchemy.dialects.postgresql import distinct_on, insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.instagram.models import Account, InboxEvent, MetaApp, OutboxTask
@@ -183,6 +183,59 @@ async def lock_account_due_refresh(
 
 async def get_account(session: AsyncSession, account_id: uuid.UUID) -> Account | None:
     return await session.get(Account, account_id)
+
+
+async def inbox_page(
+    session: AsyncSession,
+    ig_account_id: str,
+    kinds: tuple[str, ...],
+    *,
+    before: uuid.UUID | None,
+    limit: int,
+) -> list[InboxEvent]:
+    """События аккаунта, свежие сверху; before: старше этого события.
+    На одно больше limit: по лишнему видно, что есть следующая страница."""
+    query = select(InboxEvent).where(
+        InboxEvent.ig_account_id == ig_account_id, InboxEvent.kind.in_(kinds)
+    )
+    if before is not None:
+        anchor = await session.get(InboxEvent, before)
+        # закладка чужого аккаунта (переключили аккаунт со старой страницей) резала бы
+        # ленту по чужому времени: считаем её неизвестной
+        if anchor is None or anchor.ig_account_id != ig_account_id:
+            return []
+        # время прихода может совпасть: id второй ключ, иначе на стыке страниц теряли бы
+        query = query.where(
+            tuple_(InboxEvent.received_at, InboxEvent.id) < (anchor.received_at, anchor.id)
+        )
+    query = query.order_by(InboxEvent.received_at.desc(), InboxEvent.id.desc()).limit(limit + 1)
+    return list(await session.scalars(query))
+
+
+async def usernames_from_comments(
+    session: AsyncSession, ig_account_id: str, person_ids: list[str]
+) -> dict[str, str]:
+    """Ник человека по его последнему комменту аккаунту: в нажатиях и сообщениях
+    Meta ника не присылает, только id, тот же, что в комменте."""
+    if not person_ids:
+        return {}
+    person = InboxEvent.payload["from"]["id"].astext
+    username = InboxEvent.payload["from"]["username"].astext
+    # ник пишет Meta: только непустая строка, как в разборе самого коммента
+    username_is_text = func.jsonb_typeof(InboxEvent.payload["from"]["username"]) == "string"
+    rows = await session.execute(
+        select(person, username)
+        .where(
+            InboxEvent.ig_account_id == ig_account_id,
+            InboxEvent.kind == "comment",
+            person.in_(person_ids),
+            username_is_text,
+            username != "",
+        )
+        .ext(distinct_on(person))
+        .order_by(person, InboxEvent.received_at.desc())
+    )
+    return {p: u for p, u in rows.all()}
 
 
 async def get_account_by_ig_id(session: AsyncSession, ig_user_id: str) -> Account | None:

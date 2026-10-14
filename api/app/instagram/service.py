@@ -7,8 +7,9 @@ import json
 import secrets
 import ssl
 import uuid
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
-from typing import NoReturn
+from typing import Any, NoReturn
 from urllib.parse import urlencode
 
 import httpx
@@ -23,6 +24,7 @@ from app.core import crypto, signing
 from app.instagram import graph, repository, webhook
 from app.instagram.contracts import AccountRef
 from app.instagram.exceptions import (
+    AccountNotFound,
     AccountUnavailable,
     AppSecretRequired,
     InvalidOAuthState,
@@ -31,7 +33,7 @@ from app.instagram.exceptions import (
     OAuthFailed,
     PublicUrlRequired,
 )
-from app.instagram.models import Account, MetaApp
+from app.instagram.models import Account, InboxEvent, MetaApp
 
 # имя логгера постоянное, по нему ищут в логах: при переезде файла не меняется
 log = structlog.get_logger("app.instagram")
@@ -428,3 +430,110 @@ async def connect_account(
         permissions=short.permissions,
     )
     return account
+
+
+# --- лента входящих -----------------------------------------------------------------
+
+# прочтения ничего не говорят о человеке и забили бы ленту
+INBOX_KINDS = (webhook.COMMENT, webhook.POSTBACK, webhook.MESSAGE)
+
+
+@dataclass(frozen=True, slots=True)
+class InboxItem:
+    """Входящее для ленты: то, что нужно человеку, без сырого вебхука Meta."""
+
+    id: uuid.UUID
+    received_at: datetime
+    kind: str
+    person_id: str | None
+    username: str | None
+    # текст коммента или сообщения, подпись нажатой кнопки
+    text: str | None
+    # вид вложения сообщения без текста: ig_reel, image, share
+    attachment: str | None
+    media_id: str | None
+    # None: worker ещё не разобрал
+    outcome: str | None
+    reason: str | None
+    handled_by: str | None
+    handled_ref: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class InboxPage:
+    items: list[InboxItem]
+    # закладка следующей страницы: id последнего события; None, если дальше пусто
+    next: uuid.UUID | None
+
+
+async def list_inbox(
+    session: AsyncSession, account_id: uuid.UUID, *, before: uuid.UUID | None, limit: int
+) -> InboxPage:
+    """Что пришло от Meta на аккаунт и что с этим стало. Отключённый аккаунт тоже:
+    история остаётся."""
+    account = await repository.get_account(session, account_id)
+    if account is None:
+        raise AccountNotFound
+    events = await repository.inbox_page(
+        session, account.ig_user_id, INBOX_KINDS, before=before, limit=limit
+    )
+    more = len(events) > limit
+    events = events[:limit]
+    items = [_inbox_item(e) for e in events]
+    # ник для нажатий и сообщений: Meta присылает в них только id
+    missing = sorted({i.person_id for i in items if i.person_id and not i.username})
+    names = await repository.usernames_from_comments(session, account.ig_user_id, missing)
+    items = [
+        _with_username(i, names[i.person_id]) if i.person_id in names and not i.username else i
+        for i in items
+    ]
+    return InboxPage(items=items, next=events[-1].id if more else None)
+
+
+def _inbox_item(event: InboxEvent) -> InboxItem:
+    p = _obj(event.payload)
+    person = username = text = attachment = media_id = None
+    if event.kind == webhook.COMMENT:
+        author = _obj(p.get("from"))
+        person, username = _str(author.get("id")), _str(author.get("username"))
+        text, media_id = _str(p.get("text")), _str(_obj(p.get("media")).get("id"))
+    else:
+        person = _str(_obj(p.get("sender")).get("id"))
+        if event.kind == webhook.POSTBACK:
+            text = _str(_obj(p.get("postback")).get("title"))
+        else:
+            message = _obj(p.get("message"))
+            text = _str(message.get("text"))
+            files = message.get("attachments")
+            if not text and isinstance(files, list) and files:
+                attachment = _str(_obj(files[0]).get("type"))
+    return InboxItem(
+        id=event.id,
+        received_at=event.received_at,
+        kind=event.kind,
+        person_id=person,
+        username=username,
+        text=text,
+        attachment=attachment,
+        media_id=media_id,
+        outcome=event.outcome,
+        reason=event.reason,
+        handled_by=event.handled_by,
+        handled_ref=event.handled_ref,
+    )
+
+
+def _with_username(item: InboxItem, username: str) -> InboxItem:
+    return replace(item, username=username)
+
+
+def _obj(value: Any) -> dict:
+    # вебхук пишет Meta: любое поле может оказаться не тем типом
+    return value if isinstance(value, dict) else {}
+
+
+def _str(value: Any) -> str | None:
+    # bool наследник int: True не должен стать «True»
+    if isinstance(value, bool) or not isinstance(value, str | int) or value == "":
+        return None
+    return str(value)

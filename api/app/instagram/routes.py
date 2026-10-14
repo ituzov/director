@@ -11,6 +11,7 @@ from app import identity
 from app.db import SessionDep
 from app.instagram import service
 from app.instagram.exceptions import (
+    AccountNotFound,
     AccountUnavailable,
     AppSecretRequired,
     InstagramError,
@@ -23,6 +24,8 @@ from app.instagram.exceptions import (
 from app.instagram.models import Account, MetaApp
 from app.instagram.schemas import (
     AccountOut,
+    InboxItemOut,
+    InboxPageOut,
     MediaOut,
     MediaPageOut,
     MetaAppIn,
@@ -43,6 +46,7 @@ _STATUS = {
     PublicUrlRequired: status.HTTP_409_CONFLICT,
     InvalidOAuthState: status.HTTP_400_BAD_REQUEST,
     OAuthFailed: status.HTTP_502_BAD_GATEWAY,
+    AccountNotFound: status.HTTP_404_NOT_FOUND,
     AccountUnavailable: status.HTTP_409_CONFLICT,
     MetaUnavailable: status.HTTP_502_BAD_GATEWAY,
 }
@@ -150,6 +154,23 @@ async def list_media(
     """Посты аккаунта для выбора в автоответе. Закладка after из прошлого ответа."""
     page = await service.list_media(session, account_id, after=after, limit=limit)
     return MediaPageOut(items=[_media_out(m) for m in page.items], next=page.after)
+
+
+@router.get("/accounts/{account_id}/inbox")
+async def list_inbox(
+    account_id: uuid.UUID,
+    session: SessionDep,
+    user: identity.CurrentUserRef,
+    before: uuid.UUID | None = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+) -> InboxPageOut:
+    """Лента входящих аккаунта: что пришло от Meta и кто это взял. Свежие сверху,
+    закладка before из прошлого ответа."""
+    page = await service.list_inbox(session, account_id, before=before, limit=limit)
+    return InboxPageOut(
+        items=[InboxItemOut.model_validate(i, from_attributes=True) for i in page.items],
+        next=page.next,
+    )
 
 
 # id поста встаёт в путь запроса к Meta: только цифры, иначе «me/..» ушёл бы куда угодно

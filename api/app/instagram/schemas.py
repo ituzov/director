@@ -90,3 +90,31 @@ class SelectedMediaOut(BaseModel):
     items: list[MediaOut]
     # Meta таких не знает: пост удалили или убрали в архив
     missing: list[str]
+
+
+class InboxItemOut(BaseModel):
+    """Входящее для ленты. Сырой вебхук Meta наружу не отдаём."""
+
+    id: uuid.UUID
+    received_at: datetime
+    # comment, postback, message
+    kind: str
+    person_id: str | None
+    username: str | None
+    # текст коммента или сообщения, подпись нажатой кнопки
+    text: str | None
+    # вид вложения сообщения без текста
+    attachment: str | None
+    media_id: str | None
+    # None: ещё не разобрано; done, skipped, failed
+    outcome: str | None
+    reason: str | None
+    # кто взял событие и что именно у него (id автоответа); пусто: никто
+    handled_by: str | None
+    handled_ref: str | None
+
+
+class InboxPageOut(BaseModel):
+    items: list[InboxItemOut]
+    # закладка для следующей страницы, в before; None: дальше пусто
+    next: uuid.UUID | None
