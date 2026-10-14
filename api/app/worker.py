@@ -25,13 +25,24 @@ PERIODIC_SECONDS = 12 * 60 * 60
 SENDERS = 4
 
 
-async def on_comment(session: AsyncSession, comment: instagram.CommentRef) -> str | None:
+def _autoreplies(taken: autoreplies.Taken | None) -> instagram.Handled | None:
+    if taken is None:
+        return None
+    ref = str(taken.autoreply_id) if taken.autoreply_id else None
+    return instagram.Handled("autoreplies", ref)
+
+
+async def on_comment(
+    session: AsyncSession, comment: instagram.CommentRef
+) -> instagram.Handled | None:
     # кто первый взял, того и имя в ленте входящих; ассистент встанет следующим
-    return "autoreplies" if await autoreplies.handle_comment(session, comment) else None
+    return _autoreplies(await autoreplies.handle_comment(session, comment))
 
 
-async def on_postback(session: AsyncSession, postback: instagram.PostbackRef) -> str | None:
-    return "autoreplies" if await autoreplies.handle_postback(session, postback) else None
+async def on_postback(
+    session: AsyncSession, postback: instagram.PostbackRef
+) -> instagram.Handled | None:
+    return _autoreplies(await autoreplies.handle_postback(session, postback))
 
 
 # кому отдавать разобранное из входящих

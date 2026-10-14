@@ -73,7 +73,7 @@ async def journal(session) -> list[str]:
 
 
 async def test_click_queues_material(session, delivery):
-    assert await press(session, click(delivery)) is True
+    assert await press(session, click(delivery)) == autoreplies.Taken(delivery.autoreply_id)
     [task] = await outbox(session)
     assert (task.kind, task.ref, task.dedup_key) == (
         "message",
@@ -119,7 +119,8 @@ async def test_click_after_delivered_ignored(session, delivery):
     delivery.delivered_at = CLICK
     delivery.last_click_at = CLICK
     await session.commit()
-    await press(session, click(delivery, at=CLICK + timedelta(hours=1)))
+    taken = await press(session, click(delivery, at=CLICK + timedelta(hours=1)))
+    assert taken == autoreplies.Taken(delivery.autoreply_id)
     assert await outbox(session) == []
     assert await journal(session) == ["autoreply.repeat_click"]
 
@@ -141,13 +142,14 @@ async def test_archived_autoreply_still_delivers(session, delivery):
     ],
 )
 async def test_foreign_click_ignored(session, delivery, change):
-    assert await press(session, click(delivery, **change)) is True
+    # кнопка наша, но какой автоответ, не понять: выдачи нет или нажал не тот
+    assert await press(session, click(delivery, **change)) == autoreplies.Taken(None)
     assert await outbox(session) == []
     assert await journal(session) == []
 
 
 async def test_other_button_not_ours(session, delivery):
-    assert await press(session, click(delivery, payload="assistant:1")) is False
+    assert await press(session, click(delivery, payload="assistant:1")) is None
     assert await outbox(session) == []
 
 

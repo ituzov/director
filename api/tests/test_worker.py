@@ -63,13 +63,27 @@ async def test_one_event_at_a_time(session):
     assert await worker.inbox_once(sessions(session)) is False
 
 
+AUTOREPLY_ID = uuid.uuid7()
+
+
 @pytest.mark.parametrize(
     ("handler", "module_fn"),
     [("on_comment", "handle_comment"), ("on_postback", "handle_postback")],
 )
-@pytest.mark.parametrize(("taken", "name"), [(True, "autoreplies"), (False, None)])
-async def test_inbox_goes_to_autoreplies(monkeypatch, handler, module_fn, taken, name):
-    # автоответы взяли событие: в ленте входящих их имя; не взяли: никто
+@pytest.mark.parametrize(
+    ("taken", "handled"),
+    [
+        # взял: модуль и какой автоответ; в ленте его название
+        (
+            autoreplies.Taken(AUTOREPLY_ID),
+            instagram.Handled("autoreplies", str(AUTOREPLY_ID)),
+        ),
+        # взял, но какой автоответ, не понять
+        (autoreplies.Taken(None), instagram.Handled("autoreplies", None)),
+        (None, None),
+    ],
+)
+async def test_inbox_goes_to_autoreplies(monkeypatch, handler, module_fn, taken, handled):
     got = []
 
     async def fake(session, ref):
@@ -77,7 +91,7 @@ async def test_inbox_goes_to_autoreplies(monkeypatch, handler, module_fn, taken,
         return taken
 
     monkeypatch.setattr(autoreplies, module_fn, fake)
-    assert await getattr(worker.HANDLERS, handler)(None, "ref") == name
+    assert await getattr(worker.HANDLERS, handler)(None, "ref") == handled
     assert got == ["ref"]
 
 
@@ -120,7 +134,8 @@ async def test_comment_through_worker_knows_who_took_it(session, text, taken):
 
     assert await worker.inbox_once(sessions(session)) is True
     await session.refresh(event)
-    assert (event.outcome, event.handled_by) == ("done", taken)
+    ref = str(autoreply.id) if taken else None
+    assert (event.outcome, event.handled_by, event.handled_ref) == ("done", taken, ref)
 
 
 def test_send_results_go_to_autoreplies():

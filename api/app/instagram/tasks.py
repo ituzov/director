@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app import activity
 from app.core import crypto
 from app.instagram import graph, repository, service, webhook
-from app.instagram.contracts import CommentRef, InboxHandlers, OutboxResult, PostbackRef
+from app.instagram.contracts import CommentRef, Handled, InboxHandlers, OutboxResult, PostbackRef
 from app.instagram.models import Account, InboxEvent, OutboxTask
 from app.instagram.outbox import FOLLOWING, NOT_FOLLOWING, UNKNOWN
 
@@ -38,11 +38,15 @@ async def process_inbox_event(session: AsyncSession, handlers: InboxHandlers) ->
     # id запроса вебхука в логах worker: цепочка от Meta до ответа ищется по одному id
     with structlog.contextvars.bound_contextvars(request_id=event.request_id):
         try:
-            outcome, reason, handled_by = await _handle(session, event, handlers)
-            _finish(event, outcome, reason, handled_by)
+            outcome, reason, handled = await _handle(session, event, handlers)
+            _finish(event, outcome, reason, handled)
             await session.commit()
             log.info(
-                "inbox.processed", kind=kind, outcome=outcome, reason=reason, handled_by=handled_by
+                "inbox.processed",
+                kind=kind,
+                outcome=outcome,
+                reason=reason,
+                handled_by=handled.by if handled else None,
             )
         except Exception as error:
             # всё сделанное для события откатывается, в том числе журнал и outbox
@@ -52,10 +56,10 @@ async def process_inbox_event(session: AsyncSession, handlers: InboxHandlers) ->
 
 
 # итог разбора, причина и кто взял событие себе
-Handled = tuple[str, str | None, str | None]
+Outcome = tuple[str, str | None, Handled | None]
 
 
-async def _handle(session: AsyncSession, event: InboxEvent, handlers: InboxHandlers) -> Handled:
+async def _handle(session: AsyncSession, event: InboxEvent, handlers: InboxHandlers) -> Outcome:
     account = await repository.get_account_by_ig_id(session, event.ig_account_id)
     if account is None:
         # чужой аккаунт или тестовый вебхук из кабинета Meta (id 0)
@@ -72,7 +76,7 @@ async def _handle(session: AsyncSession, event: InboxEvent, handlers: InboxHandl
 
 async def _handle_postback(
     session: AsyncSession, event: InboxEvent, account: Account, handlers: InboxHandlers
-) -> Handled:
+) -> Outcome:
     postback = _postback_ref(event, account)
     if postback is None:
         return "skipped", "bad_payload", None
@@ -106,7 +110,7 @@ def _postback_ref(event: InboxEvent, account: Account) -> PostbackRef | None:
 
 async def _handle_comment(
     session: AsyncSession, event: InboxEvent, account: Account, handlers: InboxHandlers
-) -> Handled:
+) -> Outcome:
     comment = _comment_ref(event, account)
     if comment is None:
         # повтор кривые данные не вылечит
@@ -456,12 +460,13 @@ async def _refresh_one(session: AsyncSession, account_id: Any) -> int:
 
 
 def _finish(
-    event: InboxEvent, outcome: str, reason: str | None, handled_by: str | None = None
+    event: InboxEvent, outcome: str, reason: str | None, handled: Handled | None = None
 ) -> None:
     event.processed_at = func.now()
     event.outcome = outcome
     event.reason = reason
-    event.handled_by = handled_by
+    event.handled_by = handled.by if handled else None
+    event.handled_ref = handled.ref if handled else None
     event.retry_at = None
 
 

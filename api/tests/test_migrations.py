@@ -55,40 +55,58 @@ def inbox(conn, key: str, kind: str, payload: dict, outcome: str = "done") -> No
     )
 
 
-def journal(conn, kind: str, comment_id: str) -> None:
+def journal(
+    conn, kind: str, comment_id: str | None, autoreply_id=None, data=None, person_id="p1"
+) -> None:
     conn.execute(
-        "INSERT INTO activity.event (id, kind, comment_id) VALUES (%s, %s, %s)",
-        (uuid.uuid4(), kind, comment_id),
+        """INSERT INTO activity.event (id, kind, comment_id, autoreply_id, data, person_id)
+           VALUES (%s, %s, %s, %s, %s, %s)""",
+        (uuid.uuid4(), kind, comment_id, autoreply_id, json.dumps(data or {}), person_id),
     )
 
 
-def test_inbox_handled_by_restored(db):
+def test_inbox_handled_restored(db):
+    """Кто и какой автоответ взял прошлые события: по журналу activity."""
     alembic("upgrade", "ec8e58f0550d")
+    guide, other = uuid.uuid4(), uuid.uuid4()
+    d1, d2 = uuid.uuid4(), uuid.uuid4()
     # новая выдача и повтор того же человека: у повтора своей выдачи нет, только журнал
     inbox(db, "new", "comment", {"id": "c1"})
     journal(db, "comment.received", "c1")
-    journal(db, "autoreply.matched", "c1")
+    journal(db, "autoreply.matched", "c1", guide)
     inbox(db, "repeat", "comment", {"id": "c2"})
     journal(db, "comment.received", "c2")
-    journal(db, "autoreply.repeat_comment", "c2")
+    journal(db, "autoreply.repeat_comment", "c2", other)
     # ни один автоответ не подошёл: пришёл, но никто не взял
     inbox(db, "nobody", "comment", {"id": "c3"})
     journal(db, "comment.received", "c3")
     inbox(db, "own", "comment", {"id": "c4"}, outcome="skipped")
-    # нажатие нашей кнопки и чужой; сдавшееся не считается взятым
-    inbox(db, "ours", "postback", {"postback": {"payload": "ar:1"}})
+    # нажатие нашей кнопки: автоответ по выдаче из журнала нажатий
+    inbox(db, "ours", "postback", {"sender": {"id": "p1"}, "postback": {"payload": f"ar:{d1}"}})
+    journal(db, "autoreply.clicked", "c1", guide, {"delivery_id": str(d1)})
+    # ту же кнопку нажал другой человек: обработчик его отклонил, в журнале его нет
+    inbox(db, "stranger", "postback", {"sender": {"id": "p2"}, "postback": {"payload": f"ar:{d1}"}})
+    # кнопка наша, но в журнале её нет (нажал не тот): взяли, автоответ не определить
+    inbox(db, "ours-unknown", "postback", {"postback": {"payload": f"ar:{d2}"}})
     inbox(db, "foreign", "postback", {"postback": {"payload": "other:1"}})
-    inbox(db, "failed", "postback", {"postback": {"payload": "ar:2"}}, outcome="failed")
+    inbox(db, "failed", "postback", {"postback": {"payload": f"ar:{d1}"}}, outcome="failed")
 
     alembic("upgrade", "head")
 
-    rows = dict(db.execute("SELECT dedup_key, handled_by FROM instagram.inbox").fetchall())
+    rows = {
+        key: (by, ref)
+        for key, by, ref in db.execute(
+            "SELECT dedup_key, handled_by, handled_ref FROM instagram.inbox"
+        ).fetchall()
+    }
     assert rows == {
-        "new": "autoreplies",
-        "repeat": "autoreplies",
-        "nobody": None,
-        "own": None,
-        "ours": "autoreplies",
-        "foreign": None,
-        "failed": None,
+        "new": ("autoreplies", str(guide)),
+        "repeat": ("autoreplies", str(other)),
+        "nobody": (None, None),
+        "own": (None, None),
+        "ours": ("autoreplies", str(guide)),
+        "stranger": ("autoreplies", None),
+        "ours-unknown": ("autoreplies", None),
+        "foreign": (None, None),
+        "failed": (None, None),
     }

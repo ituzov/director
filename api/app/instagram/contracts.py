@@ -78,11 +78,21 @@ class OutboxResult:
 
 
 @dataclass(frozen=True, slots=True)
+class Handled:
+    """Кто взял входящее событие себе. by: модуль, имя даёт worker. ref: что именно
+    у него, строка, которую понимает только он (id автоответа, диалога); None, если
+    не определить. instagram только хранит пару и отдаёт её ленте."""
+
+    by: str
+    ref: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class InboxHandlers:
     """Кому отдать разобранное из входящих. Собирает worker, порядок
     «сначала автоответы, потом ассистент» тоже его. None: этот вид пока
     никому не нужен, событие просто отмечается разобранным.
-    Обработчик возвращает имя того, кто взял событие себе, или None: не взял никто."""
+    Обработчик возвращает Handled, если событие взяли, или None: не взял никто."""
 
-    on_comment: Callable[[AsyncSession, CommentRef], Awaitable[str | None]] | None = None
-    on_postback: Callable[[AsyncSession, PostbackRef], Awaitable[str | None]] | None = None
+    on_comment: Callable[[AsyncSession, CommentRef], Awaitable[Handled | None]] | None = None
+    on_postback: Callable[[AsyncSession, PostbackRef], Awaitable[Handled | None]] | None = None

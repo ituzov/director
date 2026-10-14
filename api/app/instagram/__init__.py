@@ -8,6 +8,7 @@ from app.instagram.contracts import (
     AccountRef,
     Button,
     CommentRef,
+    Handled,
     InboxHandlers,
     OutboxResult,
     PostbackRef,
@@ -52,6 +53,7 @@ __all__ = [
     # задачи worker
     "process_inbox_event",
     "InboxHandlers",
+    "Handled",
     "CommentRef",
     "PostbackRef",
     "report_outbox_result",

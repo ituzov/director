@@ -93,6 +93,9 @@ class InboxEvent(Base):
     # кто взял событие себе: имя модуля от worker. Пусто: никто (ни один
     # автоответ не подошёл) или событие никому не нужно
     handled_by: Mapped[str | None] = mapped_column(String(32))
+    # что именно у взявшего: id автоответа, позже диалога ассистента. Понимает
+    # только сам модуль; пусто, если не взяли или не определить
+    handled_ref: Mapped[str | None] = mapped_column(String(64))
     # сколько раз worker брался и падал; после 5 outcome = failed
     attempts: Mapped[int] = mapped_column(SmallInteger, server_default="0")
     # упавшее не берём раньше этого времени, пауза растёт с attempts

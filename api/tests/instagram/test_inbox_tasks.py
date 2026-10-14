@@ -71,7 +71,7 @@ async def test_comment_goes_to_journal_and_handler(session, account):
 
     async def on_comment(s, comment):
         got.append(comment)
-        return "autoreplies"
+        return instagram.Handled("autoreplies", "a1")
 
     handlers = instagram.InboxHandlers(on_comment=on_comment)
     assert await instagram.process_inbox_event(session, handlers) is True
@@ -88,8 +88,8 @@ async def test_comment_goes_to_journal_and_handler(session, account):
     )
     event = await stored(session, event_id)
     assert (event.outcome, event.reason, event.processed_at is not None) == ("done", None, True)
-    # кто взял, видно в ленте входящих
-    assert event.handled_by == "autoreplies"
+    # кто и что именно взяло, видно в ленте входящих
+    assert (event.handled_by, event.handled_ref) == ("autoreplies", "a1")
     [entry] = await journal(session)
     assert (entry.kind, entry.account_id, entry.person_id, entry.comment_id) == (
         "comment.received",
@@ -111,7 +111,12 @@ async def test_comment_nobody_took_still_done(session, account):
 
     await instagram.process_inbox_event(session, instagram.InboxHandlers(on_comment=not_mine))
     event = await stored(session, event_id)
-    assert (event.outcome, event.reason, event.handled_by) == ("done", None, None)
+    assert (event.outcome, event.reason, event.handled_by, event.handled_ref) == (
+        "done",
+        None,
+        None,
+        None,
+    )
 
 
 async def test_comment_without_handler_still_journaled(session, account):
@@ -196,7 +201,7 @@ async def test_postback_goes_to_handler(session, account):
 
     async def on_postback(s, postback):
         got.append(postback)
-        return "autoreplies"
+        return instagram.Handled("autoreplies", "a1")
 
     await instagram.process_inbox_event(session, instagram.InboxHandlers(on_postback=on_postback))
     assert got == [
@@ -210,7 +215,7 @@ async def test_postback_goes_to_handler(session, account):
         )
     ]
     event = await stored(session, event_id)
-    assert (event.outcome, event.handled_by) == ("done", "autoreplies")
+    assert (event.outcome, event.handled_by, event.handled_ref) == ("done", "autoreplies", "a1")
 
 
 async def test_postback_without_timestamp_uses_received(session, account):
@@ -221,7 +226,7 @@ async def test_postback_without_timestamp_uses_received(session, account):
 
     async def on_postback(s, postback):
         got.append(postback)
-        return "autoreplies"
+        return instagram.Handled("autoreplies", "a1")
 
     await instagram.process_inbox_event(session, instagram.InboxHandlers(on_postback=on_postback))
     assert got[0].acted_at == RECEIVED

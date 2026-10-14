@@ -67,7 +67,7 @@ def comment(text="хочу гайд", *, media_id="m1", person_id="p1", comment_
     )
 
 
-async def handle(session, c) -> bool:
+async def handle(session, c) -> autoreplies.Taken | None:
     taken = await autoreplies.handle_comment(session, c)
     await session.commit()
     return taken
@@ -101,7 +101,7 @@ async def test_post_taken_by_its_autoreply(session):
     assert await winner(session, comment("хочу чеклист")) == own.id
     # общие под этим постом молчат даже на свои слова
     assert await winner(session, comment("хочу гайд", person_id="p2")) is None
-    assert await handle(session, comment("прайс", person_id="p3")) is False
+    assert await handle(session, comment("прайс", person_id="p3")) is None
 
 
 async def test_disabled_own_releases_post(session):
@@ -124,17 +124,17 @@ async def test_archived_do_not_answer(session):
 
 async def test_disabled_general_silent(session):
     await make(session, "гайд", enabled=False)
-    assert await handle(session, comment()) is False
+    assert await handle(session, comment()) is None
 
 
 async def test_other_account_silent(session):
     await make(session, "гайд", account_id=uuid.uuid7())
-    assert await handle(session, comment()) is False
+    assert await handle(session, comment()) is None
 
 
 async def test_no_word_not_ours(session):
     await make(session, "гайд")
-    assert await handle(session, comment("красиво!")) is False
+    assert await handle(session, comment("красиво!")) is None
     assert await deliveries(session) == []
     assert await journal(session) == []
 
@@ -142,7 +142,8 @@ async def test_no_word_not_ours(session):
 async def test_delivery_and_journal(session):
     general = await make(session, "гайд")
     c = comment()
-    assert await handle(session, c) is True
+    # взял именно этот автоответ: его покажет лента входящих
+    assert await handle(session, c) == autoreplies.Taken(general.id)
 
     [delivery] = await deliveries(session)
     assert (
@@ -165,10 +166,10 @@ async def test_delivery_and_journal(session):
 
 
 async def test_repeat_under_same_post(session):
-    await make(session, "гайд")
+    guide = await make(session, "гайд")
     await handle(session, comment())
     # тот же человек снова под тем же постом: коммент наш, но выдачи нет
-    assert await handle(session, comment("гайд гайд")) is True
+    assert await handle(session, comment("гайд гайд")) == autoreplies.Taken(guide.id)
     assert len(await deliveries(session)) == 1
     assert [e.kind for e in await journal(session)][-1] == "autoreply.repeat_comment"
 

@@ -32,6 +32,14 @@ MATERIAL = "material"
 
 
 @dataclass(frozen=True, slots=True)
+class Taken:
+    """Событие взяли автоответы. autoreply_id: какой; None, если не определить
+    (битая кнопка, кнопка удалённого автоответа, нажал не тот)."""
+
+    autoreply_id: uuid.UUID | None
+
+
+@dataclass(frozen=True, slots=True)
 class Full:
     """Автоответ вместе со словами и постами: всё, что нужно форме и карточке."""
 
@@ -208,13 +216,13 @@ def _fields(form: AutoreplyForm) -> dict:
     return form.model_dump(exclude={"keywords", "media_ids", "account_id"})
 
 
-async def handle_comment(session: AsyncSession, comment: instagram.CommentRef) -> bool:
+async def handle_comment(session: AsyncSession, comment: instagram.CommentRef) -> Taken | None:
     """Коммент из входящих: выдать автоответ, если совпало слово.
-    True: коммент наш, даже если повторный и отвечать не будем."""
+    Taken: коммент наш, даже если повторный и отвечать не будем; None: не наш."""
     candidates = await _candidates(session, comment)
     match = matching.find_match(comment.text, candidates)
     if match is None:
-        return False
+        return None
 
     # под замком: выбор ответа по очереди не должен разойтись с соседним комментом
     autoreply = await repository.lock_autoreply(session, match.autoreply_id)
@@ -247,7 +255,7 @@ async def handle_comment(session: AsyncSession, comment: instagram.CommentRef) -
         },
         occurred_at=comment.received_at,
     )
-    return True
+    return Taken(match.autoreply_id)
 
 
 async def _enqueue_private_reply(
@@ -286,23 +294,23 @@ def _choose_comment_reply(
     return index, replies.fill(autoreply.comment_replies[index], username)
 
 
-async def handle_postback(session: AsyncSession, postback: instagram.PostbackRef) -> bool:
-    """Нажатие кнопки автоответа: выдать материал. True: кнопка наша, даже если
-    нажатие пропущено (уже выдано, выдачи нет)."""
+async def handle_postback(session: AsyncSession, postback: instagram.PostbackRef) -> Taken | None:
+    """Нажатие кнопки автоответа: выдать материал. Taken: кнопка наша, даже если
+    нажатие пропущено (уже выдано, выдачи нет); None: кнопка чужая."""
     if not postback.payload.startswith(BUTTON_PREFIX):
-        return False
+        return None
     try:
         delivery_id = uuid.UUID(postback.payload.removeprefix(BUTTON_PREFIX))
     except ValueError:
         log.warning("autoreply.bad_button")
-        return True
+        return Taken(None)
     delivery = await repository.get_delivery(session, delivery_id, lock=True)
     if delivery is None or (delivery.account_id, delivery.person_id) != (
         postback.account_id,
         postback.person_id,
     ):
         # автоответ удалили или нажал не тот, кому выдавали
-        return True
+        return Taken(None)
     # двойной тап отдельно не ловим: оба нажатия попадут в один раунд, и второе
     # письмо в очередь не ляжет. Порог по времени глушил осознанные нажатия
     delivery.last_click_at = postback.acted_at
@@ -318,7 +326,7 @@ async def handle_postback(session: AsyncSession, postback: instagram.PostbackRef
     if delivery.delivered_at:
         # материал уже в переписке прямо над кнопкой
         activity.record(session, "autoreply.repeat_click", **journal)
-        return True
+        return Taken(delivery.autoreply_id)
 
     if delivery.clicked_at is None:
         delivery.clicked_at = postback.acted_at
@@ -345,7 +353,7 @@ async def handle_postback(session: AsyncSession, postback: instagram.PostbackRef
         if_unknown=instagram.FOLLOWING,
     )
     activity.record(session, "autoreply.clicked", **journal)
-    return True
+    return Taken(delivery.autoreply_id)
 
 
 async def handle_send_result(session: AsyncSession, result: instagram.OutboxResult) -> None:
