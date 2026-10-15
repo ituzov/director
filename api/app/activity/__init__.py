@@ -3,9 +3,13 @@
 Публичный интерфейс модуля: снаружи импортируют только отсюда.
 """
 
-from app.activity.service import record
+from app.activity.contracts import EventRef
+from app.activity.service import comment_history, record
 
 __all__ = [
     # запись события в транзакции вызывающего
     "record",
+    # что было с комментами аккаунта, по порядку
+    "comment_history",
+    "EventRef",
 ]

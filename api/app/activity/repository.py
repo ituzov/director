@@ -4,6 +4,7 @@
 import uuid
 from datetime import datetime
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.activity.models import Event
@@ -32,3 +33,15 @@ def add_event(
             occurred_at=occurred_at,
         )
     )
+
+
+async def comment_events(
+    session: AsyncSession, account_id: uuid.UUID, comment_ids: list[str]
+) -> list[Event]:
+    """События аккаунта по этим комментам, по порядку: время, при равном id."""
+    query = (
+        select(Event)
+        .where(Event.account_id == account_id, Event.comment_id.in_(comment_ids))
+        .order_by(Event.occurred_at, Event.id)
+    )
+    return list(await session.scalars(query))
