@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { type Step, summary } from "./inbox";
+import { type Step, stages, summary } from "./inbox";
 
 // шаги по порядку, как их отдаёт api; итогу важен только код
 function steps(...codes: Step["step"][]): Step[] {
@@ -81,5 +81,58 @@ describe("summary: где выдача сейчас", () => {
     ["только ответ под комментом", ["commented"], null],
   ])("%s", (_, codes, want) => {
     expect(summary(steps(...codes))).toBe(want);
+  });
+});
+
+describe("stages: дорожка выдачи", () => {
+  const track = (...codes: Step["step"][]) =>
+    stages(steps(...codes))
+      ?.map(({ stage, state }) => `${stage}:${state}`)
+      .join(" ") ?? null;
+
+  it.each<[string, Step["step"][], string | null]>([
+    ["истории нет", [], null],
+    ["повторный коммент без дорожки", ["repeat_comment"], null],
+    ["отправляем директ", ["matched"], "dm:current click:todo material:todo"],
+    ["директ не ушёл", ["matched", "dm_failed"], "dm:failed click:todo material:todo"],
+    ["ждём нажатия", ["matched", "dm_sent"], "dm:done click:current material:todo"],
+    ["нажал", ["matched", "dm_sent", "clicked"], "dm:done click:done material:current"],
+    [
+      "попросили подписаться",
+      ["matched", "dm_sent", "clicked", "follow_asked"],
+      "dm:done click:done follow:current material:todo",
+    ],
+    [
+      "подписался и нажал снова",
+      ["matched", "dm_sent", "clicked", "follow_asked", "clicked"],
+      "dm:done click:done follow:done material:current",
+    ],
+    [
+      "получил без подписки",
+      ["matched", "dm_sent", "clicked", "delivered"],
+      "dm:done click:done material:done",
+    ],
+    [
+      "получил после подписки",
+      ["matched", "dm_sent", "clicked", "follow_asked", "clicked", "delivered"],
+      "dm:done click:done follow:done material:done",
+    ],
+    [
+      "материал не ушёл",
+      ["matched", "dm_sent", "clicked", "material_failed"],
+      "dm:done click:done material:failed",
+    ],
+    [
+      "неудача без этапа до нажатия",
+      ["matched", "send_failed"],
+      "dm:failed click:todo material:todo",
+    ],
+    [
+      "неудача без этапа после нажатия",
+      ["matched", "dm_sent", "clicked", "send_failed"],
+      "dm:done click:done material:failed",
+    ],
+  ])("%s", (_, codes, want) => {
+    expect(track(...codes)).toBe(want);
   });
 });

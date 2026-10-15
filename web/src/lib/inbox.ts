@@ -95,3 +95,45 @@ export function summary(steps: Step[]): Summary | null {
   }
   return state;
 }
+
+export type InboxView = "deliveries" | "all";
+
+/** Фильтр ленты для вида: выдачи это комменты, которые кто-то взял. */
+export function viewQuery(view: InboxView): Record<string, string> {
+  return view === "deliveries" ? { kind: "comment", taken: "true" } : {};
+}
+
+export type Stage = "dm" | "click" | "follow" | "material";
+export type StageState = "done" | "current" | "failed" | "todo";
+
+// этап, на котором выдача сейчас, и что с ним; до него всё сделано, после всё впереди
+const AT: Record<Exclude<Summary, "repeat_comment" | "send_failed">, [Stage, StageState]> = {
+  sending: ["dm", "current"],
+  dm_failed: ["dm", "failed"],
+  waiting_click: ["click", "current"],
+  follow_asked: ["follow", "current"],
+  clicked: ["material", "current"],
+  material_failed: ["material", "failed"],
+  delivered: ["material", "done"],
+};
+
+/** Дорожка выдачи для карточки: этапы по порядку и где выдача сейчас. Выводится из
+ * summary(), чтобы дорожка и надпись итога не разошлись. null: дорожки нет. */
+export function stages(steps: Step[]): { stage: Stage; state: StageState }[] | null {
+  const now = summary(steps);
+  if (now === null || now === "repeat_comment") return null;
+  const has = (step: Step["step"]) => steps.some((s) => s.step === step);
+  // этап неудачи стёрся: до нажатия не ушёл директ, после него материал
+  const [at, state] =
+    now === "send_failed" ? ([has("clicked") ? "material" : "dm", "failed"] as const) : AT[now];
+  // подписку показываем, только если о ней правда просили: включена ли проверка
+  // в автоответе, из истории не узнать
+  const order: Stage[] = has("follow_asked")
+    ? ["dm", "click", "follow", "material"]
+    : ["dm", "click", "material"];
+  const index = order.indexOf(at);
+  return order.map((stage, i) => ({
+    stage,
+    state: i < index ? "done" : i === index ? state : "todo",
+  }));
+}
