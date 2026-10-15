@@ -26,6 +26,8 @@ registered company needed. Data, tokens and messages stay with you.
 - Autoreplies: keywords under a post, a reply in the comments and in DMs
 - Follow check: one reply for followers, another for everyone else
 - A weekly funnel: from the comment to the delivered material
+- A journal: which step each person is at, how many are waiting to tap or to
+  follow, and why an autoreply did or didn't fire
 - Multiple Instagram accounts in one install
 - A queue that stays within Instagram limits (750 replies per hour per
   account) when a post goes viral

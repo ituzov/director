@@ -113,7 +113,12 @@ The `/privacy` page says a follower can ask to have their data deleted. There
 is no automatic deletion yet, so you do it by hand with two commands on the
 server.
 
-First find the person's Instagram id by their username (without `@`):
+First find the person's Instagram id. The easiest way is the Journal: on the
+All events tab, expand any row from this person, it says "From: @username · id
+1234567890". This also finds the id from direct messages, which have no
+username.
+
+If you prefer the database, find the id by username (without `@`):
 
 ```sh
 cd /opt/director
@@ -123,8 +128,7 @@ SELECT DISTINCT person_id FROM activity.event
 SQL
 ```
 
-The username is found if the person left comments. Direct messages arrive
-without a username, only with an id.
+The username is found if the person left comments.
 
 Then put the id into `pid` and delete everything linked to it: their comments
 and messages, replies to them, events and deliveries. It all runs in one
