@@ -5,7 +5,7 @@ import uuid
 from collections import defaultdict
 from datetime import datetime
 
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, func, select, tuple_, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -282,3 +282,42 @@ async def autoreply_counts(
         .order_by(triggered.desc(), Autoreply.name)
     )
     return [(r[0], r[1], r[2], r[3], r[4]) for r in rows]
+
+
+async def deliveries_page(
+    session: AsyncSession,
+    account_id: uuid.UUID,
+    stages: list[str] | None,
+    *,
+    before: uuid.UUID | None,
+    limit: int,
+) -> list[tuple[Delivery, str]]:
+    """Выдачи аккаунта с названием автоответа, свежие сверху; stages: только на этих
+    этапах. before: старше этой выдачи. На одну больше limit: видно, есть ли дальше."""
+    query = (
+        select(Delivery, Autoreply.name)
+        .join(Autoreply, Autoreply.id == Delivery.autoreply_id)
+        .where(Delivery.account_id == account_id)
+    )
+    if stages:
+        query = query.where(Delivery.stage.in_(stages))
+    if before is not None:
+        anchor = await session.get(Delivery, before)
+        # закладка чужого аккаунта резала бы список по чужому времени: считаем её неизвестной
+        if anchor is None or anchor.account_id != account_id:
+            return []
+        query = query.where(
+            tuple_(Delivery.created_at, Delivery.id) < (anchor.created_at, anchor.id)
+        )
+    query = query.order_by(Delivery.created_at.desc(), Delivery.id.desc()).limit(limit + 1)
+    return [(d, name) for d, name in await session.execute(query)]
+
+
+async def stage_counts(session: AsyncSession, account_id: uuid.UUID) -> dict[str, int]:
+    """Сколько выдач аккаунта сейчас на каждом этапе. Этапа без выдач в ответе нет."""
+    rows = await session.execute(
+        select(Delivery.stage, func.count())
+        .where(Delivery.account_id == account_id)
+        .group_by(Delivery.stage)
+    )
+    return {stage: count for stage, count in rows.all()}

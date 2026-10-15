@@ -218,6 +218,16 @@ async def inbox_page(
     return list(await session.scalars(query))
 
 
+async def inbox_by_keys(
+    session: AsyncSession, ig_account_id: str, dedup_keys: list[str]
+) -> list[InboxEvent]:
+    """События аккаунта по ключам отсева: ключ уникален и под индексом."""
+    query = select(InboxEvent).where(
+        InboxEvent.ig_account_id == ig_account_id, InboxEvent.dedup_key.in_(dedup_keys)
+    )
+    return list(await session.scalars(query))
+
+
 async def usernames_from_comments(
     session: AsyncSession, ig_account_id: str, person_ids: list[str]
 ) -> dict[str, str]:

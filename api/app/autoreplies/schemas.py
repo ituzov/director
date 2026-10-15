@@ -151,3 +151,40 @@ class HistoryOut(BaseModel):
     """Шаги выдачи по комментам. Коммента без шагов в ответе нет: автоответ его не брал."""
 
     comments: dict[str, list[StepOut]]
+
+
+Stage = Literal[
+    "sending",
+    "waiting_click",
+    "dm_failed",
+    "clicked",
+    "follow_asked",
+    "material_failed",
+    "delivered",
+]
+
+
+class DeliveryOut(BaseModel):
+    id: uuid.UUID
+    comment_id: str
+    person_id: str
+    # ник и текст коммента; None: во входящих его уже нет
+    username: str | None
+    text: str | None
+    autoreply_id: uuid.UUID
+    autoreply_name: str
+    keyword: str
+    stage: Stage
+    created_at: datetime
+
+
+class DeliveryPageOut(BaseModel):
+    items: list[DeliveryOut]
+    # закладка для следующей страницы, в before; None: дальше пусто
+    next: uuid.UUID | None
+
+
+class StageCountsOut(BaseModel):
+    """Сколько выдач сейчас на каждом этапе: для вкладок «Выдач»."""
+
+    counts: dict[Stage, int]

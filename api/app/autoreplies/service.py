@@ -561,3 +561,78 @@ async def history(
             )
         )
     return steps
+
+
+# этапы выдачи, как их хранит delivery.stage (там же проверка в базе)
+STAGES = (
+    "sending",
+    "waiting_click",
+    "dm_failed",
+    "clicked",
+    "follow_asked",
+    "material_failed",
+    "delivered",
+)
+
+
+@dataclass(frozen=True, slots=True)
+class DeliveryItem:
+    """Выдача для списка «Выдач»: кому, на какой коммент, каким автоответом и где сейчас."""
+
+    id: uuid.UUID
+    comment_id: str
+    person_id: str
+    # ник и текст из входящих instagram; None: там коммента уже нет
+    username: str | None
+    text: str | None
+    autoreply_id: uuid.UUID
+    autoreply_name: str
+    keyword: str
+    stage: str
+    created_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class DeliveryPage:
+    items: list[DeliveryItem]
+    # закладка следующей страницы: id последней выдачи; None, если дальше пусто
+    next: uuid.UUID | None
+
+
+async def deliveries(
+    session: AsyncSession,
+    account_id: uuid.UUID,
+    *,
+    stages: list[str] | None,
+    before: uuid.UUID | None,
+    limit: int,
+) -> DeliveryPage:
+    """Выдачи аккаунта страницами, свежие сверху; stages: только на этих этапах."""
+    rows = await repository.deliveries_page(session, account_id, stages, before=before, limit=limit)
+    more = len(rows) > limit
+    rows = rows[:limit]
+    texts = await instagram.comment_texts(session, account_id, [d.comment_id for d, _ in rows])
+    items = []
+    for d, name in rows:
+        seen = texts.get(d.comment_id)
+        items.append(
+            DeliveryItem(
+                id=d.id,
+                comment_id=d.comment_id,
+                person_id=d.person_id,
+                username=seen.username if seen else None,
+                text=seen.text if seen else None,
+                autoreply_id=d.autoreply_id,
+                autoreply_name=name,
+                keyword=d.keyword,
+                stage=d.stage,
+                created_at=d.created_at,
+            )
+        )
+    return DeliveryPage(items=items, next=rows[-1][0].id if more else None)
+
+
+async def stage_counts(session: AsyncSession, account_id: uuid.UUID) -> dict[str, int]:
+    """Сколько выдач сейчас на каждом этапе, для вкладок; этап без выдач с нулём."""
+    counts = await repository.stage_counts(session, account_id)
+    return {stage: counts.get(stage, 0) for stage in STAGES}

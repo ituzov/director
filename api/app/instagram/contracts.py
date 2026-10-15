@@ -38,6 +38,14 @@ class CommentRef:
 
 
 @dataclass(frozen=True, slots=True)
+class CommentTextRef:
+    """Что видно о комменте во входящих: ник автора и текст. None: Meta не прислала."""
+
+    username: str | None
+    text: str | None
+
+
+@dataclass(frozen=True, slots=True)
 class PostbackRef:
     """Нажатие кнопки в директе, разобранное из входящих."""
 

@@ -21,8 +21,12 @@ from app.autoreplies.schemas import (
     AutoreplyForm,
     AutoreplyIn,
     AutoreplyOut,
+    DeliveryOut,
+    DeliveryPageOut,
     EnabledIn,
     HistoryOut,
+    Stage,
+    StageCountsOut,
     StatsOut,
     StepOut,
 )
@@ -126,6 +130,28 @@ async def get_history(
         step = asdict(s)
         comments.setdefault(step.pop("comment_id"), []).append(StepOut(**step))
     return HistoryOut(comments=comments)
+
+
+# тоже выше /{autoreply_id}
+@router.get("/deliveries")
+async def list_deliveries(
+    account_id: uuid.UUID,
+    session: SessionDep,
+    user: identity.CurrentUserRef,
+    stage: Annotated[list[Stage] | None, Query()] = None,
+    before: uuid.UUID | None = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+) -> DeliveryPageOut:
+    """Выдачи аккаунта, свежие сверху; stage можно повторить: выдачи на любом из этапов."""
+    page = await service.deliveries(session, account_id, stages=stage, before=before, limit=limit)
+    return DeliveryPageOut(items=[DeliveryOut(**asdict(i)) for i in page.items], next=page.next)
+
+
+@router.get("/deliveries/counts")
+async def get_stage_counts(
+    account_id: uuid.UUID, session: SessionDep, user: identity.CurrentUserRef
+) -> StageCountsOut:
+    return StageCountsOut(counts=await service.stage_counts(session, account_id))
 
 
 @router.get("/{autoreply_id}")

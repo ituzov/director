@@ -22,7 +22,7 @@ from app import activity
 from app.config import settings
 from app.core import crypto, signing
 from app.instagram import graph, repository, webhook
-from app.instagram.contracts import AccountRef
+from app.instagram.contracts import AccountRef, CommentTextRef
 from app.instagram.exceptions import (
     AccountNotFound,
     AccountUnavailable,
@@ -502,6 +502,25 @@ async def list_inbox(
         for i in items
     ]
     return InboxPage(items=items, next=events[-1].id if more else None)
+
+
+async def comment_texts(
+    session: AsyncSession, account_id: uuid.UUID, comment_ids: list[str]
+) -> dict[str, CommentTextRef]:
+    """Ник и текст комментов аккаунта по их id, из входящих. Коммента нет во входящих
+    (стёрли или чужой аккаунт): его нет и в ответе."""
+    if not comment_ids:
+        return {}
+    account = await repository.get_account(session, account_id)
+    if account is None:
+        return {}
+    keys = [webhook.dedup_key(webhook.COMMENT, i) for i in comment_ids]
+    texts = {}
+    for event in await repository.inbox_by_keys(session, account.ig_user_id, keys):
+        item = _inbox_item(event)
+        if item.comment_id:
+            texts[item.comment_id] = CommentTextRef(username=item.username, text=item.text)
+    return texts
 
 
 def _inbox_item(event: InboxEvent) -> InboxItem:
