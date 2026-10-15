@@ -541,6 +541,10 @@
       "from": "Прислал",
       "post": "Пост",
       "result": "Разбор"
+    },
+    "waiting": {
+      "hours": "ждём {count, plural, =0 {меньше часа} one {# час} few {# часа} many {# часов} other {# часа}}",
+      "days": "ждём {count, plural, one {# день} few {# дня} many {# дней} other {# дня}}"
     }
   }
 }

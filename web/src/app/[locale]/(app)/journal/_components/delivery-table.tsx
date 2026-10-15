@@ -5,7 +5,7 @@ import { useFormatter, useTranslations } from "next-intl";
 import { useId, useState } from "react";
 
 import { Link } from "@/i18n/navigation";
-import { type Delivery, type DeliveryPage, STAGE_TONE, type Tab } from "@/lib/deliveries";
+import { type Delivery, type DeliveryPage, STAGE_TONE, type Tab, waiting } from "@/lib/deliveries";
 import { type History, type Step, stages } from "@/lib/inbox";
 import { cn } from "@/lib/utils";
 
@@ -106,6 +106,9 @@ function Row({ delivery: d, steps, now }: { delivery: Delivery; steps: Step[]; n
     ?.filter(({ state }) => state === "done")
     .map(({ stage }) => t(`stage.${stage}`))
     .join(" → ");
+  const wait = waiting(d, now);
+  // под этапом: сколько ждём человека, а у остальных пройденный путь
+  const below = wait ? t(`waiting.${wait.unit}`, { count: wait.count }) : path;
 
   return (
     <li>
@@ -114,6 +117,8 @@ function Row({ delivery: d, steps, now }: { delivery: Delivery; steps: Step[]; n
       <div
         className={cn(
           ROW,
+          // ждём дольше недели: приглушаем, но не прячем, нажать можно и потом
+          wait?.stale && "opacity-60",
           "relative py-3 text-sm hover:bg-muted/50 has-[button:focus-visible]:outline-2 has-[button:focus-visible]:-outline-offset-2 has-[button:focus-visible]:outline-ring",
         )}
       >
@@ -159,8 +164,8 @@ function Row({ delivery: d, steps, now }: { delivery: Delivery; steps: Step[]; n
           >
             {t(`stageNow.${d.stage}`)}
           </span>
-          {path && (
-            <span className="col-start-2 truncate text-xs text-muted-foreground">{path}</span>
+          {below && (
+            <span className="col-start-2 truncate text-xs text-muted-foreground">{below}</span>
           )}
         </span>
         <ChevronRight

@@ -20,6 +20,8 @@ export type Delivery = {
   autoreply_name: string;
   keyword: string;
   stage: DeliveryStage;
+  // с какого момента выдача на этом этапе
+  stage_at: string;
   created_at: string;
 };
 
@@ -69,3 +71,19 @@ export const STAGE_TONE: Record<DeliveryStage, Tone> = {
   material_failed: "bad",
   delivered: "ok",
 };
+
+// этапы, где ждём человека: нажать кнопку или подписаться и нажать снова
+const WAITING: readonly DeliveryStage[] = ["waiting_click", "follow_asked"];
+// дольше недели ждём уже без надежды: строку приглушаем, но не прячем, нажать можно и потом
+export const STALE_DAYS = 7;
+
+export type Waiting = { unit: "hours" | "days"; count: number; stale: boolean };
+
+/** Сколько ждём человека на этапе: часы в первые сутки, дальше дни. null: не ждём. */
+export function waiting(d: Pick<Delivery, "stage" | "stage_at">, now: number): Waiting | null {
+  if (!WAITING.includes(d.stage)) return null;
+  const hours = Math.max(0, Math.floor((now - Date.parse(d.stage_at)) / 3_600_000));
+  if (hours < 24) return { unit: "hours", count: hours, stale: false };
+  const days = Math.floor(hours / 24);
+  return { unit: "days", count: days, stale: days >= STALE_DAYS };
+}

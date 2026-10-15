@@ -541,6 +541,10 @@
       "from": "From",
       "post": "Post",
       "result": "Processing"
+    },
+    "waiting": {
+      "hours": "waiting {count, plural, =0 {under an hour} one {# hour} other {# hours}}",
+      "days": "waiting {count, plural, one {# day} other {# days}}"
     }
   }
 }
