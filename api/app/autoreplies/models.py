@@ -125,6 +125,13 @@ class Delivery(Base):
         UniqueConstraint(
             "autoreply_id", "media_id", "person_id", name="uq_delivery_person_per_post"
         ),
+        CheckConstraint(
+            "stage IN ('sending', 'waiting_click', 'dm_failed', 'clicked', "
+            "'follow_asked', 'material_failed', 'delivered')",
+            name="stage_known",
+        ),
+        # вкладка «Выдач»: выдачи аккаунта на этапе, свежие сверху
+        Index("ix_delivery_account_stage", "account_id", "stage", "created_at", "id"),
         {"schema": "autoreplies"},
     )
     __mapper_args__ = {"eager_defaults": True}
@@ -158,3 +165,8 @@ class Delivery(Base):
     # ответ под комментом, выбранный при совпадении, с ником. Уходит, только когда
     # ушёл директ: иначе «отправили в директ» под комментом было бы неправдой
     comment_reply: Mapped[str | None] = mapped_column(Text)
+    # где выдача сейчас, для вкладок «Выдач»: обработчики двигают его вместе с журналом.
+    # sending: директ в очереди; waiting_click: директ ушёл; clicked: нажал, материал
+    # в очереди; follow_asked: попросили подписаться; delivered: получил;
+    # dm_failed, material_failed: не ушло
+    stage: Mapped[str] = mapped_column(String(16), server_default="sending")

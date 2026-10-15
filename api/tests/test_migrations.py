@@ -9,6 +9,7 @@ import os
 import subprocess
 import sys
 import uuid
+from datetime import UTC, datetime
 
 import psycopg
 import pytest
@@ -109,4 +110,94 @@ def test_inbox_handled_restored(db):
         "ours-unknown": ("autoreplies", None),
         "foreign": (None, None),
         "failed": (None, None),
+    }
+
+
+def delivery(conn, autoreply_id, name: str, **at) -> uuid.UUID:
+    delivery_id = uuid.uuid4()
+    conn.execute(
+        """INSERT INTO autoreplies.delivery
+           (id, autoreply_id, account_id, comment_id, media_id, person_id, keyword,
+            sent_at, clicked_at, delivered_at)
+           VALUES (%s, %s, %s, %s, 'm1', %s, 'гайд', %s, %s, %s)""",
+        (
+            delivery_id,
+            autoreply_id,
+            uuid.uuid4(),
+            name,
+            name,
+            at.get("sent"),
+            at.get("clicked"),
+            at.get("delivered"),
+        ),
+    )
+    return delivery_id
+
+
+def step(conn, kind: str, delivery_id, minute: int, **data) -> None:
+    conn.execute(
+        """INSERT INTO activity.event (id, kind, comment_id, data, occurred_at)
+           VALUES (%s, %s, 'c', %s, %s)""",
+        (
+            uuid.uuid4(),
+            kind,
+            json.dumps({"delivery_id": str(delivery_id)} | data),
+            datetime(2026, 1, 2, 12, minute, tzinfo=UTC),
+        ),
+    )
+
+
+def test_delivery_stage_restored(db):
+    """Этап прошлых выдач: по полям выдачи, уточнённый последним событием журнала."""
+    alembic("upgrade", "207c348721e9")
+    autoreply_id = uuid.uuid4()
+    db.execute(
+        """INSERT INTO autoreplies.autoreply
+           (id, account_id, name, scope, intro_text, button_text, reply_text, created_by,
+            enabled, follow_gate)
+           VALUES (%s, %s, 'Гайд', 'all', 'Держи', 'Получить', 'ссылка', %s, true, false)""",
+        (autoreply_id, uuid.uuid4(), uuid.uuid4()),
+    )
+    now = "2026-01-02 12:00+00"
+    # журнала нет: только по полям
+    delivery(db, autoreply_id, "fresh")
+    delivery(db, autoreply_id, "sent", sent=now)
+    delivery(db, autoreply_id, "got", sent=now, clicked=now, delivered=now)
+    delivery(db, autoreply_id, "pressed", sent=now, clicked=now)
+    # что попросили подписаться и что не ушло, видно только в журнале
+    asked = delivery(db, autoreply_id, "asked", sent=now, clicked=now)
+    step(db, "autoreply.sent", asked, 1)
+    step(db, "autoreply.clicked", asked, 2)
+    step(db, "autoreply.follow_asked", asked, 3)
+    # ответ под комментом пришёл последним: этап не меняет
+    step(db, "autoreply.commented", asked, 4)
+    polite = delivery(db, autoreply_id, "polite", sent=now)
+    step(db, "autoreply.sent", polite, 1)
+    step(db, "autoreply.send_failed", polite, 2, stage="comment")
+    dm_lost = delivery(db, autoreply_id, "dm_lost")
+    step(db, "autoreply.send_failed", dm_lost, 1, stage="intro")
+    lost = delivery(db, autoreply_id, "lost", sent=now, clicked=now)
+    step(db, "autoreply.send_failed", lost, 3, stage="material")
+    # провалился материал, потом человек нажал снова: последнее событие решает
+    again = delivery(db, autoreply_id, "again", sent=now, clicked=now)
+    step(db, "autoreply.send_failed", again, 3, stage="material")
+    step(db, "autoreply.clicked", again, 4)
+    # выдан: журнал со старой ошибкой его не перебивает
+    done = delivery(db, autoreply_id, "done", sent=now, clicked=now, delivered=now)
+    step(db, "autoreply.send_failed", done, 9, stage="material")
+
+    alembic("upgrade", "head")
+
+    stages = dict(db.execute("SELECT comment_id, stage FROM autoreplies.delivery").fetchall())
+    assert stages == {
+        "fresh": "sending",
+        "sent": "waiting_click",
+        "got": "delivered",
+        "pressed": "clicked",
+        "polite": "waiting_click",
+        "asked": "follow_asked",
+        "dm_lost": "dm_failed",
+        "lost": "material_failed",
+        "again": "clicked",
+        "done": "delivered",
     }

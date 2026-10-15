@@ -16,7 +16,7 @@ from app.autoreplies.exceptions import (
     AutoreplyConflict,
     AutoreplyNotFound,
 )
-from app.autoreplies.models import Autoreply
+from app.autoreplies.models import Autoreply, Delivery
 from app.autoreplies.schemas import AutoreplyForm, AutoreplyIn
 
 log = structlog.get_logger("app.autoreplies")
@@ -331,6 +331,8 @@ async def handle_postback(session: AsyncSession, postback: instagram.PostbackRef
 
     if delivery.clicked_at is None:
         delivery.clicked_at = postback.acted_at
+    # нажал: материал (или просьба подписаться) ставится в очередь
+    _move(delivery, "clicked")
     # выключенный или архивный всё равно выдаёт: человеку пообещали, он нажал
     autoreply = await repository.get_autoreply(session, delivery.autoreply_id)
     gate = None
@@ -373,12 +375,16 @@ async def handle_send_result(session: AsyncSession, result: instagram.OutboxResu
     if result.outcome != "sent":
         kind = "autoreply.send_failed"
         data |= {"outcome": result.outcome, "reason": result.reason}
+        if stage == INTRO:
+            _move(delivery, "dm_failed")
         if stage == MATERIAL:
+            _move(delivery, "material_failed")
             # материал не ушёл, а ключ его письма занят навсегда: новое нажатие
             # начнёт новый раунд, иначе оно не встанет в очередь
             delivery.gate_round += 1
     elif stage == INTRO:
         delivery.sent_at = func.now()
+        _move(delivery, "waiting_click")
         kind = "autoreply.sent"
         # директ ушёл, теперь правда «отправили в директ». Не ушёл: ответа не будет
         if delivery.comment_reply:
@@ -395,9 +401,11 @@ async def handle_send_result(session: AsyncSession, result: instagram.OutboxResu
     elif stage == MATERIAL and result.variant == instagram.NOT_FOLLOWING:
         # ушла просьба подписаться: следующее нажатие начнёт новый раунд
         delivery.gate_round += 1
+        _move(delivery, "follow_asked")
         kind = "autoreply.follow_asked"
     elif stage == MATERIAL:
         delivery.delivered_at = func.now()
+        _move(delivery, "delivered")
         kind = "autoreply.delivered"
         if result.variant is not None:
             # following или unknown: подписку проверили или Meta не дала проверить
@@ -415,6 +423,13 @@ async def handle_send_result(session: AsyncSession, result: instagram.OutboxResu
         # отчёт мог опоздать: в журнале время отправки, иначе «нажал» встал бы раньше директа
         occurred_at=result.finished_at,
     )
+
+
+def _move(delivery: Delivery, stage: str) -> None:
+    """Где выдача сейчас. Получил материал: окончательно, запоздалый отчёт прошлого
+    раунда этап назад не откатит."""
+    if delivery.stage != "delivered":
+        delivery.stage = stage
 
 
 def _ref(delivery_id: uuid.UUID, stage: str) -> str:
