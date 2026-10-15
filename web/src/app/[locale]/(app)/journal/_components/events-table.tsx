@@ -48,7 +48,7 @@ function oneOf<V extends string>(list: readonly V[], value: string | null): valu
 
 /** Все события от Meta таблицей: что пришло и чем кончился разбор. Только сам разбор,
  * историю выдач не собираем: она во «Выдачах». */
-export function InboxList({ accountId, tab, initial, names, now }: Props) {
+export function EventsTable({ accountId, tab, initial, names, now }: Props) {
   const t = useTranslations("Inbox");
   const { items, next, failed, pending, more } = useFeed(initial, {}, (before) =>
     loadInbox(accountId, before, tab),
@@ -217,7 +217,7 @@ function what(item: InboxItem, t: T): string | null {
   return null;
 }
 
-export function InboxListSkeleton() {
+export function TableSkeleton() {
   return (
     <div className="divide-y rounded-lg border">
       {Array.from({ length: 6 }, (_, i) => (

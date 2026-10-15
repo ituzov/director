@@ -17,7 +17,7 @@ import { getToken } from "@/lib/session";
 import { DeliveryTable } from "./_components/delivery-table";
 import { DeliveryTabs } from "./_components/delivery-tabs";
 import { EventsTabs } from "./_components/events-tabs";
-import { InboxList, InboxListSkeleton } from "./_components/inbox-list";
+import { EventsTable, TableSkeleton } from "./_components/events-table";
 import { RefreshButton } from "./_components/refresh-button";
 import { loadHistory } from "./history";
 
@@ -37,7 +37,7 @@ export default function InboxPageRoute({ searchParams }: Props) {
         description={t("description")}
         actions={<RefreshButton />}
       >
-        <Suspense fallback={<InboxListSkeleton />}>
+        <Suspense fallback={<TableSkeleton />}>
           <Feed searchParams={searchParams} />
         </Suspense>
       </Panel>
@@ -144,7 +144,7 @@ async function Events({ accountId, tab, token, now }: ViewProps & { tab: ResultT
     <>
       <EventsTabs tab={tab} counts={counts} />
       {/* «Обновить» и смена вкладки дают новый ключ: список собирается с первой страницы */}
-      <InboxList
+      <EventsTable
         key={`${accountId}:${tab}:${now}`}
         accountId={accountId}
         tab={tab}
