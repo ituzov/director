@@ -96,7 +96,7 @@ async def get_stats(
     user: identity.CurrentUserRef,
     days: Annotated[int, Query(ge=1, le=90)] = 7,
 ) -> StatsOut:
-    """Воронка выдач аккаунта за days дней. Выдачи хранятся 90 дней, дальше считать нечего."""
+    """Воронка выдач аккаунта за days дней."""
     result = await service.stats(session, account_id, days=days)
     counts = [AutoreplyCountsOut(**asdict(c)) for c in result.by_autoreply]
     return StatsOut(
