@@ -106,6 +106,8 @@ class InboxItemOut(BaseModel):
     # вид вложения сообщения без текста
     attachment: str | None
     media_id: str | None
+    # id коммента у Meta, только у комментов: по нему история выдачи в autoreplies
+    comment_id: str | None
     # None: ещё не разобрано; done, skipped, failed
     outcome: str | None
     reason: str | None

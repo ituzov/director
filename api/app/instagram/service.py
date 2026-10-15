@@ -452,6 +452,8 @@ class InboxItem:
     # вид вложения сообщения без текста: ig_reel, image, share
     attachment: str | None
     media_id: str | None
+    # id коммента у Meta: по нему соседи рассказывают, что было дальше
+    comment_id: str | None
     # None: worker ещё не разобрал
     outcome: str | None
     reason: str | None
@@ -492,11 +494,12 @@ async def list_inbox(
 
 def _inbox_item(event: InboxEvent) -> InboxItem:
     p = _obj(event.payload)
-    person = username = text = attachment = media_id = None
+    person = username = text = attachment = media_id = comment_id = None
     if event.kind == webhook.COMMENT:
         author = _obj(p.get("from"))
         person, username = _str(author.get("id")), _str(author.get("username"))
         text, media_id = _str(p.get("text")), _str(_obj(p.get("media")).get("id"))
+        comment_id = _str(p.get("id"))
     else:
         person = _str(_obj(p.get("sender")).get("id"))
         if event.kind == webhook.POSTBACK:
@@ -516,6 +519,7 @@ def _inbox_item(event: InboxEvent) -> InboxItem:
         text=text,
         attachment=attachment,
         media_id=media_id,
+        comment_id=comment_id,
         outcome=event.outcome,
         reason=event.reason,
         handled_by=event.handled_by,
