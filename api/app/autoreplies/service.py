@@ -483,3 +483,62 @@ async def stats(session: AsyncSession, account_id: uuid.UUID, *, days: int) -> S
         undelivered=undelivered,
         by_autoreply=[AutoreplyCounts(*row) for row in counts],
     )
+
+
+# шаг выдачи по событию журнала; неудачная отправка отдельно, по этапу
+_STEPS = {
+    "autoreply.matched": "matched",
+    "autoreply.repeat_comment": "repeat_comment",
+    "autoreply.sent": "dm_sent",
+    "autoreply.commented": "commented",
+    "autoreply.clicked": "clicked",
+    "autoreply.repeat_click": "repeat_click",
+    "autoreply.follow_asked": "follow_asked",
+    "autoreply.delivered": "delivered",
+}
+_FAILED = {INTRO: "dm_failed", COMMENT: "comment_failed", MATERIAL: "material_failed"}
+
+
+@dataclass(frozen=True, slots=True)
+class Step:
+    """Что автоответ сделал с комментом, кодом: текст для человека подбирает web."""
+
+    comment_id: str
+    step: str
+    at: datetime
+    autoreply_id: uuid.UUID | None
+    # слово, на которое сработал автоответ
+    keyword: str | None = None
+    # неудачная отправка: failed или expired, и код ошибки Meta или наша причина
+    outcome: str | None = None
+    reason: str | None = None
+    # у материала: following или unknown, если Meta не дала проверить подписку
+    follow: str | None = None
+
+
+async def history(
+    session: AsyncSession, account_id: uuid.UUID, comment_ids: list[str]
+) -> list[Step]:
+    """Шаги выдачи по комментам аккаунта, по порядку. Чужие события журнала пропускаем."""
+    steps = []
+    for e in await activity.comment_history(session, account_id, comment_ids):
+        if e.kind == "autoreply.send_failed":
+            # этап стёрт вместе с data: неудача остаётся, но без подробностей
+            step = _FAILED.get(e.data.get("stage"), "send_failed")
+        else:
+            step = _STEPS.get(e.kind)
+        if step is None or e.comment_id is None:
+            continue
+        steps.append(
+            Step(
+                e.comment_id,
+                step,
+                e.occurred_at,
+                e.autoreply_id,
+                keyword=e.data.get("keyword"),
+                outcome=e.data.get("outcome"),
+                reason=e.data.get("reason"),
+                follow=e.data.get("follow"),
+            )
+        )
+    return steps

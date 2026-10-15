@@ -133,3 +133,21 @@ class StatsOut(BaseModel):
     top: list[AutoreplyCountsOut]
     # все срабатывавшие за период: для карточек. Кого нет, тот не срабатывал
     by_autoreply: list[AutoreplyCountsOut]
+
+
+class StepOut(BaseModel):
+    """Шаг выдачи: код для текста в web и подробности, если они есть."""
+
+    step: str
+    at: datetime
+    autoreply_id: uuid.UUID | None
+    keyword: str | None
+    outcome: str | None
+    reason: str | None
+    follow: str | None
+
+
+class HistoryOut(BaseModel):
+    """Шаги выдачи по комментам. Коммента без шагов в ответе нет: автоответ его не брал."""
+
+    comments: dict[str, list[StepOut]]

@@ -22,7 +22,9 @@ from app.autoreplies.schemas import (
     AutoreplyIn,
     AutoreplyOut,
     EnabledIn,
+    HistoryOut,
     StatsOut,
+    StepOut,
 )
 from app.db import SessionDep
 
@@ -108,6 +110,22 @@ async def get_stats(
         top=counts[:5],
         by_autoreply=counts,
     )
+
+
+# тоже выше /{autoreply_id}
+@router.get("/history")
+async def get_history(
+    account_id: uuid.UUID,
+    comment_id: Annotated[list[str], Query(max_length=100)],
+    session: SessionDep,
+    user: identity.CurrentUserRef,
+) -> HistoryOut:
+    """Что автоответы сделали с этими комментами: для строк ленты входящих."""
+    comments: dict[str, list[StepOut]] = {}
+    for s in await service.history(session, account_id, comment_id):
+        step = asdict(s)
+        comments.setdefault(step.pop("comment_id"), []).append(StepOut(**step))
+    return HistoryOut(comments=comments)
 
 
 @router.get("/{autoreply_id}")
