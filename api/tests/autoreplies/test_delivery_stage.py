@@ -5,11 +5,12 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from app import autoreplies, instagram
 from app.autoreplies.models import Autoreply, Delivery
-from app.instagram.models import Account
+from app.instagram.models import Account, OutboxTask
 
 T0 = datetime(2026, 1, 2, 12, 0, tzinfo=UTC)
 
@@ -148,14 +149,65 @@ async def test_late_intro_report_does_not_roll_back(session, delivery, after, wa
     assert await stage(session, delivery) == want
 
 
-async def test_late_follow_report_after_new_click(session, delivery):
-    # просьба подписаться ушла в 12:03, человек подписался и нажал в 12:04, а отчёт
-    # о просьбе дошёл только теперь: он не вернёт в «ждём подписку»
+async def materials(session, delivery) -> list[str]:
+    """Ключи писем с материалом этой выдачи в очереди: по одному на раунд."""
+    keys = await session.scalars(
+        select(OutboxTask.dedup_key)
+        # instagram добавляет к ключу вызывающего свой префикс вида письма
+        .where(OutboxTask.dedup_key.like(f"message:material:{delivery.id}:%"))
+        .order_by(OutboxTask.dedup_key)
+    )
+    return [k.removeprefix(f"message:material:{delivery.id}:") for k in keys]
+
+
+@pytest.mark.parametrize(
+    ("variant", "outcome"), [(instagram.NOT_FOLLOWING, "sent"), (None, "failed")]
+)
+async def test_late_round_report_after_new_click(session, delivery, variant, outcome):
+    # раунд 0 кончился в 12:03 (просьба подписаться или материал не ушёл), человек
+    # нажал снова в 12:04, а отчёт о раунде дошёл только теперь. Нажатие попало в
+    # дубль раунда 0, поэтому материал раунда 1 ставит сам отчёт
     await report(session, delivery, "intro", 1)
     await click(session, delivery, 2)
     await click(session, delivery, 4)
-    await report(session, delivery, "material", 3, variant=instagram.NOT_FOLLOWING)
+    assert await materials(session, delivery) == ["0"]
+    await report(session, delivery, "material", 3, outcome=outcome, variant=variant)
     assert await stage(session, delivery) == "clicked"
+    assert await materials(session, delivery) == ["0", "1"]
+
+
+async def test_late_failure_report_after_delivery_no_second_material(session, delivery):
+    # материал раунда 0 не ушёл в 12:03, человек нажал снова, раунд 1 выдал материал
+    # в 12:05, а отчёт о неудаче раунда 0 дошёл только теперь: второй раз не шлём
+    await report(session, delivery, "intro", 1)
+    await click(session, delivery, 2)
+    await click(session, delivery, 4)
+    await report(session, delivery, "material", 5)
+    assert await stage(session, delivery) == "delivered"
+    before = await materials(session, delivery)
+    await report(session, delivery, "material", 3, outcome="failed")
+    assert await stage(session, delivery) == "delivered"
+    assert await materials(session, delivery) == before
+
+
+async def test_round_report_in_time_no_extra_letter(session, delivery):
+    # отчёт о просьбе дошёл вовремя, потом нажатие: письмо раунда 1 ставит нажатие,
+    # а отчёт ничего лишнего не ставит
+    await report(session, delivery, "intro", 1)
+    await click(session, delivery, 2)
+    await report(session, delivery, "material", 3, variant=instagram.NOT_FOLLOWING)
+    assert await materials(session, delivery) == ["0"]
+    await click(session, delivery, 4)
+    assert await materials(session, delivery) == ["0", "1"]
+
+
+async def test_round_report_without_new_click(session, delivery):
+    # отчёт опоздал, но нового нажатия не было: ставить нечего, ждём подписку
+    await report(session, delivery, "intro", 1)
+    await click(session, delivery, 2)
+    await report(session, delivery, "material", 3, variant=instagram.NOT_FOLLOWING)
+    assert await stage(session, delivery) == "follow_asked"
+    assert await materials(session, delivery) == ["0"]
 
 
 async def test_late_delivered_report_after_new_click(session, delivery):

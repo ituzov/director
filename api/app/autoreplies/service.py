@@ -335,6 +335,16 @@ async def handle_postback(session: AsyncSession, postback: instagram.PostbackRef
         delivery.clicked_at = postback.acted_at
     # нажал: материал (или просьба подписаться) ставится в очередь
     _move(delivery, "clicked", postback.received_at)
+    await _enqueue_material(session, delivery, acted_at=postback.acted_at)
+    activity.record(session, "autoreply.clicked", **journal)
+    return Taken(delivery.autoreply_id)
+
+
+async def _enqueue_material(
+    session: AsyncSession, delivery: Delivery, *, acted_at: datetime
+) -> None:
+    """Материал (или просьба подписаться) на нажатие, одно письмо на раунд. acted_at:
+    когда нажали по часам Meta, от него окно в 24 часа на ответ."""
     # выключенный или архивный всё равно выдаёт: человеку пообещали, он нажал
     autoreply = await repository.get_autoreply(session, delivery.autoreply_id)
     gate = None
@@ -348,7 +358,7 @@ async def handle_postback(session: AsyncSession, postback: instagram.PostbackRef
         session,
         account_id=delivery.account_id,
         recipient_id=delivery.person_id,
-        acted_at=postback.acted_at,
+        acted_at=acted_at,
         text=autoreply.reply_text,
         # одно письмо на раунд: пока оно в очереди, новые нажатия второе не поставят
         dedup_key=f"material:{delivery.id}:{delivery.gate_round}",
@@ -357,8 +367,21 @@ async def handle_postback(session: AsyncSession, postback: instagram.PostbackRef
         # Meta не дала проверить подписку: выдаём, а не гоняем человека по кругу
         if_unknown=instagram.FOLLOWING,
     )
-    activity.record(session, "autoreply.clicked", **journal)
-    return Taken(delivery.autoreply_id)
+
+
+async def _new_round(session: AsyncSession, delivery: Delivery, finished_at: datetime) -> None:
+    """Раунд выдачи кончился (ушла просьба подписаться или материал не ушёл): следующее
+    нажатие начнёт новый. Если человек уже нажал, пока отчёт об этом раунде опаздывал,
+    его нажатие ушло в дубль старого раунда, и материал никто не поставил: ставим сами.
+    Второго письма не будет: у нового раунда свой ключ отсева."""
+    delivery.gate_round += 1
+    # этап «нажал» и время новее итога раунда. После _move() время уже следует из этапа,
+    # но проверка оставлена, чтобы не зависеть от порядка вызова. Без проверки этапа
+    # запоздалый отчёт после выдачи прислал бы материал второй раз
+    if delivery.stage == "clicked" and delivery.stage_at > finished_at:
+        await _enqueue_material(
+            session, delivery, acted_at=delivery.last_click_at or delivery.stage_at
+        )
 
 
 async def handle_send_result(session: AsyncSession, result: instagram.OutboxResult) -> None:
@@ -383,7 +406,7 @@ async def handle_send_result(session: AsyncSession, result: instagram.OutboxResu
             _move(delivery, "material_failed", result.finished_at)
             # материал не ушёл, а ключ его письма занят навсегда: новое нажатие
             # начнёт новый раунд, иначе оно не встанет в очередь
-            delivery.gate_round += 1
+            await _new_round(session, delivery, result.finished_at)
     elif stage == INTRO:
         delivery.sent_at = func.now()
         _move(delivery, "waiting_click", result.finished_at)
@@ -402,8 +425,8 @@ async def handle_send_result(session: AsyncSession, result: instagram.OutboxResu
         kind = "autoreply.commented"
     elif stage == MATERIAL and result.variant == instagram.NOT_FOLLOWING:
         # ушла просьба подписаться: следующее нажатие начнёт новый раунд
-        delivery.gate_round += 1
         _move(delivery, "follow_asked", result.finished_at)
+        await _new_round(session, delivery, result.finished_at)
         kind = "autoreply.follow_asked"
     elif stage == MATERIAL:
         delivery.delivered_at = func.now()
