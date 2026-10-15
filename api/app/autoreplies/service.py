@@ -525,10 +525,11 @@ async def history(
     steps = []
     for e in await activity.comment_history(session, account_id, comment_ids):
         if e.kind == "autoreply.send_failed":
-            # этап стёрт вместе с data: неудача остаётся, но без подробностей
+            # этапа нет в data: неудача остаётся в цепочке, только без подробностей
             step = _FAILED.get(e.data.get("stage"), "send_failed")
         else:
             step = _STEPS.get(e.kind)
+        # comment_id есть всегда, искали по нему; проверка для типа Step.comment_id
         if step is None or e.comment_id is None:
             continue
         steps.append(

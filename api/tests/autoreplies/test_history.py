@@ -170,7 +170,7 @@ async def test_failures_by_stage(client, session, owner, delivery):
 
 
 async def test_failure_without_details_kept(client, session, owner, delivery):
-    # подробности стёрли: этапа нет, но неудача из цепочки не пропадает
+    # этапа в подробностях нет: неудача из цепочки всё равно не пропадает
     journal(session, delivery, "autoreply.send_failed")
     await session.commit()
     assert steps(await history(client, owner, delivery.account_id, "c1")) == ["send_failed"]

@@ -13,5 +13,5 @@ class EventRef:
     occurred_at: datetime
     comment_id: str | None
     autoreply_id: uuid.UUID | None
-    # подробности как записал модуль; пусто, если личное уже стёрли по сроку хранения
+    # подробности как записал модуль; могут быть пустыми
     data: dict
