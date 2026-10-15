@@ -88,7 +88,9 @@ def ids(result) -> list[str]:
 async def test_newest_first_with_comment_and_autoreply(client, session, owner, account):
     autoreply = await make_autoreply(session, account.id, "Чек-лист")
     await add(session, autoreply, "c1", minute=1)
-    await add(session, autoreply, "c2", minute=2, stage="delivered")
+    await add(
+        session, autoreply, "c2", minute=2, stage="delivered", stage_at=T0 + timedelta(minutes=7)
+    )
     await comment(session, "c2", "хочу чек-лист", "vasya")
 
     result = await page(client, owner, account.id)
@@ -100,6 +102,8 @@ async def test_newest_first_with_comment_and_autoreply(client, session, owner, a
         "delivered",
     )
     assert (first["autoreply_name"], first["keyword"]) == ("Чек-лист", "гайд")
+    # с какого момента на этапе, а не время выдачи: для «ждём 3 дня»
+    assert datetime.fromisoformat(first["stage_at"]) == T0 + timedelta(minutes=7)
     # коммента нет во входящих: ника и текста нет, выдача всё равно в списке
     assert (result["items"][1]["username"], result["items"][1]["text"]) == (None, None)
 

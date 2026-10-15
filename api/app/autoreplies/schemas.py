@@ -175,6 +175,8 @@ class DeliveryOut(BaseModel):
     autoreply_name: str
     keyword: str
     stage: Stage
+    # с какого момента выдача на этом этапе
+    stage_at: datetime
     created_at: datetime
 
 

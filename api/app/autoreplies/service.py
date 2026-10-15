@@ -596,6 +596,8 @@ class DeliveryItem:
     autoreply_name: str
     keyword: str
     stage: str
+    # с какого момента выдача на этом этапе: «ждём нажатия 3 дня»
+    stage_at: datetime
     created_at: datetime
 
 
@@ -641,6 +643,7 @@ async def deliveries(
                 autoreply_name=name,
                 keyword=d.keyword,
                 stage=d.stage,
+                stage_at=d.stage_at,
                 created_at=d.created_at,
             )
         )
