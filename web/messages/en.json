@@ -47,7 +47,7 @@
       "autoreplies": "Auto-replies",
       "accounts": "Accounts",
       "metaApp": "Meta app",
-      "inbox": "Inbox"
+      "journal": "Journal"
     },
     "account": {
       "label": "Accounts",
@@ -399,7 +399,7 @@
     }
   },
   "Inbox": {
-    "title": "Inbox",
+    "title": "Journal",
     "description": "Who an autoreply matched and which step they're at now. All events shows everything the account receives.",
     "refresh": "Refresh",
     "more": "Show more",
@@ -423,7 +423,6 @@
       "story_mention": "story mention",
       "other": "attachment"
     },
-    "named": "“{name}”",
     "step": {
       "matched": "Matched the word “{keyword}”",
       "matchedNoWord": "Autoreply matched",
@@ -447,17 +446,6 @@
       "account_inactive": "Account disconnected",
       "other": "Sending failed"
     },
-    "summary": {
-      "sending": "Sending a direct message",
-      "waiting_click": "Waiting for a tap",
-      "clicked": "Tapped, sending the material",
-      "follow_asked": "Asked them to follow",
-      "delivered": "Got the material",
-      "repeat_comment": "Repeat comment",
-      "dm_failed": "Direct message wasn't sent",
-      "material_failed": "Material wasn't sent",
-      "send_failed": "Message wasn't sent"
-    },
     "view": {
       "label": "What to show",
       "deliveries": "Deliveries",
@@ -467,8 +455,7 @@
       "empty": "No deliveries yet.",
       "emptyHint": "When an autoreply matches a comment, you'll see here which step the person is at. Everything the account receives is under <link>All events</link>.",
       "emptyTab": "Nobody is at this step right now.",
-      "noHistory": "No details: this delivery's log is empty.",
-      "openAutoreply": "Open autoreply “{name}”"
+      "noHistory": "No details: this delivery's log is empty."
     },
     "stage": {
       "dm": "Message",
@@ -488,7 +475,9 @@
       "person": "Person",
       "autoreply": "Autoreply",
       "now": "Now",
-      "when": "When"
+      "when": "When",
+      "what": "What came in",
+      "result": "Processing"
     },
     "stageNow": {
       "sending": "Sending a message",
@@ -499,21 +488,59 @@
       "material_failed": "Material wasn't sent",
       "delivered": "Got the material"
     },
+    "results": {
+      "label": "Processing",
+      "all": "All",
+      "taken": "Autoreply took it",
+      "nobody": "Nobody took it",
+      "skipped": "Skipped",
+      "failed": "Errors"
+    },
+    "emptyResult": "No events with this outcome.",
+    "why": {
+      "queued": "Not processed yet, the worker will pick it up in a few seconds.",
+      "retrying": "Processing failed with {reason}, the worker will try again later.",
+      "failed": "Processing failed several times with {reason}. See the api logs for details.",
+      "skipped": {
+        "own_comment": "The account's own comments are skipped so the bot doesn't reply to itself.",
+        "unknown_account": "The event came before the account was connected to Director.",
+        "account_inactive": "The account was disconnected when the event came, so it wasn't processed.",
+        "bad_payload": "Meta sent data that couldn't be parsed.",
+        "other": "The event was skipped during processing."
+      },
+      "takenComment": "The comment contains a code word of the autoreply “{name}”.",
+      "takenPress": "This is a button from a direct message of the autoreply “{name}”.",
+      "taken": "The autoreply “{name}” took the event.",
+      "takenNoName": "An autoreply took the event, its name wasn't found.",
+      "buttonNoDelivery": "The button is from an autoreply, but there's no delivery for it: someone else tapped it, or the button is broken.",
+      "handled": "Another Director handler took the event.",
+      "noMatch": "When the comment was processed, no autoreply matched it.",
+      "foreignButton": "The button wasn't sent by Director's autoreplies, nobody handles it.",
+      "noReply": "Autoreplies don't handle direct messages, you can reply in Instagram."
+    },
     "outcome": {
       "queued": "Queued",
       "failed": "Processing error",
-      "autoreply": "Autoreply “{name}”",
-      "autoreplies": "Autoreplies",
+      "autoreply": "Taken by autoreply “{name}”",
+      "autoreplies": "Taken by an autoreply",
       "noMatch": "No autoreply matched",
       "foreignButton": "Not an autoreply button",
-      "noReply": "No reply",
+      "noReply": "Messages aren't handled",
       "skipped": {
-        "own_comment": "Your comment",
-        "unknown_account": "Other account",
-        "account_inactive": "Account disconnected",
-        "bad_payload": "Unreadable data",
+        "own_comment": "Skipped: your comment",
+        "unknown_account": "Skipped: account wasn't connected",
+        "account_inactive": "Skipped: account was disconnected",
+        "bad_payload": "Skipped: unreadable data",
         "other": "Skipped"
-      }
+      },
+      "buttonNoDelivery": "Button without a delivery",
+      "handled": "Taken by another handler"
+    },
+    "details": {
+      "received": "Received",
+      "from": "From",
+      "post": "Post",
+      "result": "Processing"
     }
   }
 }

@@ -9,7 +9,8 @@ type Page<T> = { items: T[]; next: string | null };
 export function useFeed<T>(
   initial: Page<T>,
   initialHistory: History,
-  load: (before: string) => Promise<{ page: Page<T>; history: History }>,
+  // история есть у выдач; у «Всех событий» её нет: там только сам разбор
+  load: (before: string) => Promise<{ page: Page<T>; history?: History }>,
 ) {
   const [items, setItems] = useState(initial.items);
   const [history, setHistory] = useState(initialHistory);
@@ -25,7 +26,7 @@ export function useFeed<T>(
         const { page, history: more } = await load(next);
         setItems((prev) => [...prev, ...page.items]);
         // коммент лежит на одной странице: истории порций не пересекаются
-        setHistory((prev) => ({ ...prev, ...more }));
+        if (more) setHistory((prev) => ({ ...prev, ...more }));
         setNext(page.next);
       } catch {
         setFailed(true);

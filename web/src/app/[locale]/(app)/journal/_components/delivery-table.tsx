@@ -59,7 +59,7 @@ export function DeliveryTable({
           <p className="max-w-md text-muted-foreground">
             {t.rich("deliveries.emptyHint", {
               link: (chunks) => (
-                <Link href="/inbox?view=all" className="text-foreground underline">
+                <Link href="/journal?view=all" className="text-foreground underline">
                   {chunks}
                 </Link>
               ),
@@ -109,24 +109,28 @@ function Row({ delivery: d, steps, now }: { delivery: Delivery; steps: Step[]; n
 
   return (
     <li>
-      <button
-        type="button"
-        aria-expanded={open}
-        aria-controls={stepsId}
-        onClick={() => setOpen((v) => !v)}
+      {/* кнопка раскрытия растянута на всю строку (after:inset-0), а ссылка на автоответ
+          лежит поверх неё: соседи, а не ссылка внутри кнопки */}
+      <div
         className={cn(
           ROW,
-          "w-full py-3 text-left text-sm hover:bg-muted/50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring",
+          "relative py-3 text-sm hover:bg-muted/50 has-[button:focus-visible]:outline-2 has-[button:focus-visible]:-outline-offset-2 has-[button:focus-visible]:outline-ring",
         )}
       >
-        <span className="min-w-0">
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-controls={stepsId}
+          onClick={() => setOpen((v) => !v)}
+          className="min-w-0 text-left outline-none after:absolute after:inset-0"
+        >
           <span className="block truncate font-medium">{who(d, t)}</span>
           {d.text && (
             <span className="block truncate text-muted-foreground" title={d.text}>
               «{d.text}»
             </span>
           )}
-        </span>
+        </button>
         <time
           dateTime={d.created_at}
           title={longTime(at, format)}
@@ -134,27 +138,30 @@ function Row({ delivery: d, steps, now }: { delivery: Delivery; steps: Step[]; n
         >
           {shortTime(at, now, format)}
         </time>
-        <span className="col-span-2 truncate text-muted-foreground md:col-span-1 md:col-start-2 md:row-start-1">
-          <span className="md:hidden">{t("columns.autoreply")}: </span>
-          {d.autoreply_name}
-        </span>
-        <span className="col-span-2 min-w-0 md:col-span-1 md:col-start-3 md:row-start-1">
-          <span
-            className={cn(
-              // узкая колонка на md: обрезаем, а не наезжаем на «Когда»
-              "flex min-w-0 items-center gap-2",
-              STAGE_TONE[d.stage] === "bad" && "text-destructive",
-            )}
+        <span className="col-span-2 flex min-w-0 items-center text-muted-foreground md:col-span-1 md:col-start-2 md:row-start-1">
+          <span className="shrink-0 md:hidden">{t("columns.autoreply")}:&nbsp;</span>
+          <Link
+            href={`/autoreplies/${d.autoreply_id}`}
+            className={
+              "relative z-10 -my-2.5 inline-flex min-h-10 max-w-full items-center hover:text-foreground hover:underline md:-my-2 md:min-h-9"
+            }
           >
-            <span
-              aria-hidden
-              className={cn("size-1.5 shrink-0 rounded-full", DOT[STAGE_TONE[d.stage]])}
-            />
-            <span className="truncate" title={t(`stageNow.${d.stage}`)}>
-              {t(`stageNow.${d.stage}`)}
-            </span>
+            <span className="truncate">{d.autoreply_name}</span>
+          </Link>
+        </span>
+        {/* точка в своей колонке: этап и путь под ним начинаются с одной линии; узкая
+            колонка на md обрезается, а не наезжает на «Когда» */}
+        <span className="col-span-2 grid min-w-0 grid-cols-[0.375rem_minmax(0,1fr)] items-center gap-x-2 md:col-span-1 md:col-start-3 md:row-start-1">
+          <span aria-hidden className={cn("size-1.5 rounded-full", DOT[STAGE_TONE[d.stage]])} />
+          <span
+            className={cn("truncate", STAGE_TONE[d.stage] === "bad" && "text-destructive")}
+            title={t(`stageNow.${d.stage}`)}
+          >
+            {t(`stageNow.${d.stage}`)}
           </span>
-          {path && <span className="block truncate text-xs text-muted-foreground">{path}</span>}
+          {path && (
+            <span className="col-start-2 truncate text-xs text-muted-foreground">{path}</span>
+          )}
         </span>
         <ChevronRight
           aria-hidden
@@ -163,25 +170,18 @@ function Row({ delivery: d, steps, now }: { delivery: Delivery; steps: Step[]; n
             open && "rotate-90",
           )}
         />
-      </button>
+      </div>
       <div id={stepsId} hidden={!open} className="grid gap-3 px-4 pb-4">
         {steps.length > 0 ? (
           <Steps
             id={`${stepsId}-steps`}
             open
             steps={steps}
-            now={now}
             className="grid-cols-[3.5rem_minmax(0,1fr)] gap-x-3 text-sm"
           />
         ) : (
           <p className="text-sm text-muted-foreground">{t("deliveries.noHistory")}</p>
         )}
-        <Link
-          href={`/autoreplies/${d.autoreply_id}`}
-          className="inline-flex min-h-10 w-fit items-center text-sm underline underline-offset-2 hover:text-muted-foreground md:min-h-9"
-        >
-          {t("deliveries.openAutoreply", { name: d.autoreply_name })}
-        </Link>
       </div>
     </li>
   );

@@ -1,4 +1,4 @@
-import { Inbox } from "lucide-react";
+import { ScrollText } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { getNow, getTranslations } from "next-intl/server";
 import { Suspense } from "react";
@@ -10,25 +10,29 @@ import { apiFetch } from "@/lib/api";
 import type { Autoreply } from "@/lib/autoreplies";
 import { getCurrentAccount } from "@/lib/current-account";
 import { type DeliveryPage, type StageCounts, stageQuery, type Tab, tabOf } from "@/lib/deliveries";
+import { type ResultCounts, resultOf, resultQuery, type ResultTab } from "@/lib/events";
 import { INBOX_PAGE, type InboxPage } from "@/lib/inbox";
 import { getToken } from "@/lib/session";
 
 import { DeliveryTable } from "./_components/delivery-table";
 import { DeliveryTabs } from "./_components/delivery-tabs";
+import { EventsTabs } from "./_components/events-tabs";
 import { InboxList, InboxListSkeleton } from "./_components/inbox-list";
 import { RefreshButton } from "./_components/refresh-button";
 import { loadHistory } from "./history";
 
-type Props = { searchParams: Promise<{ view?: string; tab?: string | string[] }> };
+type Props = {
+  searchParams: Promise<{ view?: string; tab?: string | string[]; result?: string | string[] }>;
+};
 
 export default function InboxPageRoute({ searchParams }: Props) {
   const t = useTranslations("Inbox");
 
   return (
-    // список: узкая колонка
-    <Page>
+    // широкая, хоть это и список: владелец решил, что текст событий важнее узкой колонки
+    <Page width="wide">
       <Panel
-        icon={Inbox}
+        icon={ScrollText}
         title={t("title")}
         description={t("description")}
         actions={<RefreshButton />}
@@ -55,12 +59,17 @@ async function Feed({ searchParams }: Props) {
       <ViewTabs
         label={t("label")}
         tabs={[
-          { key: "deliveries", href: "/inbox", label: t("deliveries"), current: !all },
-          { key: "all", href: "/inbox?view=all", label: t("all"), current: all },
+          { key: "deliveries", href: "/journal", label: t("deliveries"), current: !all },
+          { key: "all", href: "/journal?view=all", label: t("all"), current: all },
         ]}
       />
       {all ? (
-        <Events accountId={account.id} token={token} now={now.getTime()} />
+        <Events
+          accountId={account.id}
+          tab={resultOf(params.result)}
+          token={token}
+          now={now.getTime()}
+        />
       ) : (
         <Deliveries
           accountId={account.id}
@@ -111,8 +120,9 @@ async function Deliveries({ accountId, tab, token, now }: ViewProps & { tab: Tab
   );
 }
 
-/** Все события от Meta лентой, с названиями автоответов. */
-async function Events({ accountId, token, now }: ViewProps) {
+/** Все события от Meta на вкладке итога: что пришло и чем кончился разбор, без истории
+ * выдач. С названиями автоответов и счётчиками. */
+async function Events({ accountId, tab, token, now }: ViewProps & { tab: ResultTab }) {
   // названия ищем здесь, а не в api: instagram про автоответы не знает.
   // Архивные тоже: в истории есть события, которые они взяли
   const autoreplies = (archived: boolean) =>
@@ -120,29 +130,29 @@ async function Events({ accountId, token, now }: ViewProps) {
       `/autoreplies?${new URLSearchParams({ account_id: accountId, archived: String(archived) })}`,
       { token },
     );
-  const [page, active, archived] = await Promise.all([
-    apiFetch<InboxPage>(
-      `/instagram/accounts/${accountId}/inbox?${new URLSearchParams({ limit: String(INBOX_PAGE) })}`,
-      { token },
-    ),
+  const query = new URLSearchParams([["limit", String(INBOX_PAGE)], ...resultQuery(tab)]);
+  const [page, { counts }, active, archived] = await Promise.all([
+    apiFetch<InboxPage>(`/instagram/accounts/${accountId}/inbox?${query}`, { token }),
+    apiFetch<{ counts: ResultCounts }>(`/instagram/accounts/${accountId}/inbox/counts`, {
+      token,
+    }),
     autoreplies(false),
     autoreplies(true),
   ]);
   const names = Object.fromEntries([...active, ...archived].map((a) => [a.id, a.name]));
-  const history = await loadHistory(
-    accountId,
-    page.items.map((i) => i.comment_id),
-    token,
-  );
   return (
-    <InboxList
-      key={`${accountId}:${now}`}
-      accountId={accountId}
-      initial={page}
-      history={history}
-      names={names}
-      now={now}
-    />
+    <>
+      <EventsTabs tab={tab} counts={counts} />
+      {/* «Обновить» и смена вкладки дают новый ключ: список собирается с первой страницы */}
+      <InboxList
+        key={`${accountId}:${tab}:${now}`}
+        accountId={accountId}
+        tab={tab}
+        initial={page}
+        names={names}
+        now={now}
+      />
+    </>
   );
 }
 

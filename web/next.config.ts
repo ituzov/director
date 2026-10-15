@@ -11,6 +11,10 @@ const nextConfig: NextConfig = {
   cacheComponents: true,
   partialPrefetching: true,
   reactCompiler: true,
+  // «Входящие» переименованы в «Журнал»: старый адрес мог остаться в закладках
+  async redirects() {
+    return [{ source: "/inbox", destination: "/journal", permanent: true }];
+  },
   turbopack: {
     rules: {
       "*.css": {

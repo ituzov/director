@@ -2,27 +2,29 @@
 
 import { apiFetch } from "@/lib/api";
 import { type DeliveryPage, stageQuery, tabOf } from "@/lib/deliveries";
+import { resultOf, resultQuery } from "@/lib/events";
 import { type History, INBOX_PAGE, type InboxPage } from "@/lib/inbox";
 import { getToken } from "@/lib/session";
 
 import { loadHistory } from "./history";
 
-/** Следующая страница ленты: события старше закладки before, с историей их комментов. */
+/** Следующая страница ленты на вкладке итога: события старше закладки before.
+ * Вкладку присылает браузер: незнакомая значит «все». */
 export async function loadInbox(
   accountId: string,
   before: string,
-): Promise<{ page: InboxPage; history: History }> {
+  tab: string,
+): Promise<{ page: InboxPage }> {
   const token = await getToken();
-  const query = new URLSearchParams({ before, limit: String(INBOX_PAGE) });
+  const query = new URLSearchParams([
+    ["before", before],
+    ["limit", String(INBOX_PAGE)],
+    ...resultQuery(resultOf(tab)),
+  ]);
   const page = await apiFetch<InboxPage>(`/instagram/accounts/${accountId}/inbox?${query}`, {
     token,
   });
-  const history = await loadHistory(
-    accountId,
-    page.items.map((i) => i.comment_id),
-    token,
-  );
-  return { page, history };
+  return { page };
 }
 
 /** Следующая страница выдач на вкладке: старше закладки before, с историей. Вкладку

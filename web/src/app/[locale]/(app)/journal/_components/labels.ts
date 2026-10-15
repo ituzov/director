@@ -1,6 +1,6 @@
 import type { useFormatter, useTranslations } from "next-intl";
 
-import type { InboxItem, Step, Summary } from "@/lib/inbox";
+import type { InboxItem, Step } from "@/lib/inbox";
 
 export type T = ReturnType<typeof useTranslations<"Inbox">>;
 type Format = ReturnType<typeof useFormatter>;
@@ -46,25 +46,3 @@ export function failureText(step: Step, t: T): string {
 }
 
 // ok: получил; warn: ждём человека; bad: не ушло; muted: идёт своим ходом
-export type Tone = "ok" | "warn" | "bad" | "muted";
-
-const SUMMARY_TONE: Partial<Record<Summary, Tone>> = {
-  delivered: "ok",
-  waiting_click: "warn",
-  follow_asked: "warn",
-  dm_failed: "bad",
-  material_failed: "bad",
-  send_failed: "bad",
-};
-
-/** Цвет итога: тихий успех, заметные «ждём» и неудачи. */
-export function toneOf(result: Summary): Tone {
-  return SUMMARY_TONE[result] ?? "muted";
-}
-
-export const TONE_TEXT: Record<Tone, string> = {
-  ok: "text-success-foreground",
-  warn: "text-warning-foreground",
-  bad: "text-destructive",
-  muted: "text-muted-foreground",
-};
