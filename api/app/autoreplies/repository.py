@@ -62,6 +62,7 @@ async def add_delivery(
     media_id: str,
     person_id: str,
     keyword: str,
+    stage_at: datetime,
     comment_reply: str | None = None,
 ) -> uuid.UUID | None:
     """Новая выдача. None: уже выдавали (тот же человек под тем же постом или тот же
@@ -75,6 +76,7 @@ async def add_delivery(
             media_id=media_id,
             person_id=person_id,
             keyword=keyword,
+            stage_at=stage_at,
             comment_reply=comment_reply,
         )
         .on_conflict_do_nothing()

@@ -179,3 +179,43 @@ async def test_unknown_stage(client, owner, account):
         params={"account_id": str(account.id), "stage": "maybe"},
     )
     assert r.status_code == 422
+
+
+async def test_username_from_other_comment(client, session, owner, account):
+    # коммента выдачи во входящих нет, но человек писал аккаунту раньше: ник оттуда
+    autoreply = await make_autoreply(session, account.id)
+    await add(session, autoreply, "gone")
+    session.add(
+        InboxEvent(
+            ig_account_id=IG_ID,
+            kind=webhook.COMMENT,
+            dedup_key=webhook.dedup_key(webhook.COMMENT, "older"),
+            payload={
+                "id": "older",
+                "text": "привет",
+                "from": {"id": "p-gone", "username": "masha"},
+            },
+        )
+    )
+    await session.commit()
+    [item] = (await page(client, owner, account.id))["items"]
+    assert (item["username"], item["text"]) == ("masha", None)
+
+
+async def test_same_time_not_lost_between_pages(client, session, owner, account):
+    # выдачи с одним временем: на стыке страниц ни одна не теряется и не повторяется
+    autoreply = await make_autoreply(session, account.id)
+    ids_ = sorted(uuid.uuid7() for _ in range(3))
+    for n, delivery_id in enumerate(reversed(ids_)):
+        await add(session, autoreply, f"c{n}", id=delivery_id)
+    seen, before = [], None
+    # не больше страниц, чем выдач: сломанная закладка не уведёт тест в вечный цикл
+    for _ in range(4):
+        result = await page(
+            client, owner, account.id, limit=1, **({"before": before} if before else {})
+        )
+        seen += [i["id"] for i in result["items"]]
+        before = result["next"]
+        if before is None:
+            break
+    assert seen == [str(i) for i in reversed(ids_)]

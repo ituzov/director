@@ -523,6 +523,19 @@ async def comment_texts(
     return texts
 
 
+async def usernames(
+    session: AsyncSession, account_id: uuid.UUID, person_ids: list[str]
+) -> dict[str, str]:
+    """Ник человека по его последнему комменту этому аккаунту: для соседей, у которых
+    есть только id человека."""
+    if not person_ids:
+        return {}
+    account = await repository.get_account(session, account_id)
+    if account is None:
+        return {}
+    return await repository.usernames_from_comments(session, account.ig_user_id, person_ids)
+
+
 def _inbox_item(event: InboxEvent) -> InboxItem:
     p = _obj(event.payload)
     person = username = text = attachment = media_id = comment_id = None

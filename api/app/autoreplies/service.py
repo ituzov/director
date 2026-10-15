@@ -235,6 +235,8 @@ async def handle_comment(session: AsyncSession, comment: instagram.CommentRef) -
         media_id=comment.media_id,
         person_id=comment.person_id,
         keyword=match.keyword,
+        # этап «отправляем» со времени коммента: как matched в журнале
+        stage_at=comment.received_at,
         comment_reply=reply_text,
     )
     if delivery_id:
@@ -332,7 +334,7 @@ async def handle_postback(session: AsyncSession, postback: instagram.PostbackRef
     if delivery.clicked_at is None:
         delivery.clicked_at = postback.acted_at
     # нажал: материал (или просьба подписаться) ставится в очередь
-    _move(delivery, "clicked")
+    _move(delivery, "clicked", postback.received_at)
     # выключенный или архивный всё равно выдаёт: человеку пообещали, он нажал
     autoreply = await repository.get_autoreply(session, delivery.autoreply_id)
     gate = None
@@ -376,15 +378,15 @@ async def handle_send_result(session: AsyncSession, result: instagram.OutboxResu
         kind = "autoreply.send_failed"
         data |= {"outcome": result.outcome, "reason": result.reason}
         if stage == INTRO:
-            _move(delivery, "dm_failed")
+            _move(delivery, "dm_failed", result.finished_at)
         if stage == MATERIAL:
-            _move(delivery, "material_failed")
+            _move(delivery, "material_failed", result.finished_at)
             # материал не ушёл, а ключ его письма занят навсегда: новое нажатие
             # начнёт новый раунд, иначе оно не встанет в очередь
             delivery.gate_round += 1
     elif stage == INTRO:
         delivery.sent_at = func.now()
-        _move(delivery, "waiting_click")
+        _move(delivery, "waiting_click", result.finished_at)
         kind = "autoreply.sent"
         # директ ушёл, теперь правда «отправили в директ». Не ушёл: ответа не будет
         if delivery.comment_reply:
@@ -401,11 +403,11 @@ async def handle_send_result(session: AsyncSession, result: instagram.OutboxResu
     elif stage == MATERIAL and result.variant == instagram.NOT_FOLLOWING:
         # ушла просьба подписаться: следующее нажатие начнёт новый раунд
         delivery.gate_round += 1
-        _move(delivery, "follow_asked")
+        _move(delivery, "follow_asked", result.finished_at)
         kind = "autoreply.follow_asked"
     elif stage == MATERIAL:
         delivery.delivered_at = func.now()
-        _move(delivery, "delivered")
+        _move(delivery, "delivered", result.finished_at)
         kind = "autoreply.delivered"
         if result.variant is not None:
             # following или unknown: подписку проверили или Meta не дала проверить
@@ -425,11 +427,13 @@ async def handle_send_result(session: AsyncSession, result: instagram.OutboxResu
     )
 
 
-def _move(delivery: Delivery, stage: str) -> None:
-    """Где выдача сейчас. Получил материал: окончательно, запоздалый отчёт прошлого
-    раунда этап назад не откатит."""
-    if delivery.stage != "delivered":
-        delivery.stage = stage
+def _move(delivery: Delivery, stage: str, at: datetime) -> None:
+    """Где выдача сейчас. Двигает только событие не старше того, что поставило текущий
+    этап: запоздалый отчёт об отправке не вернёт нажавшего в «ждём нажатия». Получил
+    материал: окончательно."""
+    if delivery.stage == "delivered" or at < delivery.stage_at:
+        return
+    delivery.stage, delivery.stage_at = stage, at
 
 
 def _ref(delivery_id: uuid.UUID, stage: str) -> str:
@@ -612,6 +616,14 @@ async def deliveries(
     more = len(rows) > limit
     rows = rows[:limit]
     texts = await instagram.comment_texts(session, account_id, [d.comment_id for d, _ in rows])
+
+    def nick(d: Delivery) -> str | None:
+        seen = texts.get(d.comment_id)
+        return seen.username if seen else None
+
+    # коммента нет во входящих или в нём нет ника: ник по другим комментам человека
+    missing = sorted({d.person_id for d, _ in rows if not nick(d)})
+    nicks = await instagram.usernames(session, account_id, missing)
     items = []
     for d, name in rows:
         seen = texts.get(d.comment_id)
@@ -620,7 +632,7 @@ async def deliveries(
                 id=d.id,
                 comment_id=d.comment_id,
                 person_id=d.person_id,
-                username=seen.username if seen else None,
+                username=nick(d) or nicks.get(d.person_id),
                 text=seen.text if seen else None,
                 autoreply_id=d.autoreply_id,
                 autoreply_name=name,

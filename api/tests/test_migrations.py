@@ -171,6 +171,9 @@ def test_delivery_stage_restored(db):
     step(db, "autoreply.follow_asked", asked, 3)
     # ответ под комментом пришёл последним: этап не меняет
     step(db, "autoreply.commented", asked, 4)
+    # только сработал: директ ещё в очереди, журнал это подтверждает
+    matched = delivery(db, autoreply_id, "matched", sent=now)
+    step(db, "autoreply.matched", matched, 1)
     polite = delivery(db, autoreply_id, "polite", sent=now)
     step(db, "autoreply.sent", polite, 1)
     step(db, "autoreply.send_failed", polite, 2, stage="comment")
@@ -195,9 +198,42 @@ def test_delivery_stage_restored(db):
         "got": "delivered",
         "pressed": "clicked",
         "polite": "waiting_click",
+        "matched": "sending",
         "asked": "follow_asked",
         "dm_lost": "dm_failed",
         "lost": "material_failed",
         "again": "clicked",
         "done": "delivered",
+    }
+
+
+def test_delivery_stage_at_restored(db):
+    """Время этапа прошлых выдач: последнее событие, которое двигает этап; без журнала
+    время выдачи. Иначе now() миграции не пустил бы ни один запоздалый отчёт."""
+    alembic("upgrade", "5d63c70acbd8")
+    autoreply_id = uuid.uuid4()
+    db.execute(
+        """INSERT INTO autoreplies.autoreply
+           (id, account_id, name, scope, intro_text, button_text, reply_text, created_by,
+            enabled, follow_gate)
+           VALUES (%s, %s, 'Гайд', 'all', 'Держи', 'Получить', 'ссылка', %s, true, false)""",
+        (autoreply_id, uuid.uuid4(), uuid.uuid4()),
+    )
+    quiet = delivery(db, autoreply_id, "quiet")
+    db.execute(
+        "UPDATE autoreplies.delivery SET created_at = %s WHERE id = %s",
+        (datetime(2026, 1, 1, tzinfo=UTC), quiet),
+    )
+    busy = delivery(db, autoreply_id, "busy")
+    step(db, "autoreply.sent", busy, 1)
+    step(db, "autoreply.clicked", busy, 2)
+    # ответ под комментом позже, но этап не двигает: его время не берём
+    step(db, "autoreply.commented", busy, 5)
+
+    alembic("upgrade", "head")
+
+    rows = dict(db.execute("SELECT comment_id, stage_at FROM autoreplies.delivery").fetchall())
+    assert rows == {
+        "quiet": datetime(2026, 1, 1, tzinfo=UTC),
+        "busy": datetime(2026, 1, 2, 12, 2, tzinfo=UTC),
     }

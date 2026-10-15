@@ -24,7 +24,7 @@ from app.instagram.outbox import (
     enqueue_private_reply,
 )
 from app.instagram.routes import instagram_error_handler, router, webhook_router
-from app.instagram.service import comment_texts, count_undelivered, get_account
+from app.instagram.service import comment_texts, count_undelivered, get_account, usernames
 from app.instagram.tasks import (
     process_inbox_event,
     refresh_due_tokens,
@@ -45,6 +45,7 @@ __all__ = [
     # ник и текст комментов по id: для «Выдач» автоответов
     "comment_texts",
     "CommentTextRef",
+    "usernames",
     # исходящие: соседи ставят в своей транзакции, отправляет worker
     "Button",
     "enqueue_comment_reply",

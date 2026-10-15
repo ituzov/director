@@ -170,3 +170,6 @@ class Delivery(Base):
     # в очереди; follow_asked: попросили подписаться; delivered: получил;
     # dm_failed, material_failed: не ушло
     stage: Mapped[str] = mapped_column(String(16), server_default="sending")
+    # время события, которое поставило этап. Отчёт об отправке может опоздать (упал,
+    # повтор через 30 с и позже): этап двигает только событие не старше этого, как в журнале
+    stage_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
