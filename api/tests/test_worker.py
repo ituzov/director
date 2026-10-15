@@ -138,9 +138,9 @@ async def test_comment_through_worker_knows_who_took_it(session, text, taken):
     assert (event.outcome, event.handled_by, event.handled_ref) == ("done", taken, ref)
 
 
-async def test_feed_comment_id_finds_history(client, session, login_as, monkeypatch):
+async def test_comment_reaches_deliveries(client, session, login_as, monkeypatch):
     # вся цепочка без подмен: вебхук во входящих, worker отвечает и отправляет директ,
-    # лента отдаёт id коммента, история автоответов по нему находит шаги
+    # выдача видна в «Выдачах» с ником и текстом из входящих, а её шаги в истории
     account = Account(
         ig_user_id="17841400000000000",
         username="shop",
@@ -165,7 +165,8 @@ async def test_feed_comment_id_finds_history(client, session, login_as, monkeypa
         InboxEvent(
             ig_account_id=account.ig_user_id,
             kind=webhook.COMMENT,
-            dedup_key="comment:1",
+            # ключ, как его пишет вебхук: по нему «Выдачи» находят ник и текст коммента
+            dedup_key=webhook.dedup_key(webhook.COMMENT, "180001"),
             payload={
                 "id": "180001",
                 "text": "хочу гайд",
@@ -182,8 +183,15 @@ async def test_feed_comment_id_finds_history(client, session, login_as, monkeypa
     assert await worker.outbox_once(sessions(session)) is True
 
     owner = await login_as("owner")
-    feed = await client.get(f"/instagram/accounts/{account.id}/inbox", headers=owner)
-    [item] = feed.json()["items"]
+    page = await client.get(
+        "/autoreplies/deliveries", headers=owner, params={"account_id": str(account.id)}
+    )
+    [item] = page.json()["items"]
+    assert (item["username"], item["text"], item["stage"]) == (
+        "vasya",
+        "хочу гайд",
+        "waiting_click",
+    )
     r = await client.get(
         "/autoreplies/history",
         headers=owner,

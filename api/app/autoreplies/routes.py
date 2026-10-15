@@ -124,7 +124,7 @@ async def get_history(
     session: SessionDep,
     user: identity.CurrentUserRef,
 ) -> HistoryOut:
-    """Что автоответы сделали с этими комментами: для строк ленты входящих."""
+    """Что автоответы сделали с этими комментами: шаги выдачи в «Журнале»."""
     comments: dict[str, list[StepOut]] = {}
     for s in await service.history(session, account_id, comment_id):
         step = asdict(s)

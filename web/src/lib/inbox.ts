@@ -11,8 +11,6 @@ export type InboxItem = {
   // вид вложения сообщения без текста: ig_reel, image, share
   attachment: string | null;
   media_id: string | null;
-  // id коммента у Meta, только у комментов: по нему история выдачи
-  comment_id: string | null;
   // null: ещё не разобрано
   outcome: "done" | "skipped" | "failed" | null;
   reason: string | null;

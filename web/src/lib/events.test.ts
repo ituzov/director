@@ -35,7 +35,6 @@ function item(over: Partial<InboxItem>): InboxItem {
     text: "гайд",
     attachment: null,
     media_id: "m1",
-    comment_id: "c1",
     outcome: "done",
     reason: null,
     handled_by: null,

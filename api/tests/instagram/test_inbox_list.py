@@ -85,11 +85,10 @@ async def test_same_time_not_lost_between_pages(client, session, account, owner)
 
 
 async def test_kinds_shown_and_parsed(client, session, account, owner):
-    comment_payload = comment("хочу гайд")
     await add(
         session,
         webhook.COMMENT,
-        comment_payload,
+        comment("хочу гайд"),
         minute=1,
         **done(handled_by="autoreplies", handled_ref="a1"),
     )
@@ -128,9 +127,8 @@ async def test_kinds_shown_and_parsed(client, session, account, owner):
         ("comment", "vasya", "500001", "хочу гайд", None, "190001"),
     ]
     assert (items[2]["handled_by"], items[2]["handled_ref"]) == ("autoreplies", "a1")
-    # id коммента у Meta только у коммента: по нему web спросит, что было дальше
-    assert [i["comment_id"] is not None for i in items] == [False, False, False, True]
-    assert items[3]["comment_id"] == comment_payload["id"]
+    # id коммента у Meta наружу не уходит: «Выдачи» берут его из самой выдачи
+    assert "comment_id" not in items[3]
     # сырой вебхук наружу не уходит
     assert "payload" not in items[0]
 
@@ -284,9 +282,9 @@ async def test_wrong_types_become_empty(client, session, account, owner):
         minute=3,
     )
     items = (await feed(client, account, owner))["items"]
-    fields = ("text", "attachment", "media_id", "username", "comment_id")
+    fields = ("text", "attachment", "media_id", "username")
     got = [tuple(i[f] for f in fields) for i in items]
-    assert got == [(None,) * 5] * 3
+    assert got == [(None,) * 4] * 3
 
 
 async def test_message_with_text_has_no_attachment_label(client, session, account, owner):

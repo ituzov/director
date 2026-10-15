@@ -452,7 +452,7 @@ class InboxItem:
     # вид вложения сообщения без текста: ig_reel, image, share
     attachment: str | None
     media_id: str | None
-    # id коммента у Meta: по нему соседи рассказывают, что было дальше
+    # id коммента у Meta: по нему comment_texts() находит ник и текст для соседей
     comment_id: str | None
     # None: worker ещё не разобрал
     outcome: str | None
