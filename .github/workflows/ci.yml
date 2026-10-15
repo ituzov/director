@@ -75,6 +75,8 @@ jobs:
         run: npm run lint
       - name: Формат
         run: npm run format:check
+      - name: Тесты
+        run: npm test
       - name: Сборка
         run: npm run build
       # после сборки: типы LayoutProps и PageProps генерирует next build
