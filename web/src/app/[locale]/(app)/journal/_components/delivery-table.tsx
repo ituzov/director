@@ -148,7 +148,7 @@ function Row({ delivery: d, steps, now }: { delivery: Delivery; steps: Step[]; n
           <Link
             href={`/autoreplies/${d.autoreply_id}`}
             className={
-              "relative z-10 -my-2.5 inline-flex min-h-10 max-w-full items-center hover:text-foreground hover:underline md:-my-2 md:min-h-9"
+              "relative z-10 -my-2.5 inline-flex min-h-10 max-w-full min-w-0 items-center hover:text-foreground hover:underline md:-my-2 md:min-h-9"
             }
           >
             <span className="truncate">{d.autoreply_name}</span>

@@ -149,7 +149,7 @@ function Row({ item, names, now }: { item: InboxItem; names: Props["names"]; now
           {autoreply ? (
             <Link
               href={`/autoreplies/${item.handled_ref}`}
-              className="relative z-10 -my-2.5 inline-flex min-h-10 max-w-full items-center hover:underline md:-my-2 md:min-h-9"
+              className="relative z-10 -my-2.5 inline-flex min-h-10 max-w-full min-w-0 items-center hover:underline md:-my-2 md:min-h-9"
             >
               <span className="truncate">{resultText}</span>
             </Link>
