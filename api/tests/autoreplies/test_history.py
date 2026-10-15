@@ -65,11 +65,18 @@ def journal(session, delivery, kind, comment_id="c1", *, minute=0, account_id=No
     )
 
 
-async def report(session, delivery, stage, outcome="sent", reason=None, variant=None) -> None:
+async def report(
+    session, delivery, stage, outcome="sent", reason=None, variant=None, *, minute=0
+) -> None:
     await autoreplies.handle_send_result(
         session,
         instagram.OutboxResult(
-            f"autoreplies:{delivery.id}:{stage}", "message", outcome, reason, variant
+            f"autoreplies:{delivery.id}:{stage}",
+            "message",
+            outcome,
+            reason,
+            T0 + timedelta(minutes=minute),
+            variant,
         ),
     )
     await session.commit()
@@ -123,6 +130,27 @@ async def test_chain_from_handlers(client, session, owner, delivery):
         "reason",
         "follow",
     }
+
+
+async def test_late_report_keeps_order(client, session, owner, delivery):
+    # директ ушёл в 12:00, человек нажал в 12:01, а отчёт об отправке дошёл после
+    # нажатия (упал и повторился): в цепочке директ всё равно раньше нажатия
+    await autoreplies.handle_postback(
+        session,
+        instagram.PostbackRef(
+            account_id=delivery.account_id,
+            person_id="p1",
+            payload=f"ar:{delivery.id}",
+            mid="m1",
+            acted_at=T0 + timedelta(minutes=1),
+        ),
+    )
+    await session.commit()
+    await report(session, delivery, "intro")
+    assert steps(await history(client, owner, delivery.account_id, "c1")) == [
+        "dm_sent",
+        "clicked",
+    ]
 
 
 async def test_failures_by_stage(client, session, owner, delivery):

@@ -411,6 +411,8 @@ async def handle_send_result(session: AsyncSession, result: instagram.OutboxResu
         person_id=delivery.person_id,
         comment_id=delivery.comment_id,
         data=data,
+        # отчёт мог опоздать: в журнале время отправки, иначе «нажал» встал бы раньше директа
+        occurred_at=result.finished_at,
     )
 
 

@@ -192,7 +192,7 @@ async def result(session, delivery, variant, outcome="sent") -> None:
     await autoreplies.handle_send_result(
         session,
         instagram.OutboxResult(
-            f"autoreplies:{delivery.id}:material", "message", outcome, None, variant
+            f"autoreplies:{delivery.id}:material", "message", outcome, None, CLICK, variant
         ),
     )
     await session.commit()

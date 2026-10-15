@@ -1,6 +1,7 @@
 """Итог отправки письма автоответа: этап в выдаче и запись в журнал."""
 
 import uuid
+from datetime import UTC, datetime
 
 import pytest
 from sqlalchemy import select
@@ -9,6 +10,8 @@ from app import autoreplies, instagram
 from app.activity.models import Event
 from app.autoreplies.models import Autoreply, Delivery
 from app.instagram.models import Account, OutboxTask
+
+SENT = datetime(2026, 1, 2, 3, 4, 5, tzinfo=UTC)
 
 
 @pytest.fixture
@@ -39,7 +42,7 @@ async def delivery(session) -> Delivery:
 
 async def report(session, ref: str, kind="private_reply", outcome="sent", reason=None) -> None:
     await autoreplies.handle_send_result(
-        session, instagram.OutboxResult(ref, kind, outcome, reason)
+        session, instagram.OutboxResult(ref, kind, outcome, reason, SENT)
     )
     await session.commit()
 
@@ -60,6 +63,13 @@ async def test_intro_sent(session, delivery):
         "c1",
     )
     assert entry.data == {"delivery_id": str(delivery.id), "stage": "intro"}
+
+
+async def test_step_time_is_send_time(session, delivery):
+    # отчёт мог опоздать: в журнале время отправки, а не время отчёта
+    await report(session, f"autoreplies:{delivery.id}:intro")
+    [entry] = await journal(session)
+    assert entry.occurred_at == SENT
 
 
 async def test_comment_sent(session, delivery):

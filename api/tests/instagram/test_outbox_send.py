@@ -125,7 +125,9 @@ async def test_private_reply_with_button(session, account, meta):
     }
     task = await stored(session)
     assert (task.outcome, task.reason, task.finished_at is not None) == ("sent", None, True)
-    assert results.got == [instagram.OutboxResult("autoreplies:d1", "private_reply", "sent", None)]
+    assert results.got == [
+        instagram.OutboxResult("autoreplies:d1", "private_reply", "sent", None, task.finished_at)
+    ]
 
 
 async def test_message_to_person(session, account, meta):
@@ -324,7 +326,7 @@ async def test_final_error_not_retried(session, account, meta):
     task = await stored(session)
     assert (task.outcome, task.reason, task.attempts) == ("failed", "100", 1)
     assert results.got == [
-        instagram.OutboxResult("autoreplies:d1", "private_reply", "failed", "100")
+        instagram.OutboxResult("autoreplies:d1", "private_reply", "failed", "100", task.finished_at)
     ]
 
 
@@ -534,7 +536,10 @@ async def test_failed_report_repeated_with_same_result(session, account, meta):
     assert [(r.ref, r.kind, r.outcome, r.reason, r.variant) for r in results.got] == [
         ("autoreplies:d1:material", "message", "sent", None, "not_following")
     ]
-    assert (await stored(session)).reported_at is not None
+    task = await stored(session)
+    # повтор отчёта несёт время отправки, а не время повтора
+    assert results.got[0].finished_at == task.finished_at
+    assert task.reported_at is not None
     assert await report(session, results) is False
 
 

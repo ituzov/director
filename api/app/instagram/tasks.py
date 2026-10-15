@@ -244,7 +244,10 @@ async def _report(session: AsyncSession, task: OutboxTask, on_result: OnResult) 
     task_id, kind = task.id, task.kind
     try:
         await on_result(
-            session, OutboxResult(task.ref, task.kind, task.outcome, task.reason, task.variant)
+            session,
+            OutboxResult(
+                task.ref, task.kind, task.outcome, task.reason, task.finished_at, task.variant
+            ),
         )
         task.reported_at = func.now()
         await session.commit()
