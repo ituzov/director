@@ -13,6 +13,7 @@ import { getToken } from "@/lib/session";
 
 import { InboxList, InboxListSkeleton } from "./_components/inbox-list";
 import { RefreshButton } from "./_components/refresh-button";
+import { loadHistory } from "./history";
 
 export default function InboxPageRoute() {
   const t = useTranslations("Inbox");
@@ -57,12 +58,15 @@ async function Feed() {
     getNow(),
   ]);
   const names = Object.fromEntries([...active, ...archived].map((a) => [a.id, a.name]));
+  // id комментов видны только из ответа ленты: историю спрашиваем вторым заходом
+  const history = await loadHistory(account.id, page.items, token);
   return (
     // «Обновить» даёт новый now: список собирается заново с первой страницы
     <InboxList
       key={`${account.id}:${now.getTime()}`}
       accountId={account.id}
       initial={page}
+      history={history}
       names={names}
       now={now.getTime()}
     />

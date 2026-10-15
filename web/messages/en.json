@@ -422,6 +422,41 @@
       "story_mention": "story mention",
       "other": "attachment"
     },
+    "named": "“{name}”",
+    "step": {
+      "matched": "Matched the word “{keyword}”",
+      "matchedNoWord": "Autoreply matched",
+      "dm_sent": "Sent a direct message with a button",
+      "commented": "Replied under the comment",
+      "clicked": "Tapped the button",
+      "follow_asked": "Asked them to follow",
+      "repeat_click": "Tapped again, already had the material",
+      "delivered": "Got the material",
+      "deliveredUnchecked": "Got the material, couldn't check whether they follow",
+      "repeat_comment": "Repeat comment, no second reply",
+      "dm_failed": "Direct message wasn't sent",
+      "comment_failed": "Comment reply wasn't sent",
+      "material_failed": "Material wasn't sent",
+      "send_failed": "Message wasn't sent",
+      "other": "Delivery step"
+    },
+    "failure": {
+      "expired": "Too late: Meta no longer accepts a reply",
+      "meta": "Meta returned an error, code {code}",
+      "account_inactive": "Account disconnected",
+      "other": "Sending failed"
+    },
+    "summary": {
+      "sending": "Sending a direct message",
+      "waiting_click": "Waiting for a tap",
+      "clicked": "Tapped, sending the material",
+      "follow_asked": "Asked them to follow",
+      "delivered": "Got the material",
+      "repeat_comment": "Repeat comment",
+      "dm_failed": "Direct message wasn't sent",
+      "material_failed": "Material wasn't sent",
+      "send_failed": "Message wasn't sent"
+    },
     "outcome": {
       "queued": "Queued",
       "failed": "Processing error",

@@ -11,6 +11,8 @@ export type InboxItem = {
   // вид вложения сообщения без текста: ig_reel, image, share
   attachment: string | null;
   media_id: string | null;
+  // id коммента у Meta, только у комментов: по нему история выдачи
+  comment_id: string | null;
   // null: ещё не разобрано
   outcome: "done" | "skipped" | "failed" | null;
   reason: string | null;
@@ -23,3 +25,73 @@ export type InboxPage = { items: InboxItem[]; next: string | null };
 
 // одна страница ленты: около экрана с запасом, дальше «Показать ещё»
 export const INBOX_PAGE = 50;
+
+/** Шаг выдачи, как его отдаёт api (GET /autoreplies/history). */
+export type Step = {
+  step:
+    | "matched"
+    | "repeat_comment"
+    | "dm_sent"
+    | "commented"
+    | "clicked"
+    | "repeat_click"
+    | "follow_asked"
+    | "delivered"
+    | "dm_failed"
+    | "comment_failed"
+    | "material_failed"
+    | "send_failed";
+  at: string;
+  autoreply_id: string | null;
+  // слово, на которое сработал автоответ
+  keyword: string | null;
+  // неудачная отправка: failed или expired, и код ошибки Meta или причина api
+  outcome: string | null;
+  reason: string | null;
+  // у материала: unknown, если Meta не дала проверить подписку
+  follow: string | null;
+};
+
+// шаги по id коммента; коммента без шагов в ответе нет
+export type History = Record<string, Step[]>;
+
+export type Summary =
+  | "sending"
+  | "waiting_click"
+  | "clicked"
+  | "follow_asked"
+  | "delivered"
+  | "repeat_comment"
+  | "dm_failed"
+  | "material_failed"
+  | "send_failed";
+
+export function isFailure(step: Step["step"]): boolean {
+  return step.endsWith("_failed");
+}
+
+// куда шаг переводит выдачу. Нет в списке: побочный шаг (ответ под комментом,
+// нажатие после выдачи), состояние не меняет, где бы ни встал по времени
+const NEXT: Partial<Record<Step["step"], Summary>> = {
+  matched: "sending",
+  dm_sent: "waiting_click",
+  // новое нажатие начинает раунд: прошлая ошибка материала и просьба подписаться позади
+  clicked: "clicked",
+  follow_asked: "follow_asked",
+  delivered: "delivered",
+  repeat_comment: "repeat_comment",
+  dm_failed: "dm_failed",
+  material_failed: "material_failed",
+  send_failed: "send_failed",
+};
+
+/** Где выдача сейчас, для строки ленты: шаги по порядку, как отдал api. */
+export function summary(steps: Step[]): Summary | null {
+  let state: Summary | null = null;
+  for (const { step } of steps) {
+    // материал получен: дальше ничего не меняет итог
+    if (state === "delivered") break;
+    state = NEXT[step] ?? state;
+  }
+  return state;
+}

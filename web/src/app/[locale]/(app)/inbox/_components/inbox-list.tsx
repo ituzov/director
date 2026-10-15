@@ -1,22 +1,32 @@
 "use client";
 
 import {
+  ChevronRight,
   CircleAlert,
   CircleCheck,
   CircleDashed,
   CircleMinus,
+  Clock,
   Inbox,
   Mail,
   MessageCircle,
   MousePointerClick,
 } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
-import { useState, useTransition } from "react";
+import { useId, useState, useTransition } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "@/i18n/navigation";
-import type { InboxItem, InboxPage } from "@/lib/inbox";
+import {
+  type History,
+  type InboxItem,
+  type InboxPage,
+  isFailure,
+  type Step,
+  summary,
+  type Summary,
+} from "@/lib/inbox";
 import { cn } from "@/lib/utils";
 
 import { loadInbox } from "../actions";
@@ -24,6 +34,8 @@ import { loadInbox } from "../actions";
 type Props = {
   accountId: string;
   initial: InboxPage;
+  // шаги выдачи по id коммента: что было после того, как автоответ взял коммент
+  history: History;
   // название автоответа по id: handled_ref у событий, которые взяли автоответы
   names: Record<string, string>;
   // момент запроса страницы: «сегодня» в браузере совпадёт с серверным
@@ -40,9 +52,10 @@ function oneOf<T extends string>(list: readonly T[], value: string | null): valu
   return value !== null && (list as readonly string[]).includes(value);
 }
 
-export function InboxList({ accountId, initial, names, now }: Props) {
+export function InboxList({ accountId, initial, history: initialHistory, names, now }: Props) {
   const t = useTranslations("Inbox");
   const [items, setItems] = useState(initial.items);
+  const [history, setHistory] = useState(initialHistory);
   const [next, setNext] = useState(initial.next);
   const [failed, setFailed] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -70,8 +83,10 @@ export function InboxList({ accountId, initial, names, now }: Props) {
     setFailed(false);
     startTransition(async () => {
       try {
-        const page = await loadInbox(accountId, before);
+        const { page, history: more } = await loadInbox(accountId, before);
         setItems((prev) => [...prev, ...page.items]);
+        // коммент лежит на одной странице: истории порций не пересекаются
+        setHistory((prev) => ({ ...prev, ...more }));
         setNext(page.next);
       } catch {
         setFailed(true);
@@ -83,7 +98,13 @@ export function InboxList({ accountId, initial, names, now }: Props) {
     <div className="grid gap-4">
       <ul className="divide-y rounded-lg border">
         {items.map((item) => (
-          <Row key={item.id} item={item} names={names} now={now} />
+          <Row
+            key={item.id}
+            item={item}
+            steps={(item.comment_id && history[item.comment_id]) || []}
+            names={names}
+            now={now}
+          />
         ))}
       </ul>
       {next && (
@@ -102,12 +123,34 @@ export function InboxList({ accountId, initial, names, now }: Props) {
   );
 }
 
-function Row({ item, names, now }: { item: InboxItem; names: Props["names"]; now: number }) {
+type Format = ReturnType<typeof useFormatter>;
+
+/** Сегодня часы, раньше дата: как в строке ленты. */
+function shortTime(at: Date, now: number, format: Format): string {
+  const today = new Date(now).toDateString() === at.toDateString();
+  return format.dateTime(
+    at,
+    today ? { hour: "2-digit", minute: "2-digit" } : { day: "numeric", month: "short" },
+  );
+}
+
+function Row({
+  item,
+  steps,
+  names,
+  now,
+}: {
+  item: InboxItem;
+  steps: Step[];
+  names: Props["names"];
+  now: number;
+}) {
   const t = useTranslations("Inbox");
   const format = useFormatter();
+  const [open, setOpen] = useState(false);
+  const stepsId = useId();
   const Icon = KIND_ICON[item.kind];
   const at = new Date(item.received_at);
-  const today = new Date(now).toDateString() === at.toDateString();
 
   return (
     // телефон: время и кто сверху, итог под текстом; шире: всё в одну строку
@@ -117,10 +160,7 @@ function Row({ item, names, now }: { item: InboxItem; names: Props["names"]; now
         title={format.dateTime(at, { dateStyle: "long", timeStyle: "medium" })}
         className="text-muted-foreground tabular-nums"
       >
-        {format.dateTime(
-          at,
-          today ? { hour: "2-digit", minute: "2-digit" } : { day: "numeric", month: "short" },
-        )}
+        {shortTime(at, now, format)}
       </time>
       <div className="flex min-w-0 items-center gap-2">
         <Icon
@@ -133,9 +173,57 @@ function Row({ item, names, now }: { item: InboxItem; names: Props["names"]; now
         </span>
       </div>
       <div className="col-span-2 md:col-span-1 md:justify-self-end">
-        <Outcome item={item} names={names} />
+        <Outcome
+          item={item}
+          names={names}
+          steps={steps}
+          toggle={{ open, controls: stepsId, onClick: () => setOpen((v) => !v) }}
+        />
       </div>
+      {steps.length > 0 && <Steps id={stepsId} open={open} steps={steps} now={now} />}
     </li>
+  );
+}
+
+/** Что было с комментом после автоответа, по шагам. В DOM всегда: на него
+ * указывает aria-controls кнопки, закрытый просто скрыт. */
+function Steps({
+  id,
+  open,
+  steps,
+  now,
+}: {
+  id: string;
+  open: boolean;
+  steps: Step[];
+  now: number;
+}) {
+  const t = useTranslations("Inbox");
+  const format = useFormatter();
+
+  return (
+    // сетка строки (subgrid): время шага ровно под временем коммента
+    <ol id={id} hidden={!open} className="col-span-full grid grid-cols-subgrid gap-y-1.5 pt-2">
+      {steps.map((step, i) => {
+        const at = new Date(step.at);
+        const failure = isFailure(step.step);
+        return (
+          <li key={i} className="col-span-full grid grid-cols-subgrid">
+            <time
+              dateTime={step.at}
+              title={format.dateTime(at, { dateStyle: "long", timeStyle: "medium" })}
+              className="text-muted-foreground tabular-nums"
+            >
+              {shortTime(at, now, format)}
+            </time>
+            <div className={cn("md:col-span-2", failure && "text-destructive")}>
+              <p>{stepText(step, t)}</p>
+              {failure && <p className="text-muted-foreground">{failureText(step, t)}</p>}
+            </div>
+          </li>
+        );
+      })}
+    </ol>
   );
 }
 
@@ -148,6 +236,25 @@ function who(item: InboxItem, t: T): string {
   return t("unknownPerson");
 }
 
+function stepText(step: Step, t: T): string {
+  if (step.step === "matched") {
+    return step.keyword ? t("step.matched", { keyword: step.keyword }) : t("step.matchedNoWord");
+  }
+  // following не пишем: проверили и выдали, это обычный случай
+  if (step.step === "delivered" && step.follow === "unknown") return t("step.deliveredUnchecked");
+  // api добавил шаг, которого web ещё не знает: общий текст, а не сырой ключ
+  const key = `step.${step.step}` as const;
+  return t.has(key) ? t(key) : t("step.other");
+}
+
+/** Почему не ушло. reason бывает кодом Meta, нашей причиной или именем исключения. */
+function failureText(step: Step, t: T): string {
+  if (step.outcome === "expired") return t("failure.expired");
+  if (step.reason && /^\d+$/.test(step.reason)) return t("failure.meta", { code: step.reason });
+  if (step.reason === "account_inactive") return t("failure.account_inactive");
+  return t("failure.other");
+}
+
 function what(item: InboxItem, t: T): string | null {
   if (item.kind === "postback") return item.text ? t("pressed", { title: item.text }) : null;
   if (item.text) return item.kind === "comment" ? `«${item.text}»` : item.text;
@@ -157,8 +264,27 @@ function what(item: InboxItem, t: T): string | null {
   return null;
 }
 
+type Toggle = { open: boolean; controls: string; onClick: () => void };
+
+const SUMMARY_TONE: Partial<Record<Summary, "ok" | "bad">> = {
+  delivered: "ok",
+  dm_failed: "bad",
+  material_failed: "bad",
+  send_failed: "bad",
+};
+
 /** Что Директор сделал с событием, человеческим языком. */
-function Outcome({ item, names }: { item: InboxItem; names: Props["names"] }) {
+function Outcome({
+  item,
+  names,
+  steps,
+  toggle,
+}: {
+  item: InboxItem;
+  names: Props["names"];
+  steps: Step[];
+  toggle: Toggle;
+}) {
   const t = useTranslations("Inbox.outcome");
 
   if (item.outcome === null) return <Status tone="muted" icon={CircleDashed} text={t("queued")} />;
@@ -169,6 +295,8 @@ function Outcome({ item, names }: { item: InboxItem; names: Props["names"] }) {
   }
   if (item.handled_by === "autoreplies") {
     const name = item.handled_ref ? names[item.handled_ref] : undefined;
+    const result = summary(steps);
+    if (result) return <Delivery item={item} name={name} result={result} toggle={toggle} />;
     if (!name) return <Status tone="ok" icon={CircleCheck} text={t("autoreplies")} />;
     return (
       <Link href={`/autoreplies/${item.handled_ref}`} className="hover:underline">
@@ -184,6 +312,65 @@ function Outcome({ item, names }: { item: InboxItem; names: Props["names"] }) {
         ? t("foreignButton")
         : t("noReply");
   return <Status tone="muted" icon={CircleMinus} text={text} />;
+}
+
+/** Автоответ и чем кончилась выдача; по итогу раскрываются шаги. */
+function Delivery({
+  item,
+  name,
+  result,
+  toggle,
+}: {
+  item: InboxItem;
+  name: string | undefined;
+  result: Summary;
+  toggle: Toggle;
+}) {
+  const t = useTranslations("Inbox");
+  const tone = SUMMARY_TONE[result] ?? "muted";
+  const Icon =
+    tone === "ok"
+      ? CircleCheck
+      : tone === "bad"
+        ? CircleAlert
+        : result === "repeat_comment"
+          ? CircleMinus
+          : Clock;
+
+  return (
+    <span
+      className={cn(
+        "inline-flex flex-wrap items-center gap-x-1.5",
+        tone === "ok" && "text-primary",
+        tone === "bad" && "text-destructive",
+        tone === "muted" && "text-muted-foreground",
+      )}
+    >
+      <Icon className="size-4 shrink-0" />
+      {name ? (
+        <Link href={`/autoreplies/${item.handled_ref}`} className="hover:underline">
+          {t("named", { name })}
+        </Link>
+      ) : (
+        t("outcome.autoreplies")
+      )}
+      <span aria-hidden>·</span>
+      {/* кнопка под палец: на телефоне 40px, от md 36px; отрицательный отступ
+          держит высоту строки */}
+      <button
+        type="button"
+        aria-expanded={toggle.open}
+        aria-controls={toggle.controls}
+        onClick={toggle.onClick}
+        className="-my-2.5 inline-flex min-h-10 items-center gap-0.5 rounded-sm hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none md:-my-2 md:min-h-9"
+      >
+        {t(`summary.${result}`)}
+        <ChevronRight
+          className={cn("size-4 shrink-0 transition-transform", toggle.open && "rotate-90")}
+        />
+      </button>
+    </span>
+  );
 }
 
 function Status({
