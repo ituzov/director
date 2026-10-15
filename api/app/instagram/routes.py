@@ -1,7 +1,7 @@
 """HTTP-ручки instagram. Тонкие: разобрать запрос, позвать сервис, собрать ответ."""
 
 import uuid
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response, status
 from fastapi.responses import JSONResponse, PlainTextResponse
@@ -163,10 +163,15 @@ async def list_inbox(
     user: identity.CurrentUserRef,
     before: uuid.UUID | None = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    # фильтр: вид события и взял ли его кто-то; выдачи это kind=comment, taken=true
+    kind: Literal["comment", "postback", "message"] | None = None,
+    taken: bool | None = None,
 ) -> InboxPageOut:
     """Лента входящих аккаунта: что пришло от Meta и кто это взял. Свежие сверху,
     закладка before из прошлого ответа."""
-    page = await service.list_inbox(session, account_id, before=before, limit=limit)
+    page = await service.list_inbox(
+        session, account_id, before=before, limit=limit, kind=kind, taken=taken
+    )
     return InboxPageOut(
         items=[InboxItemOut.model_validate(i, from_attributes=True) for i in page.items],
         next=page.next,

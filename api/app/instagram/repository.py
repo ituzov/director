@@ -192,12 +192,18 @@ async def inbox_page(
     *,
     before: uuid.UUID | None,
     limit: int,
+    taken: bool | None = None,
 ) -> list[InboxEvent]:
     """События аккаунта, свежие сверху; before: старше этого события.
-    На одно больше limit: по лишнему видно, что есть следующая страница."""
+    taken: только взятые кем-то или только ничьи. На одно больше limit: по
+    лишнему видно, что есть следующая страница."""
     query = select(InboxEvent).where(
         InboxEvent.ig_account_id == ig_account_id, InboxEvent.kind.in_(kinds)
     )
+    if taken is not None:
+        query = query.where(
+            InboxEvent.handled_by.is_not(None) if taken else InboxEvent.handled_by.is_(None)
+        )
     if before is not None:
         anchor = await session.get(InboxEvent, before)
         # закладка чужого аккаунта (переключили аккаунт со старой страницей) резала бы

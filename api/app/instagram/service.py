@@ -469,15 +469,27 @@ class InboxPage:
 
 
 async def list_inbox(
-    session: AsyncSession, account_id: uuid.UUID, *, before: uuid.UUID | None, limit: int
+    session: AsyncSession,
+    account_id: uuid.UUID,
+    *,
+    before: uuid.UUID | None,
+    limit: int,
+    kind: str | None = None,
+    taken: bool | None = None,
 ) -> InboxPage:
     """Что пришло от Meta на аккаунт и что с этим стало. Отключённый аккаунт тоже:
-    история остаётся."""
+    история остаётся. kind: один вид из ленты; taken: взял ли событие кто-то."""
     account = await repository.get_account(session, account_id)
     if account is None:
         raise AccountNotFound
     events = await repository.inbox_page(
-        session, account.ig_user_id, INBOX_KINDS, before=before, limit=limit
+        session,
+        account.ig_user_id,
+        # чужой вид (прочтения) не пропускаем, даже если ручку обошли: вместо него вся лента
+        (kind,) if kind in INBOX_KINDS else INBOX_KINDS,
+        before=before,
+        limit=limit,
+        taken=taken,
     )
     more = len(events) > limit
     events = events[:limit]

@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from app.instagram import webhook
+from app.instagram import service, webhook
 from app.instagram.models import Account, InboxEvent
 
 IG_ID = "17841400000000000"
@@ -297,3 +297,84 @@ async def test_message_with_text_has_no_attachment_label(client, session, accoun
     await add(session, webhook.MESSAGE, payload)
     [item] = (await feed(client, account, owner))["items"]
     assert (item["text"], item["attachment"]) == ("смотри", None)
+
+
+async def mixed(session) -> dict[str, InboxEvent]:
+    """Лента вперемешку: выдачи (взятые комменты) через одну с другими событиями."""
+    taken = done(handled_by="autoreplies", handled_ref="a1")
+    return {
+        "taken1": await add(session, webhook.COMMENT, comment("гайд"), minute=1, **taken),
+        "nobody": await add(session, webhook.COMMENT, comment("класс"), minute=2, **done()),
+        "taken2": await add(session, webhook.COMMENT, comment("гайд"), minute=3, **taken),
+        "press": await add(
+            session,
+            webhook.POSTBACK,
+            {"sender": {"id": "500001"}, "postback": {"title": "Ок"}},
+            minute=4,
+            **taken,
+        ),
+        "taken3": await add(session, webhook.COMMENT, comment("гайд"), minute=5, **taken),
+        "message": await add(
+            session, webhook.MESSAGE, {"sender": {"id": "1"}, "message": {"text": "x"}}, minute=6
+        ),
+        "queued": await add(session, webhook.COMMENT, comment("гайд"), minute=7),
+    }
+
+
+def ids(page, events, *names) -> bool:
+    return [i["id"] for i in page["items"]] == [str(events[n].id) for n in names]
+
+
+async def test_filter_by_kind(client, session, account, owner):
+    events = await mixed(session)
+    assert ids(await feed(client, account, owner, kind="postback"), events, "press")
+    assert ids(
+        await feed(client, account, owner, kind="comment"),
+        events,
+        "queued",
+        "taken3",
+        "taken2",
+        "nobody",
+        "taken1",
+    )
+
+
+async def test_filter_by_taken(client, session, account, owner):
+    events = await mixed(session)
+    assert ids(
+        await feed(client, account, owner, taken="true"),
+        events,
+        "taken3",
+        "press",
+        "taken2",
+        "taken1",
+    )
+    # ничьи: никто не взял и ещё не разобранные
+    assert ids(
+        await feed(client, account, owner, taken="false"), events, "queued", "message", "nobody"
+    )
+
+
+async def test_deliveries_by_pages(client, session, account, owner):
+    # выдачи это взятые комменты; между ними другие события, страницы их не теряют
+    events = await mixed(session)
+    params = {"kind": "comment", "taken": "true", "limit": 2}
+    first = await feed(client, account, owner, **params)
+    assert ids(first, events, "taken3", "taken2")
+    rest = await feed(client, account, owner, before=first["next"], **params)
+    assert ids(rest, events, "taken1")
+    assert rest["next"] is None
+
+
+async def test_unknown_kind(client, account, owner):
+    r = await client.get(
+        f"/instagram/accounts/{account.id}/inbox", headers=owner, params={"kind": "read"}
+    )
+    assert r.status_code == 422
+
+
+async def test_reads_never_shown_even_past_route(session, account):
+    # ручка чужой вид не пустит, но сервис не должен на это полагаться
+    await add(session, webhook.READ, {"sender": {"id": "1"}, "read": {"mid": "m1"}})
+    page = await service.list_inbox(session, account.id, before=None, limit=50, kind="read")
+    assert [i.kind for i in page.items] == []
