@@ -7,7 +7,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from app import activity, autoreplies, instagram
-from app.autoreplies.models import Autoreply, Delivery
+from app.autoreplies.models import Autoreply, Delivery, Keyword
 from app.instagram.models import Account
 
 T0 = datetime(2026, 1, 2, 12, 0, tzinfo=UTC)
@@ -96,30 +96,47 @@ def steps(comments, comment_id="c1") -> list[str]:
     return [s["step"] for s in comments[comment_id]]
 
 
-async def test_chain_from_handlers(client, session, owner, delivery):
-    # записи делают настоящие обработчики: чтение не разойдётся с записью
-    journal(session, delivery, "autoreply.matched", data={"keyword": "гайд", "delivery_id": "x"})
-    await session.commit()
-    await report(session, delivery, "intro")
-    await report(session, delivery, "comment")
+async def click(session, delivery, *, minute) -> None:
     await autoreplies.handle_postback(
         session,
         instagram.PostbackRef(
             account_id=delivery.account_id,
             person_id="p1",
             payload=f"ar:{delivery.id}",
-            mid="m1",
-            acted_at=datetime.now(UTC),
+            mid=f"m{minute}",
+            acted_at=T0 + timedelta(minutes=minute),
         ),
     )
     await session.commit()
-    await report(session, delivery, "material", variant="unknown")
 
-    got = {s["step"]: s for s in (await history(client, owner, delivery.account_id, "c1"))["c1"]}
-    assert set(got) == {"matched", "dm_sent", "commented", "clicked", "delivered"}
+
+async def test_chain_from_handlers(client, session, owner, delivery):
+    # записи делают настоящие обработчики: чтение не разойдётся с записью
+    journal(session, delivery, "autoreply.matched", data={"keyword": "гайд", "delivery_id": "x"})
+    await session.commit()
+    await report(session, delivery, "intro")
+    await report(session, delivery, "comment", minute=1)
+    await click(session, delivery, minute=2)
+    # не подписан: попросили подписаться, он нажал ещё раз и получил
+    await report(session, delivery, "material", variant="not_following", minute=3)
+    await click(session, delivery, minute=4)
+    await report(session, delivery, "material", variant="unknown", minute=5)
+
+    chain = (await history(client, owner, delivery.account_id, "c1"))["c1"]
+    # по порядку и с повторами: второе нажатие не склеивается с первым
+    assert [s["step"] for s in chain] == [
+        "matched",
+        "dm_sent",
+        "commented",
+        "clicked",
+        "follow_asked",
+        "clicked",
+        "delivered",
+    ]
+    got = {s["step"]: s for s in chain}
     assert got["matched"]["keyword"] == "гайд"
     assert got["delivered"]["follow"] == "unknown"
-    assert {s["autoreply_id"] for s in got.values()} == {str(delivery.autoreply_id)}
+    assert {s["autoreply_id"] for s in chain} == {str(delivery.autoreply_id)}
     # внутренности автоответов наружу не уходят
     assert set(got["matched"]) == {
         "step",
@@ -135,22 +152,37 @@ async def test_chain_from_handlers(client, session, owner, delivery):
 async def test_late_report_keeps_order(client, session, owner, delivery):
     # директ ушёл в 12:00, человек нажал в 12:01, а отчёт об отправке дошёл после
     # нажатия (упал и повторился): в цепочке директ всё равно раньше нажатия
-    await autoreplies.handle_postback(
-        session,
-        instagram.PostbackRef(
-            account_id=delivery.account_id,
-            person_id="p1",
-            payload=f"ar:{delivery.id}",
-            mid="m1",
-            acted_at=T0 + timedelta(minutes=1),
-        ),
-    )
-    await session.commit()
+    await click(session, delivery, minute=1)
     await report(session, delivery, "intro")
     assert steps(await history(client, owner, delivery.account_id, "c1")) == [
         "dm_sent",
         "clicked",
     ]
+
+
+async def test_repeat_comment_from_handler(client, session, owner, delivery):
+    # тот же человек снова написал слово под тем же постом: выдача остаётся первой,
+    # нажатия пишутся под первым комментом, у второго только «уже получал»
+    session.add(Keyword(autoreply_id=delivery.autoreply_id, word="гайд", normalized="гайд"))
+    await session.commit()
+    await autoreplies.handle_comment(
+        session,
+        instagram.CommentRef(
+            account_id=delivery.account_id,
+            comment_id="c2",
+            media_id="m1",
+            person_id="p1",
+            username="vasya",
+            text="гайд",
+            received_at=T0,
+        ),
+    )
+    await session.commit()
+    await click(session, delivery, minute=1)
+
+    comments = await history(client, owner, delivery.account_id, "c1", "c2")
+    assert steps(comments) == ["clicked"]
+    assert steps(comments, "c2") == ["repeat_comment"]
 
 
 async def test_failures_by_stage(client, session, owner, delivery):
@@ -177,15 +209,17 @@ async def test_failure_without_details_kept(client, session, owner, delivery):
 
 
 async def test_steps_in_order_by_comment(client, session, owner, delivery):
+    # нажал дважды подряд, пока материал в очереди: оба нажатия видны
     journal(session, delivery, "autoreply.clicked", minute=1)
-    journal(session, delivery, "autoreply.follow_asked", minute=2)
-    journal(session, delivery, "autoreply.repeat_click", minute=3)
+    journal(session, delivery, "autoreply.clicked", minute=2)
+    journal(session, delivery, "autoreply.follow_asked", minute=3)
+    journal(session, delivery, "autoreply.repeat_click", minute=4)
     # повторный коммент записан под своим id: у его строки один шаг
-    journal(session, delivery, "autoreply.repeat_comment", "c2", minute=4)
+    journal(session, delivery, "autoreply.repeat_comment", "c2", minute=5)
     await session.commit()
 
     comments = await history(client, owner, delivery.account_id, "c1", "c2")
-    assert steps(comments) == ["clicked", "follow_asked", "repeat_click"]
+    assert steps(comments) == ["clicked", "clicked", "follow_asked", "repeat_click"]
     assert steps(comments, "c2") == ["repeat_comment"]
 
 

@@ -138,6 +138,63 @@ async def test_comment_through_worker_knows_who_took_it(session, text, taken):
     assert (event.outcome, event.handled_by, event.handled_ref) == ("done", taken, ref)
 
 
+async def test_feed_comment_id_finds_history(client, session, login_as, monkeypatch):
+    # вся цепочка без подмен: вебхук во входящих, worker отвечает и отправляет директ,
+    # лента отдаёт id коммента, история автоответов по нему находит шаги
+    account = Account(
+        ig_user_id="17841400000000000",
+        username="shop",
+        token_encrypted=crypto.encrypt("t"),
+        connected_by=uuid.uuid7(),
+    )
+    session.add(account)
+    await session.flush()
+    autoreply = Autoreply(
+        account_id=account.id,
+        name="Гайд",
+        scope="all",
+        intro_text="Держи",
+        button_text="Получить",
+        reply_text="https://guide",
+        created_by=uuid.uuid7(),
+    )
+    session.add(autoreply)
+    await session.flush()
+    session.add(Keyword(autoreply_id=autoreply.id, word="гайд", normalized="гайд"))
+    session.add(
+        InboxEvent(
+            ig_account_id=account.ig_user_id,
+            kind=webhook.COMMENT,
+            dedup_key="comment:1",
+            payload={
+                "id": "180001",
+                "text": "хочу гайд",
+                "from": {"id": "500001", "username": "vasya"},
+                "media": {"id": "190001"},
+            },
+        )
+    )
+    await session.commit()
+    transport = httpx.MockTransport(lambda request: httpx.Response(200, json={"id": "r1"}))
+    monkeypatch.setattr(tasks, "_http", lambda: httpx.AsyncClient(transport=transport))
+
+    assert await worker.inbox_once(sessions(session)) is True
+    assert await worker.outbox_once(sessions(session)) is True
+
+    owner = await login_as("owner")
+    feed = await client.get(f"/instagram/accounts/{account.id}/inbox", headers=owner)
+    [item] = feed.json()["items"]
+    r = await client.get(
+        "/autoreplies/history",
+        headers=owner,
+        params={"account_id": str(account.id), "comment_id": item["comment_id"]},
+    )
+    assert [s["step"] for s in r.json()["comments"][item["comment_id"]]] == [
+        "matched",
+        "dm_sent",
+    ]
+
+
 def test_send_results_go_to_autoreplies():
     assert worker.ON_RESULT is autoreplies.handle_send_result
 
