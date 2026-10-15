@@ -300,7 +300,7 @@ async def test_message_with_text_has_no_attachment_label(client, session, accoun
 
 
 async def mixed(session) -> dict[str, InboxEvent]:
-    """Лента вперемешку: выдачи (взятые комменты) через одну с другими событиями."""
+    """Лента вперемешку: взятые комменты через одно с событиями других итогов."""
     taken = done(handled_by="autoreplies", handled_ref="a1")
     return {
         "taken1": await add(session, webhook.COMMENT, comment("гайд"), minute=1, **taken),
@@ -313,11 +313,25 @@ async def mixed(session) -> dict[str, InboxEvent]:
             minute=4,
             **taken,
         ),
-        "taken3": await add(session, webhook.COMMENT, comment("гайд"), minute=5, **taken),
-        "message": await add(
-            session, webhook.MESSAGE, {"sender": {"id": "1"}, "message": {"text": "x"}}, minute=6
+        "own": await add(
+            session,
+            webhook.COMMENT,
+            comment("спасибо"),
+            minute=5,
+            **done(outcome="skipped", reason="own_comment"),
         ),
-        "queued": await add(session, webhook.COMMENT, comment("гайд"), minute=7),
+        "taken3": await add(session, webhook.COMMENT, comment("гайд"), minute=6, **taken),
+        "message": await add(
+            session,
+            webhook.MESSAGE,
+            {"sender": {"id": "1"}, "message": {"text": "x"}},
+            minute=7,
+            **done(),
+        ),
+        "broken": await add(
+            session, webhook.COMMENT, comment("гайд"), minute=8, **done(outcome="failed")
+        ),
+        "queued": await add(session, webhook.COMMENT, comment("гайд"), minute=9),
     }
 
 
@@ -328,42 +342,62 @@ def ids(page, events, *names) -> bool:
 async def test_filter_by_kind(client, session, account, owner):
     events = await mixed(session)
     assert ids(await feed(client, account, owner, kind="postback"), events, "press")
-    assert ids(
-        await feed(client, account, owner, kind="comment"),
-        events,
-        "queued",
-        "taken3",
-        "taken2",
-        "nobody",
-        "taken1",
-    )
+    assert ids(await feed(client, account, owner, kind="message"), events, "message")
 
 
-async def test_filter_by_taken(client, session, account, owner):
+@pytest.mark.parametrize(
+    ("result", "want"),
+    [
+        ("taken", ["taken3", "press", "taken2", "taken1"]),
+        # разобрано, но никто не взял; неразобранное сюда не входит
+        ("nobody", ["message", "nobody"]),
+        ("skipped", ["own"]),
+        ("failed", ["broken"]),
+    ],
+)
+async def test_filter_by_result(client, session, account, owner, result, want):
     events = await mixed(session)
-    assert ids(
-        await feed(client, account, owner, taken="true"),
-        events,
-        "taken3",
-        "press",
-        "taken2",
-        "taken1",
-    )
-    # ничьи: никто не взял и ещё не разобранные
-    assert ids(
-        await feed(client, account, owner, taken="false"), events, "queued", "message", "nobody"
-    )
+    assert ids(await feed(client, account, owner, result=result), events, *want)
 
 
-async def test_deliveries_by_pages(client, session, account, owner):
-    # выдачи это взятые комменты; между ними другие события, страницы их не теряют
+async def test_result_by_pages(client, session, account, owner):
+    # между взятыми лежат другие события: страницы их не теряют и не повторяют
     events = await mixed(session)
-    params = {"kind": "comment", "taken": "true", "limit": 2}
+    params = {"kind": "comment", "result": "taken", "limit": 2}
     first = await feed(client, account, owner, **params)
     assert ids(first, events, "taken3", "taken2")
     rest = await feed(client, account, owner, before=first["next"], **params)
     assert ids(rest, events, "taken1")
     assert rest["next"] is None
+
+
+async def test_counts(client, session, account, owner):
+    await mixed(session)
+    # чужой аккаунт и прочтения в счёт не идут
+    await add(session, webhook.COMMENT, comment(), ig_id="999", **done())
+    await add(session, webhook.READ, {"sender": {"id": "1"}, "read": {"mid": "m1"}}, **done())
+    r = await client.get(f"/instagram/accounts/{account.id}/inbox/counts", headers=owner)
+    assert r.status_code == 200, r.text
+    assert r.json()["counts"] == {"taken": 4, "nobody": 2, "skipped": 1, "failed": 1, "queued": 1}
+
+
+async def test_counts_empty_and_unknown_account(client, account, owner):
+    r = await client.get(f"/instagram/accounts/{account.id}/inbox/counts", headers=owner)
+    assert r.json()["counts"] == {"taken": 0, "nobody": 0, "skipped": 0, "failed": 0, "queued": 0}
+    r = await client.get(f"/instagram/accounts/{uuid.uuid7()}/inbox/counts", headers=owner)
+    assert (r.status_code, r.json()) == (404, {"detail": "AccountNotFound"})
+
+
+async def test_counts_need_login(client, account):
+    r = await client.get(f"/instagram/accounts/{account.id}/inbox/counts")
+    assert r.status_code == 401
+
+
+async def test_unknown_result(client, account, owner):
+    r = await client.get(
+        f"/instagram/accounts/{account.id}/inbox", headers=owner, params={"result": "queued"}
+    )
+    assert r.status_code == 422
 
 
 async def test_unknown_kind(client, account, owner):

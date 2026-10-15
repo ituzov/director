@@ -475,10 +475,11 @@ async def list_inbox(
     before: uuid.UUID | None,
     limit: int,
     kind: str | None = None,
-    taken: bool | None = None,
+    result: str | None = None,
 ) -> InboxPage:
     """Что пришло от Meta на аккаунт и что с этим стало. Отключённый аккаунт тоже:
-    история остаётся. kind: один вид из ленты; taken: взял ли событие кто-то."""
+    история остаётся. kind: один вид из ленты; result: итог (взяли, никто, пропущено,
+    ошибка)."""
     account = await repository.get_account(session, account_id)
     if account is None:
         raise AccountNotFound
@@ -489,7 +490,7 @@ async def list_inbox(
         (kind,) if kind in INBOX_KINDS else INBOX_KINDS,
         before=before,
         limit=limit,
-        taken=taken,
+        result=result,
     )
     more = len(events) > limit
     events = events[:limit]
@@ -502,6 +503,19 @@ async def list_inbox(
         for i in items
     ]
     return InboxPage(items=items, next=events[-1].id if more else None)
+
+
+# итоги для вкладок ленты; queued: ещё не разобрано, во вкладки не входит
+INBOX_RESULTS = ("taken", "nobody", "skipped", "failed", "queued")
+
+
+async def inbox_counts(session: AsyncSession, account_id: uuid.UUID) -> dict[str, int]:
+    """Сколько событий ленты с каждым итогом, для вкладок; итог без событий с нулём."""
+    account = await repository.get_account(session, account_id)
+    if account is None:
+        raise AccountNotFound
+    counts = await repository.inbox_counts(session, account.ig_user_id, INBOX_KINDS)
+    return {name: counts.get(name, 0) for name in INBOX_RESULTS}
 
 
 async def comment_texts(

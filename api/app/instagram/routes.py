@@ -24,6 +24,7 @@ from app.instagram.exceptions import (
 from app.instagram.models import Account, MetaApp
 from app.instagram.schemas import (
     AccountOut,
+    InboxCountsOut,
     InboxItemOut,
     InboxPageOut,
     MediaOut,
@@ -156,6 +157,14 @@ async def list_media(
     return MediaPageOut(items=[_media_out(m) for m in page.items], next=page.after)
 
 
+@router.get("/accounts/{account_id}/inbox/counts")
+async def inbox_counts(
+    account_id: uuid.UUID, session: SessionDep, user: identity.CurrentUserRef
+) -> InboxCountsOut:
+    """Сколько событий ленты с каждым итогом: для вкладок «Всех событий»."""
+    return InboxCountsOut(counts=await service.inbox_counts(session, account_id))
+
+
 @router.get("/accounts/{account_id}/inbox")
 async def list_inbox(
     account_id: uuid.UUID,
@@ -163,14 +172,14 @@ async def list_inbox(
     user: identity.CurrentUserRef,
     before: uuid.UUID | None = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
-    # фильтр: вид события и взял ли его кто-то; выдачи это kind=comment, taken=true
+    # фильтр: вид события и итог разбора
     kind: Literal["comment", "postback", "message"] | None = None,
-    taken: bool | None = None,
+    result: Literal["taken", "nobody", "skipped", "failed"] | None = None,
 ) -> InboxPageOut:
     """Лента входящих аккаунта: что пришло от Meta и кто это взял. Свежие сверху,
     закладка before из прошлого ответа."""
     page = await service.list_inbox(
-        session, account_id, before=before, limit=limit, kind=kind, taken=taken
+        session, account_id, before=before, limit=limit, kind=kind, result=result
     )
     return InboxPageOut(
         items=[InboxItemOut.model_validate(i, from_attributes=True) for i in page.items],

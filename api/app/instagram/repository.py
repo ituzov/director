@@ -4,7 +4,7 @@
 import uuid
 from datetime import datetime, timedelta
 
-from sqlalchemy import func, or_, select, tuple_
+from sqlalchemy import and_, case, func, or_, select, tuple_
 from sqlalchemy.dialects.postgresql import distinct_on, insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -192,18 +192,16 @@ async def inbox_page(
     *,
     before: uuid.UUID | None,
     limit: int,
-    taken: bool | None = None,
+    result: str | None = None,
 ) -> list[InboxEvent]:
     """События аккаунта, свежие сверху; before: старше этого события.
-    taken: только взятые кем-то или только ничьи. На одно больше limit: по
+    result: только с таким итогом (_RESULT). На одно больше limit: по
     лишнему видно, что есть следующая страница."""
     query = select(InboxEvent).where(
         InboxEvent.ig_account_id == ig_account_id, InboxEvent.kind.in_(kinds)
     )
-    if taken is not None:
-        query = query.where(
-            InboxEvent.handled_by.is_not(None) if taken else InboxEvent.handled_by.is_(None)
-        )
+    if result is not None:
+        query = query.where(_RESULT[result])
     if before is not None:
         anchor = await session.get(InboxEvent, before)
         # закладка чужого аккаунта (переключили аккаунт со старой страницей) резала бы
@@ -216,6 +214,29 @@ async def inbox_page(
         )
     query = query.order_by(InboxEvent.received_at.desc(), InboxEvent.id.desc()).limit(limit + 1)
     return list(await session.scalars(query))
+
+
+# итог события для вкладок ленты: взял ли кто-то, разобрано без ответа, пропущено, упало.
+# Неразобранное (в очереди) ни в одну вкладку не входит, видно только во «Всех»
+_RESULT = {
+    "taken": InboxEvent.handled_by.is_not(None),
+    "nobody": and_(InboxEvent.outcome == "done", InboxEvent.handled_by.is_(None)),
+    "skipped": InboxEvent.outcome == "skipped",
+    "failed": InboxEvent.outcome == "failed",
+}
+
+
+async def inbox_counts(
+    session: AsyncSession, ig_account_id: str, kinds: tuple[str, ...]
+) -> dict[str, int]:
+    """Сколько событий аккаунта с каждым итогом; queued: ещё не разобраны."""
+    bucket = case(*((cond, name) for name, cond in _RESULT.items()), else_="queued")
+    rows = await session.execute(
+        select(bucket, func.count())
+        .where(InboxEvent.ig_account_id == ig_account_id, InboxEvent.kind.in_(kinds))
+        .group_by(bucket)
+    )
+    return {name: count for name, count in rows.all()}
 
 
 async def inbox_by_keys(

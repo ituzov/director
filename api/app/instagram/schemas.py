@@ -2,7 +2,7 @@
 
 import uuid
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, StringConstraints
 
@@ -120,3 +120,9 @@ class InboxPageOut(BaseModel):
     items: list[InboxItemOut]
     # закладка для следующей страницы, в before; None: дальше пусто
     next: uuid.UUID | None
+
+
+class InboxCountsOut(BaseModel):
+    """Сколько событий ленты с каждым итогом; queued: ещё не разобраны."""
+
+    counts: dict[Literal["taken", "nobody", "skipped", "failed", "queued"], int]
