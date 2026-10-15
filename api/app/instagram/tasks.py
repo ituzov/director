@@ -105,6 +105,7 @@ def _postback_ref(event: InboxEvent, account: Account) -> PostbackRef | None:
         payload=payload,
         mid=str(mid),
         acted_at=acted_at,
+        received_at=event.received_at,
     )
 
 

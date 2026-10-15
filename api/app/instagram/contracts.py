@@ -51,6 +51,9 @@ class PostbackRef:
     mid: str
     # когда нажали по часам Meta; по ним меряем двойной тап
     acted_at: datetime
+    # когда вебхук пришёл к нам, по нашим часам: на них же время отправок,
+    # и шаги одной истории не перепутаются, если часы Meta убежали
+    received_at: datetime
 
 
 @dataclass(frozen=True, slots=True)

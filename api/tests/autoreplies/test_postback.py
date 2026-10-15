@@ -55,6 +55,7 @@ def click(delivery, *, at=CLICK, person_id="p1", mid=None, payload=None) -> inst
         payload=payload if payload is not None else f"ar:{delivery.id}",
         mid=mid or str(uuid.uuid4()),
         acted_at=at,
+        received_at=at,
     )
 
 
@@ -161,6 +162,7 @@ async def test_other_account_ignored(session, delivery):
         payload=postback.payload,
         mid=postback.mid,
         acted_at=postback.acted_at,
+        received_at=postback.received_at,
     )
     await press(session, postback)
     assert await outbox(session) == []

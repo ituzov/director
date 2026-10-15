@@ -212,6 +212,7 @@ async def test_postback_goes_to_handler(session, account):
             mid="pb-1",
             # время нажатия по часам Meta, а не время вебхука
             acted_at=RECEIVED - timedelta(seconds=2),
+            received_at=RECEIVED,
         )
     ]
     event = await stored(session, event_id)

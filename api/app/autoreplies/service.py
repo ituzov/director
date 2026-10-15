@@ -321,7 +321,8 @@ async def handle_postback(session: AsyncSession, postback: instagram.PostbackRef
         "person_id": delivery.person_id,
         "comment_id": delivery.comment_id,
         "data": {"delivery_id": str(delivery.id)},
-        "occurred_at": postback.acted_at,
+        # по нашим часам, как отправки: иначе спешащие часы Meta переставят шаги
+        "occurred_at": postback.received_at,
     }
     if delivery.delivered_at:
         # материал уже в переписке прямо над кнопкой

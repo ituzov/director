@@ -96,7 +96,7 @@ def steps(comments, comment_id="c1") -> list[str]:
     return [s["step"] for s in comments[comment_id]]
 
 
-async def click(session, delivery, *, minute) -> None:
+async def click(session, delivery, *, minute, meta_ahead=0) -> None:
     await autoreplies.handle_postback(
         session,
         instagram.PostbackRef(
@@ -104,7 +104,8 @@ async def click(session, delivery, *, minute) -> None:
             person_id="p1",
             payload=f"ar:{delivery.id}",
             mid=f"m{minute}",
-            acted_at=T0 + timedelta(minutes=minute),
+            acted_at=T0 + timedelta(minutes=minute + meta_ahead),
+            received_at=T0 + timedelta(minutes=minute),
         ),
     )
     await session.commit()
@@ -157,6 +158,17 @@ async def test_late_report_keeps_order(client, session, owner, delivery):
     assert steps(await history(client, owner, delivery.account_id, "c1")) == [
         "dm_sent",
         "clicked",
+    ]
+
+
+async def test_click_on_our_clock(client, session, owner, delivery):
+    # часы Meta спешат на 5 минут: нажатие в 12:01 по нашим часам Meta помечает 12:06.
+    # Просьба подписаться ушла в 12:02 и должна стоять после нажатия
+    await click(session, delivery, minute=1, meta_ahead=5)
+    await report(session, delivery, "material", variant="not_following", minute=2)
+    assert steps(await history(client, owner, delivery.account_id, "c1")) == [
+        "clicked",
+        "follow_asked",
     ]
 
 
