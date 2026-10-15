@@ -2,17 +2,22 @@ import { describe, expect, it } from "vitest";
 
 import { type Step, stages, summary } from "./inbox";
 
-// шаги по порядку, как их отдаёт api; итогу важен только код
-function steps(...codes: Step["step"][]): Step[] {
-  return codes.map((step) => ({
-    step,
-    at: "2026-01-02T12:00:00Z",
-    autoreply_id: null,
-    keyword: null,
-    outcome: null,
-    reason: null,
-    follow: null,
-  }));
+// шаги по порядку, как их отдаёт api; итогу важен код, дорожке ещё подписка у выдачи.
+// "delivered:following" это выдача с проверенной подпиской
+type Code = Step["step"] | "delivered:following" | "delivered:unknown";
+function steps(...codes: Code[]): Step[] {
+  return codes.map((code) => {
+    const [step, follow] = code.split(":") as [Step["step"], string | undefined];
+    return {
+      step,
+      at: "2026-01-02T12:00:00Z",
+      autoreply_id: null,
+      keyword: null,
+      outcome: null,
+      reason: null,
+      follow: follow ?? null,
+    };
+  });
 }
 
 describe("summary: где выдача сейчас", () => {
@@ -85,12 +90,12 @@ describe("summary: где выдача сейчас", () => {
 });
 
 describe("stages: дорожка выдачи", () => {
-  const track = (...codes: Step["step"][]) =>
+  const track = (...codes: Code[]) =>
     stages(steps(...codes))
       ?.map(({ stage, state }) => `${stage}:${state}`)
       .join(" ") ?? null;
 
-  it.each<[string, Step["step"][], string | null]>([
+  it.each<[string, Code[], string | null]>([
     ["истории нет", [], null],
     ["повторный коммент без дорожки", ["repeat_comment"], null],
     ["отправляем директ", ["matched"], "dm:current click:todo material:todo"],
@@ -103,9 +108,10 @@ describe("stages: дорожка выдачи", () => {
       "dm:done click:done follow:current material:todo",
     ],
     [
-      "подписался и нажал снова",
+      // подписку проверят при отправке материала: нажатие её ещё не подтверждает
+      "нажал после просьбы подписаться",
       ["matched", "dm_sent", "clicked", "follow_asked", "clicked"],
-      "dm:done click:done follow:done material:current",
+      "dm:done click:done follow:current material:todo",
     ],
     [
       "получил без подписки",
@@ -113,9 +119,24 @@ describe("stages: дорожка выдачи", () => {
       "dm:done click:done material:done",
     ],
     [
-      "получил после подписки",
-      ["matched", "dm_sent", "clicked", "follow_asked", "clicked", "delivered"],
+      "получил с проверенной подпиской",
+      ["matched", "dm_sent", "clicked", "follow_asked", "clicked", "delivered:following"],
       "dm:done click:done follow:done material:done",
+    ],
+    [
+      "получил без проверки подписки",
+      ["matched", "dm_sent", "clicked", "follow_asked", "clicked", "delivered:unknown"],
+      "dm:done click:done follow:unknown material:done",
+    ],
+    [
+      "после просьбы отправка упала без этапа",
+      ["matched", "dm_sent", "clicked", "follow_asked", "clicked", "send_failed"],
+      "dm:done click:done follow:unknown material:failed",
+    ],
+    [
+      "после просьбы материал не ушёл",
+      ["matched", "dm_sent", "clicked", "follow_asked", "clicked", "material_failed"],
+      "dm:done click:done follow:unknown material:failed",
     ],
     [
       "материал не ушёл",

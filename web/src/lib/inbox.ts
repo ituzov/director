@@ -96,15 +96,10 @@ export function summary(steps: Step[]): Summary | null {
   return state;
 }
 
-export type InboxView = "deliveries" | "all";
-
-/** Фильтр ленты для вида: выдачи это комменты, которые кто-то взял. */
-export function viewQuery(view: InboxView): Record<string, string> {
-  return view === "deliveries" ? { kind: "comment", taken: "true" } : {};
-}
-
 export type Stage = "dm" | "click" | "follow" | "material";
-export type StageState = "done" | "current" | "failed" | "todo";
+// unknown: о подписке просили, но выдали без проверки (Meta не ответила) или
+// отправка упала раньше, чем подписку проверили
+export type StageState = "done" | "current" | "failed" | "todo" | "unknown";
 
 // этап, на котором выдача сейчас, и что с ним; до него всё сделано, после всё впереди
 const AT: Record<Exclude<Summary, "repeat_comment" | "send_failed">, [Stage, StageState]> = {
@@ -117,8 +112,20 @@ const AT: Record<Exclude<Summary, "repeat_comment" | "send_failed">, [Stage, Sta
   delivered: ["material", "done"],
 };
 
-/** Дорожка выдачи для карточки: этапы по порядку и где выдача сейчас. Выводится из
- * summary(), чтобы дорожка и надпись итога не разошлись. null: дорожки нет. */
+/** Что известно о подписке, когда выдача ушла дальше просьбы подписаться. Подписку
+ * проверяют только при отправке материала: нажатие её ещё не подтверждает. */
+function followState(now: Summary, steps: Step[]): StageState | null {
+  if (now === "clicked") return "current";
+  if (now === "material_failed" || now === "send_failed") return "unknown";
+  if (now === "delivered") {
+    const delivered = steps.findLast((s) => s.step === "delivered");
+    return delivered?.follow === "following" ? "done" : "unknown";
+  }
+  return null;
+}
+
+/** Дорожка выдачи: этапы по порядку и где выдача сейчас. Выводится из summary(),
+ * чтобы дорожка и надпись итога не разошлись. null: дорожки нет. */
 export function stages(steps: Step[]): { stage: Stage; state: StageState }[] | null {
   const now = summary(steps);
   if (now === null || now === "repeat_comment") return null;
@@ -128,12 +135,23 @@ export function stages(steps: Step[]): { stage: Stage; state: StageState }[] | n
     now === "send_failed" ? ([has("clicked") ? "material" : "dm", "failed"] as const) : AT[now];
   // подписку показываем, только если о ней правда просили: включена ли проверка
   // в автоответе, из истории не узнать
-  const order: Stage[] = has("follow_asked")
+  const asked = has("follow_asked");
+  const order: Stage[] = asked
     ? ["dm", "click", "follow", "material"]
     : ["dm", "click", "material"];
   const index = order.indexOf(at);
-  return order.map((stage, i) => ({
+  const track = order.map((stage, i): { stage: Stage; state: StageState } => ({
     stage,
     state: i < index ? "done" : i === index ? state : "todo",
   }));
+  const follow = asked && index > order.indexOf("follow") ? followState(now, steps) : null;
+  if (!follow) return track;
+  return track.map((t) =>
+    t.stage === "follow"
+      ? { stage: t.stage, state: follow }
+      : // нажал после просьбы: сейчас проверяем подписку, материал ещё впереди
+        t.stage === "material" && follow === "current"
+        ? { stage: t.stage, state: "todo" }
+        : t,
+  );
 }
