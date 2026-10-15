@@ -5,9 +5,15 @@ import type { InboxItem, Step } from "@/lib/inbox";
 export type T = ReturnType<typeof useTranslations<"Inbox">>;
 type Format = ReturnType<typeof useFormatter>;
 
-/** Сегодня часы, раньше дата. */
+// день в поясе форматтера (cookie tz), а не среды: на сервере UTC, в браузере свой
+// пояс, и около полуночи toDateString() дал бы им разный ответ и ошибку гидратации
+function day(at: Date, format: Format): string {
+  return format.dateTime(at, { year: "numeric", month: "2-digit", day: "2-digit" });
+}
+
+/** Сегодня часы, раньше дата. «Сегодня» в поясе форматтера. */
 export function shortTime(at: Date, now: number, format: Format): string {
-  const today = new Date(now).toDateString() === at.toDateString();
+  const today = day(at, format) === day(new Date(now), format);
   return format.dateTime(
     at,
     today ? { hour: "2-digit", minute: "2-digit" } : { day: "numeric", month: "short" },
