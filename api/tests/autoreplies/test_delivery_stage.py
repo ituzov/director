@@ -158,6 +158,17 @@ async def test_late_follow_report_after_new_click(session, delivery):
     assert await stage(session, delivery) == "clicked"
 
 
+async def test_late_delivered_report_after_new_click(session, delivery):
+    # материал ушёл в 12:03, отчёт упал; человек нажал ещё раз в 12:04, а отчёт о
+    # выдаче дошёл после нажатия: материал у человека, цепочка закрыта
+    await report(session, delivery, "intro", 1)
+    await click(session, delivery, 2)
+    await click(session, delivery, 4)
+    await report(session, delivery, "material", 3)
+    assert await stage(session, delivery) == "delivered"
+    assert delivery.delivered_at is not None
+
+
 async def test_delivered_is_final(session, delivery):
     await report(session, delivery, "material", 1)
     # отчёт другого раунда и нажатие после выдачи этап не откатят, даже если новее

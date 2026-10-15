@@ -430,8 +430,11 @@ async def handle_send_result(session: AsyncSession, result: instagram.OutboxResu
 def _move(delivery: Delivery, stage: str, at: datetime) -> None:
     """Где выдача сейчас. Двигает только событие не старше того, что поставило текущий
     этап: запоздалый отчёт об отправке не вернёт нажавшего в «ждём нажатия». Получил
-    материал: окончательно."""
-    if delivery.stage == "delivered" or at < delivery.stage_at:
+    материал: окончательно в обе стороны. Его отчёт мог опоздать за повторным нажатием,
+    но материал уже у человека, и цепочку он закрывает всегда."""
+    if delivery.stage == "delivered":
+        return
+    if stage != "delivered" and at < delivery.stage_at:
         return
     delivery.stage, delivery.stage_at = stage, at
 
