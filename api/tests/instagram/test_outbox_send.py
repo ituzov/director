@@ -130,6 +130,15 @@ async def test_private_reply_with_button(session, account, meta):
     ]
 
 
+async def test_finished_after_meta_answered(session, account, meta):
+    # время в песочнице стоит: now() это начало транзакции, до звонка в Meta.
+    # Конец отправки позже, иначе нажатие во время отправки встало бы после итога
+    await private_reply(session, account)
+    await instagram.send_outbox_task(session)
+    task = await stored(session)
+    assert task.finished_at > await session.scalar(select(func.now()))
+
+
 async def test_message_to_person(session, account, meta):
     await instagram.enqueue_message(
         session,

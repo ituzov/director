@@ -406,7 +406,10 @@ def _finish_task(
     task.outcome = outcome
     task.reason = reason
     task.variant = variant
-    task.finished_at = func.now()
+    # настоящее время записи, а не начало транзакции (now()): отправка закончилась
+    # после ответа Meta. Нажатие, пришедшее, пока шла отправка, встанет в истории
+    # раньше её итога
+    task.finished_at = func.clock_timestamp()
     return outcome, reason, variant
 
 
