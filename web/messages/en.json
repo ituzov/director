@@ -400,7 +400,7 @@
   },
   "Inbox": {
     "title": "Inbox",
-    "description": "What Instagram sent to the selected account and what Director did with it, newest first.",
+    "description": "Who an autoreply matched and which step they're at now. All events shows everything the account receives.",
     "refresh": "Refresh",
     "more": "Show more",
     "moreFailed": "Couldn't load more. Please try again.",
@@ -457,6 +457,47 @@
       "dm_failed": "Direct message wasn't sent",
       "material_failed": "Material wasn't sent",
       "send_failed": "Message wasn't sent"
+    },
+    "view": {
+      "label": "What to show",
+      "deliveries": "Deliveries",
+      "all": "All events"
+    },
+    "deliveries": {
+      "empty": "No deliveries yet.",
+      "emptyHint": "When an autoreply matches a comment, you'll see here which step the person is at. Everything the account receives is under <link>All events</link>.",
+      "emptyTab": "Nobody is at this step right now.",
+      "noHistory": "No details: this delivery's log is empty.",
+      "openAutoreply": "Open autoreply “{name}”"
+    },
+    "stage": {
+      "dm": "Message",
+      "click": "Tap",
+      "follow": "Follow",
+      "material": "Material"
+    },
+    "tabs": {
+      "label": "Stage",
+      "all": "All",
+      "waiting": "Waiting for a tap",
+      "follow": "Waiting to follow",
+      "delivered": "Received",
+      "failed": "Not delivered"
+    },
+    "columns": {
+      "person": "Person",
+      "autoreply": "Autoreply",
+      "now": "Now",
+      "when": "When"
+    },
+    "stageNow": {
+      "sending": "Sending a message",
+      "waiting_click": "Waiting for a tap",
+      "dm_failed": "Message wasn't sent",
+      "clicked": "Tapped, sending the material",
+      "follow_asked": "Waiting for a follow",
+      "material_failed": "Material wasn't sent",
+      "delivered": "Got the material"
     },
     "outcome": {
       "queued": "Queued",

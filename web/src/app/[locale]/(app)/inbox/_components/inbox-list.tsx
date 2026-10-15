@@ -26,6 +26,7 @@ import {
 } from "@/lib/inbox";
 import { cn } from "@/lib/utils";
 
+import { loadInbox } from "../actions";
 import { longTime, shortTime, type T, TONE_TEXT, toneOf, type Tone, who } from "./labels";
 import { MoreButton } from "./more-button";
 import { Steps } from "./steps";
@@ -56,9 +57,9 @@ function oneOf<T extends string>(list: readonly T[], value: string | null): valu
 export function InboxList({ accountId, initial, history: initialHistory, names, now }: Props) {
   const t = useTranslations("Inbox");
   const { items, history, next, failed, pending, more } = useFeed(
-    accountId,
     initial,
     initialHistory,
+    (before) => loadInbox(accountId, before),
   );
 
   if (items.length === 0) {

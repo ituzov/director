@@ -1,11 +1,16 @@
 import { useState, useTransition } from "react";
 
-import type { History, InboxPage } from "@/lib/inbox";
+import type { History } from "@/lib/inbox";
 
-import { loadInbox } from "../actions";
+type Page<T> = { items: T[]; next: string | null };
 
-/** Лента по страницам: строки, их история и закладка следующей страницы. */
-export function useFeed(accountId: string, initial: InboxPage, initialHistory: History) {
+/** Список по страницам: строки, их история и закладка следующей страницы. load
+ * догружает страницу старше закладки. */
+export function useFeed<T>(
+  initial: Page<T>,
+  initialHistory: History,
+  load: (before: string) => Promise<{ page: Page<T>; history: History }>,
+) {
   const [items, setItems] = useState(initial.items);
   const [history, setHistory] = useState(initialHistory);
   const [next, setNext] = useState(initial.next);
@@ -17,7 +22,7 @@ export function useFeed(accountId: string, initial: InboxPage, initialHistory: H
     setFailed(false);
     startTransition(async () => {
       try {
-        const { page, history: more } = await loadInbox(accountId, next);
+        const { page, history: more } = await load(next);
         setItems((prev) => [...prev, ...page.items]);
         // коммент лежит на одной странице: истории порций не пересекаются
         setHistory((prev) => ({ ...prev, ...more }));

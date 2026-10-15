@@ -19,7 +19,7 @@ export function longTime(at: Date, format: Format): string {
   return format.dateTime(at, { dateStyle: "long", timeStyle: "medium" });
 }
 
-export function who(item: InboxItem, t: T): string {
+export function who(item: Pick<InboxItem, "username" | "person_id">, t: T): string {
   if (item.username) return `@${item.username}`;
   // ника нет: человек не писал комментов этому аккаунту, видно только хвост id
   if (item.person_id) return `…${item.person_id.slice(-4)}`;
@@ -45,22 +45,26 @@ export function failureText(step: Step, t: T): string {
   return t("failure.other");
 }
 
-export type Tone = "ok" | "bad" | "muted";
+// ok: получил; warn: ждём человека; bad: не ушло; muted: идёт своим ходом
+export type Tone = "ok" | "warn" | "bad" | "muted";
 
 const SUMMARY_TONE: Partial<Record<Summary, Tone>> = {
   delivered: "ok",
+  waiting_click: "warn",
+  follow_asked: "warn",
   dm_failed: "bad",
   material_failed: "bad",
   send_failed: "bad",
 };
 
-/** Цвет итога: получил зелёным, неудача красным, остальное серым. */
+/** Цвет итога: тихий успех, заметные «ждём» и неудачи. */
 export function toneOf(result: Summary): Tone {
   return SUMMARY_TONE[result] ?? "muted";
 }
 
 export const TONE_TEXT: Record<Tone, string> = {
-  ok: "text-primary",
+  ok: "text-success-foreground",
+  warn: "text-warning-foreground",
   bad: "text-destructive",
   muted: "text-muted-foreground",
 };

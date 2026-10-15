@@ -1,16 +1,16 @@
 import "server-only";
 
 import { ApiError, apiFetch } from "@/lib/api";
-import type { History, InboxItem } from "@/lib/inbox";
+import type { History } from "@/lib/inbox";
 
-/** Шаги выдачи по комментам страницы ленты. Только для сервера: не server action,
- * браузер его сам не позовёт. Не ответило api: лента без цепочек, а не ошибка. */
+/** Шаги выдачи по комментам страницы. Только для сервера: не server action,
+ * браузер его сам не позовёт. Не ответило api: список без истории, а не ошибка. */
 export async function loadHistory(
   accountId: string,
-  items: InboxItem[],
+  commentIds: (string | null)[],
   token: string | undefined,
 ): Promise<History> {
-  const ids = items.flatMap((i) => (i.comment_id ? [i.comment_id] : []));
+  const ids = commentIds.filter((id): id is string => id !== null);
   if (ids.length === 0) return {};
   const query = new URLSearchParams({ account_id: accountId });
   for (const id of ids) query.append("comment_id", id);
