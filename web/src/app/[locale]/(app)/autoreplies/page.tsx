@@ -1,9 +1,10 @@
 import { MessageSquareReply, Plus } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { getNow } from "next-intl/server";
+import { getNow, getTranslations } from "next-intl/server";
 import { Suspense } from "react";
 
 import { Page, Panel } from "@/components/page";
+import { ViewTabs } from "@/components/view-tabs";
 import { Button } from "@/components/ui/button";
 import { Link } from "@/i18n/navigation";
 import { apiFetch } from "@/lib/api";
@@ -11,7 +12,6 @@ import { type Autoreply, type AutoreplyStats, STATS_DAYS } from "@/lib/autorepli
 import { getCurrentAccount } from "@/lib/current-account";
 import { getToken } from "@/lib/session";
 
-import { ArchiveTabs } from "./_components/archive-tabs";
 import { AutoreplyList, AutoreplyListSkeleton } from "./_components/autoreply-list";
 
 type Props = { searchParams: Promise<{ archived?: string }> };
@@ -51,7 +51,7 @@ async function Autoreplies({ searchParams }: Props) {
   const token = await getToken();
   const query = new URLSearchParams({ account_id: account.id, archived: String(archived) });
   // один момент на запрос: «2 ч назад» в браузере совпадёт с серверным
-  const [autoreplies, stats, now] = await Promise.all([
+  const [autoreplies, stats, now, t] = await Promise.all([
     apiFetch<Autoreply[]>(`/autoreplies?${query}`, { token }),
     // цифры на карточках не главное: сводка упала, список всё равно показываем
     apiFetch<AutoreplyStats>(
@@ -59,10 +59,22 @@ async function Autoreplies({ searchParams }: Props) {
       { token },
     ).catch(() => null),
     getNow(),
+    getTranslations("Autoreplies.tabs"),
   ]);
   return (
     <>
-      <ArchiveTabs archived={archived} />
+      <ViewTabs
+        label={t("label")}
+        tabs={[
+          { key: "active", href: "/autoreplies", label: t("active"), current: !archived },
+          {
+            key: "archive",
+            href: "/autoreplies?archived=1",
+            label: t("archive"),
+            current: archived,
+          },
+        ]}
+      />
       <AutoreplyList
         autoreplies={autoreplies}
         archived={archived}

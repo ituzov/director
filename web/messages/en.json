@@ -230,6 +230,7 @@
     "description": "Someone comments a code word under a post and gets a direct message with a button. The button gives them the material.",
     "create": "Create",
     "tabs": {
+      "label": "Active or archived",
       "active": "Active",
       "archive": "Archive"
     },
