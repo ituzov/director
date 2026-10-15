@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  ChevronRight,
   CircleAlert,
   CircleCheck,
   CircleDashed,
@@ -13,23 +12,25 @@ import {
   MousePointerClick,
 } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
-import { useId, useState, useTransition } from "react";
+import { useId, useState } from "react";
 
-import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "@/i18n/navigation";
 import {
   type History,
   type InboxItem,
   type InboxPage,
-  isFailure,
   type Step,
   summary,
   type Summary,
 } from "@/lib/inbox";
 import { cn } from "@/lib/utils";
 
-import { loadInbox } from "../actions";
+import { longTime, shortTime, type T, TONE_TEXT, toneOf, type Tone, who } from "./labels";
+import { MoreButton } from "./more-button";
+import { Steps } from "./steps";
+import { SummaryToggle, type Toggle } from "./summary-toggle";
+import { useFeed } from "./use-feed";
 
 type Props = {
   accountId: string;
@@ -54,11 +55,11 @@ function oneOf<T extends string>(list: readonly T[], value: string | null): valu
 
 export function InboxList({ accountId, initial, history: initialHistory, names, now }: Props) {
   const t = useTranslations("Inbox");
-  const [items, setItems] = useState(initial.items);
-  const [history, setHistory] = useState(initialHistory);
-  const [next, setNext] = useState(initial.next);
-  const [failed, setFailed] = useState(false);
-  const [pending, startTransition] = useTransition();
+  const { items, history, next, failed, pending, more } = useFeed(
+    accountId,
+    initial,
+    initialHistory,
+  );
 
   if (items.length === 0) {
     return (
@@ -79,21 +80,6 @@ export function InboxList({ accountId, initial, history: initialHistory, names, 
     );
   }
 
-  function more(before: string) {
-    setFailed(false);
-    startTransition(async () => {
-      try {
-        const { page, history: more } = await loadInbox(accountId, before);
-        setItems((prev) => [...prev, ...page.items]);
-        // коммент лежит на одной странице: истории порций не пересекаются
-        setHistory((prev) => ({ ...prev, ...more }));
-        setNext(page.next);
-      } catch {
-        setFailed(true);
-      }
-    });
-  }
-
   return (
     <div className="grid gap-4">
       <ul className="divide-y rounded-lg border">
@@ -107,30 +93,8 @@ export function InboxList({ accountId, initial, history: initialHistory, names, 
           />
         ))}
       </ul>
-      {next && (
-        <div className="grid justify-items-center gap-2">
-          <Button variant="outline" disabled={pending} onClick={() => more(next)}>
-            {t("more")}
-          </Button>
-          {failed && (
-            <p role="alert" className="text-sm text-destructive">
-              {t("moreFailed")}
-            </p>
-          )}
-        </div>
-      )}
+      {next && <MoreButton pending={pending} failed={failed} onClick={more} />}
     </div>
-  );
-}
-
-type Format = ReturnType<typeof useFormatter>;
-
-/** Сегодня часы, раньше дата: как в строке ленты. */
-function shortTime(at: Date, now: number, format: Format): string {
-  const today = new Date(now).toDateString() === at.toDateString();
-  return format.dateTime(
-    at,
-    today ? { hour: "2-digit", minute: "2-digit" } : { day: "numeric", month: "short" },
   );
 }
 
@@ -157,7 +121,7 @@ function Row({
     <li className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 px-4 py-3 text-sm md:grid-cols-[4.5rem_minmax(0,1fr)_auto] md:items-center">
       <time
         dateTime={item.received_at}
-        title={format.dateTime(at, { dateStyle: "long", timeStyle: "medium" })}
+        title={longTime(at, format)}
         className="text-muted-foreground tabular-nums"
       >
         {shortTime(at, now, format)}
@@ -180,79 +144,18 @@ function Row({
           toggle={{ open, controls: stepsId, onClick: () => setOpen((v) => !v) }}
         />
       </div>
-      {steps.length > 0 && <Steps id={stepsId} open={open} steps={steps} now={now} />}
+      {steps.length > 0 && (
+        // сетка строки (subgrid): время шага ровно под временем коммента
+        <Steps
+          id={stepsId}
+          open={open}
+          steps={steps}
+          now={now}
+          className="col-span-full grid-cols-subgrid pt-2"
+        />
+      )}
     </li>
   );
-}
-
-/** Что было с комментом после автоответа, по шагам. В DOM всегда: на него
- * указывает aria-controls кнопки, закрытый просто скрыт. */
-function Steps({
-  id,
-  open,
-  steps,
-  now,
-}: {
-  id: string;
-  open: boolean;
-  steps: Step[];
-  now: number;
-}) {
-  const t = useTranslations("Inbox");
-  const format = useFormatter();
-
-  return (
-    // сетка строки (subgrid): время шага ровно под временем коммента
-    <ol id={id} hidden={!open} className="col-span-full grid grid-cols-subgrid gap-y-1.5 pt-2">
-      {steps.map((step, i) => {
-        const at = new Date(step.at);
-        const failure = isFailure(step.step);
-        return (
-          <li key={i} className="col-span-full grid grid-cols-subgrid">
-            <time
-              dateTime={step.at}
-              title={format.dateTime(at, { dateStyle: "long", timeStyle: "medium" })}
-              className="text-muted-foreground tabular-nums"
-            >
-              {shortTime(at, now, format)}
-            </time>
-            <div className={cn("md:col-span-2", failure && "text-destructive")}>
-              <p>{stepText(step, t)}</p>
-              {failure && <p className="text-muted-foreground">{failureText(step, t)}</p>}
-            </div>
-          </li>
-        );
-      })}
-    </ol>
-  );
-}
-
-type T = ReturnType<typeof useTranslations<"Inbox">>;
-
-function who(item: InboxItem, t: T): string {
-  if (item.username) return `@${item.username}`;
-  // ника нет: человек не писал комментов этому аккаунту, видно только хвост id
-  if (item.person_id) return `…${item.person_id.slice(-4)}`;
-  return t("unknownPerson");
-}
-
-function stepText(step: Step, t: T): string {
-  if (step.step === "matched") {
-    return step.keyword ? t("step.matched", { keyword: step.keyword }) : t("step.matchedNoWord");
-  }
-  // following не пишем: проверили и выдали, это обычный случай
-  if (step.step === "delivered" && step.follow === "unknown") return t("step.deliveredUnchecked");
-  // api добавил шаг, которого web ещё не знает: общий текст, а не сырой ключ
-  const key = `step.${step.step}` as const;
-  return t.has(key) ? t(key) : t("step.other");
-}
-
-/** Почему не ушло. reason бывает кодом Meta, нашей причиной или именем исключения. */
-function failureText(step: Step, t: T): string {
-  if (step.outcome === "expired") return t("failure.expired");
-  if (step.reason && /^\d+$/.test(step.reason)) return t("failure.meta", { code: step.reason });
-  if (step.reason === "account_inactive") return t("failure.account_inactive");
-  return t("failure.other");
 }
 
 function what(item: InboxItem, t: T): string | null {
@@ -263,15 +166,6 @@ function what(item: InboxItem, t: T): string | null {
   }
   return null;
 }
-
-type Toggle = { open: boolean; controls: string; onClick: () => void };
-
-const SUMMARY_TONE: Partial<Record<Summary, "ok" | "bad">> = {
-  delivered: "ok",
-  dm_failed: "bad",
-  material_failed: "bad",
-  send_failed: "bad",
-};
 
 /** Что Директор сделал с событием, человеческим языком. */
 function Outcome({
@@ -327,7 +221,7 @@ function Delivery({
   toggle: Toggle;
 }) {
   const t = useTranslations("Inbox");
-  const tone = SUMMARY_TONE[result] ?? "muted";
+  const tone = toneOf(result);
   const Icon =
     tone === "ok"
       ? CircleCheck
@@ -338,14 +232,7 @@ function Delivery({
           : Clock;
 
   return (
-    <span
-      className={cn(
-        "inline-flex flex-wrap items-center gap-x-1.5",
-        tone === "ok" && "text-primary",
-        tone === "bad" && "text-destructive",
-        tone === "muted" && "text-muted-foreground",
-      )}
-    >
+    <span className={cn("inline-flex flex-wrap items-center gap-x-1.5", TONE_TEXT[tone])}>
       <Icon className="size-4 shrink-0" />
       {name ? (
         <Link href={`/autoreplies/${item.handled_ref}`} className="hover:underline">
@@ -355,20 +242,8 @@ function Delivery({
         t("outcome.autoreplies")
       )}
       <span aria-hidden>·</span>
-      {/* кнопка под палец: на телефоне 40px, от md 36px; отрицательный отступ
-          держит высоту строки */}
-      <button
-        type="button"
-        aria-expanded={toggle.open}
-        aria-controls={toggle.controls}
-        onClick={toggle.onClick}
-        className="-my-2.5 inline-flex min-h-10 items-center gap-0.5 rounded-sm hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none md:-my-2 md:min-h-9"
-      >
-        {t(`summary.${result}`)}
-        <ChevronRight
-          className={cn("size-4 shrink-0 transition-transform", toggle.open && "rotate-90")}
-        />
-      </button>
+      {/* отрицательный отступ держит высоту строки при кнопке под палец */}
+      <SummaryToggle result={result} toggle={toggle} className="-my-2.5 md:-my-2" />
     </span>
   );
 }
@@ -378,19 +253,12 @@ function Status({
   icon: Icon,
   text,
 }: {
-  tone: "ok" | "bad" | "muted";
+  tone: Tone;
   icon: typeof CircleCheck;
   text: string;
 }) {
   return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1.5",
-        tone === "ok" && "text-primary",
-        tone === "bad" && "text-destructive",
-        tone === "muted" && "text-muted-foreground",
-      )}
-    >
+    <span className={cn("inline-flex items-center gap-1.5", TONE_TEXT[tone])}>
       <Icon className="size-4 shrink-0" />
       {text}
     </span>
