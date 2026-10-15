@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, Clapperboard, X } from "lucide-react";
-import { useFormatter, useTranslations } from "next-intl";
+import { useFormatter, useNow, useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -296,14 +296,17 @@ function PostTile({
 }) {
   const t = useTranslations("AutoreplyForm.posts");
   const format = useFormatter();
+  const now = useNow();
   const date = media.timestamp ? new Date(media.timestamp) : null;
-  // год только у прошлогодних: в плитке тесно
+  // год только у прошлогодних: в плитке тесно. Год в поясе форматтера, а не среды:
+  // иначе под Новый год сервер и браузер нарисовали бы разное
+  const year = (d: Date) => format.dateTime(d, { year: "numeric" });
   const when =
     date &&
     format.dateTime(date, {
       day: "numeric",
       month: "short",
-      ...(date.getFullYear() !== new Date().getFullYear() && { year: "numeric" }),
+      ...(year(date) !== year(now) && { year: "numeric" }),
     });
 
   return (
