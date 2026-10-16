@@ -55,7 +55,7 @@ type = "layers"
 layers = [
     "app.main | app.worker",
     "app.autoreplies | app.updates",
-    "app.instagram",
+    "app.instagram | app.ai",
     "app.identity",
     "app.activity",
     "app.core : app.config : app.db",
@@ -78,6 +78,12 @@ name = "instagram: только через публичный интерфейс
 type = "protected"
 protected_modules = ["app.instagram.*"]
 allowed_importers = ["app.instagram", "app.instagram.**", "app.db_models"]
+
+[[tool.importlinter.contracts]]
+name = "ai: только через публичный интерфейс"
+type = "protected"
+protected_modules = ["app.ai.*"]
+allowed_importers = ["app.ai", "app.ai.**", "app.db_models"]
 
 [[tool.importlinter.contracts]]
 name = "activity: только через публичный интерфейс"
