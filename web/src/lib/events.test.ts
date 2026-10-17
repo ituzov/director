@@ -115,9 +115,32 @@ describe("explain: чем кончилось и почему", () => {
       "outcome.foreignButton muted why.foreignButton",
     ],
     ["сообщение", { kind: "message" }, undefined, "outcome.noReply muted why.noReply"],
-    ["другой обработчик", { handled_by: "assistant" }, undefined, "outcome.handled ok why.handled"],
+    // взял ассистент: его название; что он решил, рассказывает вкладка «Ассистент»
+    [
+      "ассистент",
+      { handled_by: "assistant", handled_ref: "a1" },
+      "Все вопросы",
+      "outcome.assistant ok why.assistant",
+    ],
+    [
+      "ассистент без названия",
+      { handled_by: "assistant", handled_ref: "a1" },
+      undefined,
+      "outcome.assistantNoName ok why.assistant",
+    ],
+    [
+      "другой обработчик",
+      { handled_by: "conversations" },
+      undefined,
+      "outcome.handled ok why.handled",
+    ],
   ])("%s", (_, over, name, want) => {
     expect(say(over, name)).toBe(want);
+  });
+
+  it("название ассистента уходит в текст", () => {
+    const explained = explain(item({ handled_by: "assistant", handled_ref: "a1" }), "Все вопросы");
+    expect(explained.result.params).toEqual({ name: "Все вопросы" });
   });
 
   it("причина и название уходят в тексты", () => {

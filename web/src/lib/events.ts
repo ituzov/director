@@ -48,6 +48,8 @@ export type ResultKey =
   | "outcome.autoreply"
   | "outcome.autoreplies"
   | "outcome.buttonNoDelivery"
+  | "outcome.assistant"
+  | "outcome.assistantNoName"
   | "outcome.handled"
   | "outcome.noMatch"
   | "outcome.foreignButton"
@@ -62,6 +64,7 @@ export type WhyKey =
   | "why.taken"
   | "why.takenNoName"
   | "why.buttonNoDelivery"
+  | "why.assistant"
   | "why.handled"
   | "why.noMatch"
   | "why.foreignButton"
@@ -73,8 +76,8 @@ export type Explained = {
 };
 
 /** Чем кончился разбор события и почему, ключами текстов Inbox. Только сам разбор:
- * что было с выдачей дальше, рассказывают «Выдачи». name: название автоответа по
- * handled_ref; нет, если автоответ не определить или его нет в списке. */
+ * что было дальше, рассказывают вкладки «Автоответы» и «Ассистент». name: название
+ * автоответа или ассистента по handled_ref; нет, если его не определить. */
 export function explain(item: InboxItem, name: string | undefined): Explained {
   if (item.outcome === null) {
     // reason у неразобранного: разбор падал, событие ждёт повтора
@@ -115,6 +118,13 @@ export function explain(item: InboxItem, name: string | undefined): Explained {
           ? { key: "why.takenPress", params: { name } }
           : { key: "why.taken", params: { name } };
     return { result, why };
+  }
+  if (item.handled_by === "assistant") {
+    // что ассистент решил, видно во вкладке «Ассистент»: разбор только отдаёт ему коммент
+    const result: Explained["result"] = name
+      ? { key: "outcome.assistant", params: { name }, tone: "ok" }
+      : { key: "outcome.assistantNoName", tone: "ok" };
+    return { result, why: { key: "why.assistant" } };
   }
   if (item.handled_by) {
     return { result: { key: "outcome.handled", tone: "ok" }, why: { key: "why.handled" } };

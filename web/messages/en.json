@@ -427,7 +427,8 @@
     },
     "view": {
       "label": "What to show",
-      "deliveries": "Deliveries",
+      "autoreplies": "Auto-replies",
+      "assistant": "Assistant",
       "all": "All events"
     },
     "deliveries": {
@@ -493,9 +494,10 @@
       "takenNoName": "An autoreply took the event, its name wasn't found.",
       "buttonNoDelivery": "The button is from an autoreply, but there's no delivery for it: someone else tapped it, or the button is broken.",
       "handled": "Another Director handler took the event.",
-      "noMatch": "When the comment was processed, no autoreply matched it.",
+      "noMatch": "When the comment was processed, no auto-reply matched and no assistant took it: assistants don't answer replies under comments, posts without an assistant, or while paused.",
       "foreignButton": "The button wasn't sent by Director's autoreplies, nobody handles it.",
-      "noReply": "Autoreplies don't handle direct messages, you can reply in Instagram."
+      "noReply": "Autoreplies don't handle direct messages, you can reply in Instagram.",
+      "assistant": "The comment went to an assistant: see what it answered on the Assistant tab."
     },
     "outcome": {
       "queued": "Queued",
@@ -513,7 +515,9 @@
         "other": "Skipped"
       },
       "buttonNoDelivery": "Button without a delivery",
-      "handled": "Taken by another handler"
+      "handled": "Taken by another handler",
+      "assistant": "Taken by assistant “{name}”",
+      "assistantNoName": "Taken by an assistant"
     },
     "details": {
       "received": "Received",
@@ -524,6 +528,80 @@
     "waiting": {
       "hours": "waiting {count, plural, =0 {under an hour} one {# hour} other {# hours}}",
       "days": "waiting {count, plural, one {# day} other {# days}}"
+    },
+    "assistant": {
+      "tabs": {
+        "label": "What the assistant did",
+        "all": "All",
+        "answered": "Answered",
+        "unsure": "Didn't know",
+        "not_mine": "Not its business",
+        "missed": "Didn't answer"
+      },
+      "columns": {
+        "person": "Who",
+        "assistant": "Assistant",
+        "result": "Result",
+        "when": "When"
+      },
+      "empty": "Assistants haven't taken any comments yet.",
+      "emptyTab": "Nothing on this tab.",
+      "emptyHint": "An assistant answers comments that no auto-reply took. Turn one on in <link>Assistants</link>.",
+      "state": {
+        "queued": "Queued",
+        "thinking": "AI is thinking",
+        "sending": "Sending the answer",
+        "sent": "Answered",
+        "send_failed": "Answer not delivered",
+        "unsure": "Didn't know the answer",
+        "not_mine": "Not its business",
+        "limit": "Hit the daily limit",
+        "failed": "AI didn't answer",
+        "expired": "Comment older than a day",
+        "paused": "Assistant paused"
+      },
+      "inComment": "Under the comment",
+      "inDirect": "In DMs",
+      "source": "From the base: “{source}”",
+      "steps": {
+        "answered": "The AI wrote an answer",
+        "unsure": "Found no answer in the base and stayed silent",
+        "not_mine": "Not a question or a request, stayed silent",
+        "limit": "Daily limit reached, stayed silent",
+        "failed": "The AI didn't answer",
+        "expired": "Comment older than a day, didn't answer",
+        "paused": "The assistant was paused and didn't answer",
+        "other": "Assistant step",
+        "sent": {
+          "direct": "The answer went to DMs",
+          "comment": "The answer appeared under the comment"
+        },
+        "send_failed": {
+          "direct": "The DM wasn't delivered",
+          "comment": "The reply under the comment wasn't delivered"
+        }
+      },
+      "errors": {
+        "key_rejected": "The AI key was rejected",
+        "no_funds": "No funds left with the provider",
+        "key_unreadable": "The AI key can't be read",
+        "rate_limited": "The provider asked us to wait",
+        "timeout": "The AI didn't answer in time",
+        "server": "The provider returned an error",
+        "bad_response": "The provider sent an unexpected answer",
+        "bad_output": "The AI answered in the wrong format",
+        "step_limit": "The AI ran out of attempts",
+        "not_configured": "The assistant has no connection or model",
+        "model_missing": "The provider no longer knows this model",
+        "cancelled": "The request was cut off",
+        "stuck": "The worker crashed on this comment three times",
+        "already_replied": "This comment already has a reply",
+        "expired": "Meta's reply window has closed",
+        "failed": "Sending failed",
+        "meta": "Meta error {code}",
+        "other": "Error {code}"
+      },
+      "nothingYet": "Nothing to show yet: the comment is queued or with the AI."
     }
   },
   "Ai": {

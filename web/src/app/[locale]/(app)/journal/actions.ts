@@ -1,12 +1,18 @@
 "use server";
 
 import { apiFetch } from "@/lib/api";
+import {
+  type AssistantHistory,
+  type AssistantReplyPage,
+  assistantTabOf,
+  repliesQuery,
+} from "@/lib/assistant-replies";
 import { type DeliveryPage, stageQuery, tabOf } from "@/lib/deliveries";
 import { resultOf, resultQuery } from "@/lib/events";
 import { type History, INBOX_PAGE, type InboxPage } from "@/lib/inbox";
 import { getToken } from "@/lib/session";
 
-import { loadHistory } from "./history";
+import { loadAssistantHistory, loadHistory } from "./history";
 
 /** Следующая страница ленты на вкладке итога: события старше закладки before.
  * Вкладку присылает браузер: незнакомая значит «все». */
@@ -45,6 +51,23 @@ export async function loadDeliveries(
   const history = await loadHistory(
     accountId,
     page.items.map((d) => d.comment_id),
+    token,
+  );
+  return { page, history };
+}
+
+/** Следующая страница ответов ассистентов на вкладке: старше закладки before, с шагами. */
+export async function loadAssistantReplies(
+  accountId: string,
+  before: string,
+  tab: string,
+): Promise<{ page: AssistantReplyPage; history: AssistantHistory }> {
+  const token = await getToken();
+  const query = repliesQuery(accountId, assistantTabOf(tab), INBOX_PAGE, before);
+  const page = await apiFetch<AssistantReplyPage>(`/assistants/replies?${query}`, { token });
+  const history = await loadAssistantHistory(
+    accountId,
+    page.items.map((r) => r.comment_id),
     token,
   );
   return { page, history };
