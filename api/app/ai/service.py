@@ -128,7 +128,8 @@ async def create_connection(
         key_encrypted=crypto.encrypt(key),
         key_hint=key[-HINT:],
         base_url=base_url,
-        key_changed_at=started,
+        # с этого момента в базе новый ключ; проверка шла раньше (started)
+        key_changed_at=_now(),
         checked_at=None,
         error_code=None,
         error_at=None,
@@ -163,7 +164,9 @@ async def replace_key(session: AsyncSession, connection_id: uuid.UUID, *, key: s
     connection = await _get(session, connection_id, lock=True)
     connection.key_encrypted = crypto.encrypt(key)
     connection.key_hint = key[-HINT:]
-    connection.key_changed_at = started
+    # время записи, а не начала проверки: вызов, начатый пока проверяли, шёл
+    # ещё со старым ключом, и его 401 не должен окрасить новый
+    connection.key_changed_at = _now()
     _apply_check(connection, error, started)
     await session.commit()
     log.info(

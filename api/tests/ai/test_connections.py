@@ -270,3 +270,20 @@ async def test_list_in_creation_order(session, net):
     first = await create(session, name="Первый")
     second = await create(session, name="Второй")
     assert [c.id for c in await service.list_connections(session)] == [first.id, second.id]
+
+
+async def test_key_changed_after_check(session, net):
+    # вызов, начатый пока проверяли новый ключ, шёл ещё со старым: смена ключа
+    # должна быть позже него, иначе его 401 окрасит рабочий новый ключ
+    connection = await create(session)
+    during = []
+
+    def check(request):
+        during.append(service._now())
+        return httpx2.Response(200, json=EMPTY)
+
+    net.answer = check
+    connection = await service.replace_key(session, connection.id, key=NEW_KEY)
+    assert connection.key_changed_at > during[0]
+    # а проверку помечаем временем, когда начали проверять
+    assert connection.checked_at < during[0]
