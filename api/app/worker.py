@@ -55,8 +55,17 @@ async def on_postback(
 
 # кому отдавать разобранное из входящих
 HANDLERS = instagram.InboxHandlers(on_comment=on_comment, on_postback=on_postback)
+
+
+async def on_result(session: AsyncSession, result: instagram.OutboxResult) -> None:
+    """Итог отправки исходящих тому, кто ставил письмо. Каждый модуль узнаёт свою
+    метку и чужие пропускает, поэтому зовём обоих по очереди."""
+    await autoreplies.handle_send_result(session, result)
+    await assistant.handle_send_result(session, result)
+
+
 # кому сообщать итог отправки исходящих
-ON_RESULT = autoreplies.handle_send_result
+ON_RESULT = on_result
 
 log = structlog.get_logger("app.worker")
 

@@ -267,8 +267,20 @@ async def test_comment_reaches_deliveries(client, session, login_as, monkeypatch
     ]
 
 
-def test_send_results_go_to_autoreplies():
-    assert worker.ON_RESULT is autoreplies.handle_send_result
+async def test_send_results_go_to_both(monkeypatch):
+    # чью метку узнает, тот и обработает: зовём обоих, чужое каждый пропускает
+    got = []
+
+    async def words(session, result):
+        got.append(("autoreplies", result))
+
+    async def helper(session, result):
+        got.append(("assistant", result))
+
+    monkeypatch.setattr(autoreplies, "handle_send_result", words)
+    monkeypatch.setattr(assistant, "handle_send_result", helper)
+    await worker.ON_RESULT(None, "result")
+    assert got == [("autoreplies", "result"), ("assistant", "result")]
 
 
 async def test_outbox_once_sends(session, monkeypatch):

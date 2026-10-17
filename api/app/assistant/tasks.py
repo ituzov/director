@@ -270,3 +270,55 @@ async def _finish(session: AsyncSession, reply: Reply, outcome: str, stage: str 
     )
     await session.commit()
     log.info("assistant.decided", reply_id=str(reply.id), outcome=outcome)
+
+
+async def handle_send_result(session: AsyncSession, result: instagram.OutboxResult) -> None:
+    """Итог отправки письма ассистента: стадия ответа и запись в журнал. Без
+    commit: отчёт и отметку о нём коммитит instagram одной транзакцией. Чужие
+    метки и ответы, которых уже нет, пропускаем."""
+    parsed = _parse_ref(result.ref)
+    if parsed is None:
+        return
+    reply_id, part = parsed
+    reply = await repository.lock_reply(session, reply_id)
+    if reply is None:
+        return
+    sent = result.outcome == "sent"
+    activity.record(
+        session,
+        "assistant.sent" if sent else "assistant.send_failed",
+        account_id=reply.account_id,
+        person_id=reply.person_id,
+        comment_id=reply.comment_id,
+        data={"reply_id": str(reply.id), "part": part, "reason": result.reason},
+        occurred_at=result.finished_at,
+    )
+    # строку двигает только первый отчёт: повтор и коммент в combo приходят, когда
+    # она уже не в sending (коммент встаёт после ушедшего директа), и остаются
+    # только в журнале
+    if reply.stage != "sending":
+        return
+    if not sent:
+        reply.stage, reply.error_code = "send_failed", result.reason or result.outcome
+        return
+    reply.stage = "sent"
+    if reply.direct_reply is not None and reply.comment_reply is not None:
+        # директ ушёл: теперь «подробно написали в директ» под комментом правда
+        await instagram.enqueue_comment_reply(
+            session,
+            account_id=reply.account_id,
+            comment_id=reply.comment_id,
+            text=reply.comment_reply or "",
+            ref=REF.format(reply_id=reply.id, part=COMMENT),
+        )
+
+
+def _parse_ref(ref: str) -> tuple[uuid.UUID, str] | None:
+    prefix, _, rest = ref.partition(":")
+    reply, _, part = rest.partition(":")
+    if prefix != "assistant" or part not in (DIRECT, COMMENT):
+        return None
+    try:
+        return uuid.UUID(reply), part
+    except ValueError:
+        return None
