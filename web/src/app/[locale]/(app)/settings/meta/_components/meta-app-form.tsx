@@ -65,7 +65,16 @@ export function MetaAppForm({ metaApp }: { metaApp: MetaApp | null }) {
             description={t("appSecretHint")}
             validate={check(APP_SECRET, "InvalidAppSecret")}
           >
-            <Input type="password" autoComplete="off" />
+            {/* new-password: Chrome не подставит сюда сохранённый пароль от Директора и не
+                предложит запомнить секрет как пароль; метки просят о том же менеджеры паролей */}
+            <Input
+              type="password"
+              autoComplete="new-password"
+              spellCheck={false}
+              data-1p-ignore
+              data-lpignore="true"
+              data-bwignore
+            />
           </FormField>
         ) : (
           <FormField name="app_secret" label={t("appSecret")} description={t("secretSet")}>
