@@ -2,6 +2,7 @@
 журнал, ошибки нашими кодами, поломка на карточку подключения. Сеть подменена,
 сессии ai.run в тестах это сессия песочницы."""
 
+import asyncio
 import contextlib
 import json
 import uuid
@@ -580,3 +581,18 @@ async def test_model_missing_only_for_same_setting(session, make_session, net, c
     net.answer = change_meanwhile
     await failed(make_session)
     assert (await session.scalar(select(Binding))).model_missing_at is None
+
+
+async def test_cancelled_request_journaled(session, make_session, net, connection):
+    # вызывающий обернул ai.run в свой таймаут, а модель думает дольше: запрос
+    # оборвался, но токены могли списать, и строка в журнале нужна
+    async def slow(request):
+        await asyncio.sleep(10)
+
+    net.answer = slow
+    with pytest.raises(TimeoutError):
+        async with asyncio.timeout(0.2):
+            await run(make_session)
+    [call] = await journal(session)
+    assert (call.outcome, call.error_code) == ("error", "cancelled")
+    assert (await fresh(session, connection)).error_code is None

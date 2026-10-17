@@ -10,6 +10,7 @@ docs/development/modules.md): ответ модели идёт секунды, �
 откатиться вместе с вызывающим.
 """
 
+import asyncio
 import time
 import uuid
 from collections.abc import AsyncIterator, Callable
@@ -18,6 +19,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
+import anyio
 import httpx2
 import structlog
 from pydantic_ai import Agent
@@ -41,6 +43,8 @@ log = structlog.get_logger("app.ai")
 
 NOT_CONFIGURED = "not_configured"
 STEP_LIMIT = "step_limit"
+# запрос оборвал вызывающий: в журнале есть, карточку не трогает
+CANCELLED = "cancelled"
 BAD_OUTPUT = "bad_output"
 
 # шагов в одном запуске: запросы к модели и переспросы по схеме вместе
@@ -189,6 +193,9 @@ class _Journaled(WrapperModel):
         started, clock = _now(), time.monotonic()
         try:
             response = await super().request(messages, model_settings, model_request_parameters)
+        except asyncio.CancelledError:
+            await self._cancelled(started, clock)
+            raise
         except Exception as exc:
             raise await self._failed(exc, started, clock) from None
         await _record(self.make_session, self.target, started, clock, response.usage, None)
@@ -208,9 +215,22 @@ class _Journaled(WrapperModel):
                 messages, model_settings, model_request_parameters, run_context
             ) as stream:
                 yield stream
+        except asyncio.CancelledError:
+            await self._cancelled(started, clock)
+            raise
         except Exception as exc:
             raise await self._failed(exc, started, clock) from None
         await _record(self.make_session, self.target, started, clock, stream.usage, None)
+
+    async def _cancelled(self, started: datetime, clock: float) -> None:
+        """Запрос оборвал вызывающий (свой таймаут, остановка worker). Токены могли
+        уже списать: строка в журнал всё равно. Pydantic AI работает на anyio, а
+        там отмена повторяется на каждом await: asyncio.shield её не удержит,
+        запись нужна под защищённой областью anyio."""
+        with anyio.CancelScope(shield=True):
+            await _record(
+                self.make_session, self.target, started, clock, None, ProviderError(CANCELLED)
+            )
 
     async def _failed(self, exc: BaseException, started: datetime, clock: float) -> ProviderError:
         """Любая ошибка запроса к модели: строка в журнал и наш код. Неопознанное
