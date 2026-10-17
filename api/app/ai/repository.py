@@ -4,9 +4,10 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.ai.models import Connection
+from app.ai.models import Binding, Call, Connection
 
 
 def add_connection(
@@ -51,3 +52,39 @@ async def get_connection(
 
 async def list_connections(session: AsyncSession) -> list[Connection]:
     return list(await session.scalars(select(Connection).order_by(Connection.created_at)))
+
+
+async def get_binding(
+    session: AsyncSession, *, purpose: str, scope: str | None, lock: bool = False
+) -> Binding | None:
+    query = select(Binding).where(
+        Binding.purpose == purpose,
+        Binding.scope.is_(None) if scope is None else Binding.scope == scope,
+    )
+    if lock:
+        query = query.with_for_update()
+    return await session.scalar(query)
+
+
+async def upsert_binding(
+    session: AsyncSession,
+    *,
+    purpose: str,
+    scope: str | None,
+    connection_id: uuid.UUID,
+    model: str,
+) -> None:
+    """Одна строка на задачу и область: вторая настройка заменяет первую.
+    Сменили модель: пометка «модели нет» про старую, её снимаем."""
+    values = {"connection_id": connection_id, "model": model, "model_missing_at": None}
+    await session.execute(
+        insert(Binding)
+        .values(purpose=purpose, scope=scope, **values)
+        .on_conflict_do_update(index_elements=["purpose", "scope"], set_=values)
+    )
+
+
+def add_call(session: AsyncSession, **fields) -> Call:
+    call = Call(**fields)
+    session.add(call)
+    return call

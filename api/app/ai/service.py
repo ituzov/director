@@ -228,3 +228,19 @@ async def _get(
     if connection is None:
         raise ConnectionNotFound
     return connection
+
+
+async def set_binding(
+    session: AsyncSession,
+    *,
+    purpose: str,
+    scope: str | None,
+    connection_id: uuid.UUID,
+    model: str,
+) -> None:
+    """Через какое подключение и модель идёт задача. Без commit: зовёт модуль
+    задачи в своей транзакции, вместе со своими настройками."""
+    await _get(session, connection_id)
+    await repository.upsert_binding(
+        session, purpose=purpose, scope=scope, connection_id=connection_id, model=model.strip()
+    )

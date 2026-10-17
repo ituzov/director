@@ -27,3 +27,13 @@ class KeyRejected(AiError):
 
 class ConnectionNotFound(AiError):
     """Такого подключения нет: удалили или не было."""
+
+
+class AiCallFailed(AiError):
+    """Ответа модели нет. code говорит почему: not_configured, model_missing,
+    key_unreadable, step_limit, bad_output или код провайдера (key_rejected,
+    no_funds, rate_limited, timeout, server). Тот, кто звал, просто молчит."""
+
+    def __init__(self, code: str) -> None:
+        super().__init__(f"вызов модели не удался: {code}")
+        self.code = code
