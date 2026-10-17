@@ -9,6 +9,7 @@ dependencies = [
     "email-validator>=2.3.0",
     "fastapi>=0.143.0",
     "httpx>=0.28.1",
+    "httpx2>=2.13.1",
     "psycopg[binary]>=3.3.6",
     "pydantic-ai-slim[anthropic,openai]>=2.57,<3",
     "pydantic-settings>=2.15.0",
