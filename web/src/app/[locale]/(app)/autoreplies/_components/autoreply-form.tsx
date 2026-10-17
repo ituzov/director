@@ -9,6 +9,7 @@ import { startTransition, useActionState, useEffect, useRef, useState } from "re
 
 import { FormField } from "@/components/form-field";
 import { Page, Panel } from "@/components/page";
+import { PostPicker } from "@/components/post-picker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,10 +18,9 @@ import { Link } from "@/i18n/navigation";
 import { type Autoreply, LIMITS, normalizeKeyword } from "@/lib/autoreplies";
 import { cn } from "@/lib/utils";
 
-import { type SaveState, saveAutoreply } from "../actions";
+import { loadMedia, loadSelectedMedia, type SaveState, saveAutoreply } from "../actions";
 import { type PreviewTexts, AutoreplyPreview } from "./autoreply-preview";
 import { ChipsInput } from "./chips-input";
-import { PostPicker } from "./post-picker";
 
 const INITIAL: SaveState = {};
 
@@ -162,8 +162,11 @@ function AutoreplyFormFields({ autoreply, accountId, username }: Props) {
                 {scope === "posts" && (
                   <PostPicker
                     accountId={autoreply?.account_id ?? accountId}
-                    autoreplyId={autoreply?.id ?? null}
+                    ownId={autoreply?.id ?? null}
                     initial={autoreply?.media_ids ?? []}
+                    owner="autoreply"
+                    loadPage={loadMedia}
+                    loadSelected={loadSelectedMedia}
                   />
                 )}
                 {state.conflict?.kind === "post" && <Conflict conflict={state.conflict} />}

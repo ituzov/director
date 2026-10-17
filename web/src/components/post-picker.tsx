@@ -17,26 +17,34 @@ import {
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Media } from "@/lib/accounts";
+import type { MediaPage, SelectedMedia, TakenBy } from "@/lib/media";
 import { cn } from "@/lib/utils";
-
-import { loadMedia, loadSelectedMedia, type MediaPage, type TakenBy } from "../actions";
 
 type Failure = Extract<MediaPage, { failed: unknown }>["failed"];
 
 type Props = {
-  // аккаунт автоответа; null при создании: тогда выбранный в меню
+  // аккаунт формы; null при создании: тогда выбранный в меню
   accountId: string | null;
-  // сам автоответ при правке: его посты не считаются занятыми
-  autoreplyId: string | null;
+  // сам правимый автоответ или ассистент: его посты не считаются занятыми
+  ownId: string | null;
   // уже выбранные посты при правке
   initial: string[];
+  // чьи посты: подписи окна и плашки «занят»
+  owner: "autoreply" | "assistant";
+  // серверные действия модуля: лента с занятыми и миниатюры выбранных
+  loadPage: (
+    accountId: string | null,
+    ownId: string | null,
+    after: string | null,
+  ) => Promise<MediaPage>;
+  loadSelected: (accountId: string, ids: string[]) => Promise<SelectedMedia>;
 };
 
 /** Поле «на каких постах»: ряд выбранных в форме и окно с лентой аккаунта.
  * Форма показывает поле, только когда выбраны посты, и в этот же момент обе загрузки
  * уходят сразу: к нажатию «Выбрать посты» лента обычно уже здесь. */
-export function PostPicker({ accountId, autoreplyId, initial }: Props) {
-  const t = useTranslations("AutoreplyForm.posts");
+export function PostPicker({ accountId, ownId, initial, owner, loadPage, loadSelected }: Props) {
+  const t = useTranslations("PostPicker");
 
   // что уйдёт в форму, и миниатюры к этим id: из ленты или из ручки выбранных
   const [chosen, setChosen] = useState<string[]>(initial);
@@ -74,10 +82,10 @@ export function PostPicker({ accountId, autoreplyId, initial }: Props) {
 
   useEffect(() => {
     let current = true;
-    void fetchPage(accountId, autoreplyId, null).then((page) => current && apply(page, null));
+    void fetchPage(loadPage, accountId, ownId, null).then((page) => current && apply(page, null));
     // миниатюры выбранных при правке: аккаунт тогда известен
     if (accountId && initial.length) {
-      void loadSelectedMedia(accountId, initial)
+      void loadSelected(accountId, initial)
         .catch(() => null)
         .then((result) => {
           if (!current) return;
@@ -94,11 +102,11 @@ export function PostPicker({ accountId, autoreplyId, initial }: Props) {
     };
     // initial берём один раз при появлении поля, дальше выбор живёт в chosen
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [accountId, autoreplyId]);
+  }, [accountId, ownId]);
 
   function load(after: string | null) {
     setLoading(true);
-    void fetchPage(accountId, autoreplyId, after).then((page) => apply(page, after));
+    void fetchPage(loadPage, accountId, ownId, after).then((page) => apply(page, after));
   }
 
   function openDialog(value: boolean) {
@@ -142,7 +150,7 @@ export function PostPicker({ accountId, autoreplyId, initial }: Props) {
             className="flex max-h-[90dvh] flex-col sm:max-w-2xl"
           >
             <DialogHeader>
-              <DialogTitle>{t("title")}</DialogTitle>
+              <DialogTitle>{t(`owners.${owner}.title`)}</DialogTitle>
               <DialogDescription>{t("chosen", { count: draft.length })}</DialogDescription>
             </DialogHeader>
 
@@ -156,6 +164,7 @@ export function PostPicker({ accountId, autoreplyId, initial }: Props) {
                       media={media}
                       checked={draft.includes(media.id)}
                       takenBy={taken[media.id] ?? null}
+                      owner={owner}
                       onChange={(checked) => toggle(media.id, checked)}
                     />
                   ))}
@@ -232,13 +241,12 @@ export function PostPicker({ accountId, autoreplyId, initial }: Props) {
 
 /** Server action может и бросить (сеть, упавший Next): для человека это тот же «не ответили». */
 function fetchPage(
+  loadPage: Props["loadPage"],
   accountId: string | null,
-  autoreplyId: string | null,
+  ownId: string | null,
   after: string | null,
 ): Promise<MediaPage> {
-  return loadMedia(accountId, autoreplyId, after).catch(
-    () => ({ failed: "MetaUnavailable" }) as const,
-  );
+  return loadPage(accountId, ownId, after).catch(() => ({ failed: "MetaUnavailable" }) as const);
 }
 
 /** Выбранный пост в ряду формы: миниатюра и крестик «убрать». */
@@ -253,7 +261,7 @@ function ChosenThumb({
   loading: boolean;
   onRemove: () => void;
 }) {
-  const t = useTranslations("AutoreplyForm.posts");
+  const t = useTranslations("PostPicker");
 
   return (
     <div className="relative size-16">
@@ -287,14 +295,16 @@ function PostTile({
   media,
   checked,
   takenBy,
+  owner,
   onChange,
 }: {
   media: Media;
   checked: boolean;
   takenBy: TakenBy | null;
+  owner: Props["owner"];
   onChange: (checked: boolean) => void;
 }) {
-  const t = useTranslations("AutoreplyForm.posts");
+  const t = useTranslations("PostPicker");
   const format = useFormatter();
   const now = useNow();
   const date = media.timestamp ? new Date(media.timestamp) : null;
@@ -336,7 +346,9 @@ function PostTile({
         {/* приглушена картинка, а не плашка: плашку надо прочесть */}
         {takenBy && (
           <span className="absolute inset-x-1.5 bottom-1.5 truncate rounded-md bg-background/90 px-1.5 py-0.5 text-xs">
-            {t(takenBy.enabled ? "takenBy" : "takenByDisabled", { name: takenBy.name })}
+            {t(`owners.${owner}.${takenBy.enabled ? "takenBy" : "takenByDisabled"}`, {
+              name: takenBy.name,
+            })}
           </span>
         )}
       </div>
