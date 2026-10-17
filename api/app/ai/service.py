@@ -24,7 +24,7 @@ from app.ai.exceptions import (
     ModelRequired,
     UnknownProvider,
 )
-from app.ai.models import Connection
+from app.ai.models import Binding, Connection
 from app.ai.providers.base import KEY_REJECTED, NO_FUNDS, Provider, ProviderError
 from app.core import crypto
 
@@ -144,6 +144,16 @@ def _new_key(connection: Connection, key: str) -> None:
 
 async def list_connections(session: AsyncSession) -> list[Connection]:
     return await repository.list_connections(session)
+
+
+async def bindings_by_connection(
+    session: AsyncSession, connection_ids: list[uuid.UUID]
+) -> dict[uuid.UUID, list[Binding]]:
+    """Какие задачи идут через каждое подключение: для карточек."""
+    found: dict[uuid.UUID, list[Binding]] = {i: [] for i in connection_ids}
+    for binding in await repository.list_bindings(session, connection_ids):
+        found[binding.connection_id].append(binding)
+    return found
 
 
 async def create_connection(

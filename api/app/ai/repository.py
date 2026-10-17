@@ -68,6 +68,19 @@ async def get_binding(
     return await session.scalar(query)
 
 
+async def list_bindings(session: AsyncSession, connection_ids: list[uuid.UUID]) -> list[Binding]:
+    """Настройки задач на этих подключениях, одним запросом на весь список."""
+    if not connection_ids:
+        return []
+    return list(
+        await session.scalars(
+            select(Binding)
+            .where(Binding.connection_id.in_(connection_ids))
+            .order_by(Binding.purpose, Binding.model)
+        )
+    )
+
+
 async def upsert_binding(
     session: AsyncSession,
     *,
