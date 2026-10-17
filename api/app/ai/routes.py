@@ -98,7 +98,7 @@ async def _checked(session: SessionDep, checked: service.Checked) -> CheckedOut:
 
 
 @router.get("/providers")
-async def list_providers(user: identity.CurrentUserRef) -> list[ProviderOut]:
+async def list_providers(user: identity.CurrentOwner) -> list[ProviderOut]:
     return [
         ProviderOut(kind=p.kind, needs_base_url=p.needs_base_url)
         for p in providers.REGISTRY.values()
@@ -107,7 +107,7 @@ async def list_providers(user: identity.CurrentUserRef) -> list[ProviderOut]:
 
 @router.get("/connections")
 async def list_connections(
-    session: SessionDep, user: identity.CurrentUserRef
+    session: SessionDep, user: identity.CurrentOwner
 ) -> list[ConnectionOut]:
     connections = await service.list_connections(session)
     bindings = await service.bindings_by_connection(session, [c.id for c in connections])
@@ -116,7 +116,7 @@ async def list_connections(
 
 @router.post("/connections", status_code=status.HTTP_201_CREATED)
 async def create_connection(
-    body: ConnectionIn, session: SessionDep, user: identity.CanConnectAccounts
+    body: ConnectionIn, session: SessionDep, user: identity.CurrentOwner
 ) -> CheckedOut:
     checked = await service.create_connection(
         session,
@@ -131,7 +131,7 @@ async def create_connection(
 
 @router.put("/connections/{connection_id}/key")
 async def replace_key(
-    connection_id: uuid.UUID, body: KeyIn, session: SessionDep, user: identity.CanConnectAccounts
+    connection_id: uuid.UUID, body: KeyIn, session: SessionDep, user: identity.CurrentOwner
 ) -> CheckedOut:
     checked = await service.replace_key(session, connection_id, key=body.key)
     return await _checked(session, checked)
@@ -139,14 +139,14 @@ async def replace_key(
 
 @router.post("/connections/{connection_id}/check")
 async def recheck(
-    connection_id: uuid.UUID, session: SessionDep, user: identity.CanConnectAccounts
+    connection_id: uuid.UUID, session: SessionDep, user: identity.CurrentOwner
 ) -> CheckedOut:
     return await _checked(session, await service.recheck(session, connection_id))
 
 
 @router.patch("/connections/{connection_id}")
 async def rename(
-    connection_id: uuid.UUID, body: NameIn, session: SessionDep, user: identity.CanConnectAccounts
+    connection_id: uuid.UUID, body: NameIn, session: SessionDep, user: identity.CurrentOwner
 ) -> ConnectionOut:
     connection = await service.rename(session, connection_id, name=body.name)
     return await _card(session, connection)
@@ -154,6 +154,6 @@ async def rename(
 
 @router.delete("/connections/{connection_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_connection(
-    connection_id: uuid.UUID, session: SessionDep, user: identity.CanConnectAccounts
+    connection_id: uuid.UUID, session: SessionDep, user: identity.CurrentOwner
 ) -> None:
     await service.delete_connection(session, connection_id)

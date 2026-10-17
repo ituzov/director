@@ -1,5 +1,5 @@
 """Ручки «Настройки → ИИ»: ключ наружу не уходит, ошибки становятся кодами,
-менять может тот, кто подключает аккаунты, итог проверки отдельно от карточки.
+раздел только для владельца, итог проверки отдельно от карточки.
 Сеть провайдера подменена."""
 
 import uuid
@@ -11,6 +11,7 @@ from sqlalchemy import func, select
 
 from app.ai import service
 from app.ai.models import Binding, Connection
+from app.identity import repository as identity_repository
 
 KEY = "sk-ant-api03-0123456789abcdefWXYZ"
 NEW_KEY = "sk-ant-api03-fedcba9876543210QRST"
@@ -228,14 +229,18 @@ WRITES = [
 ]
 
 
-@pytest.mark.parametrize(("method", "path", "body"), WRITES)
-async def test_member_reads_but_cannot_change(
-    client, owner, login_as, net, session, method, path, body
-):
+@pytest.mark.parametrize("granted", [False, True], ids=["member", "can_connect"])
+@pytest.mark.parametrize(("method", "path", "body"), [("GET", "", None), *WRITES])
+async def test_only_owner(client, owner, login_as, net, session, method, path, body, granted):
+    # ключи общие на установку, платит за них владелец: участнику раздел закрыт
+    # целиком, даже с правом подключать аккаунты Instagram
     card = (await create(client, owner)).json()["connection"]
     member = await login_as("member")
-    assert (await client.get("/ai/connections", headers=member)).status_code == 200
-    assert (await client.get("/ai/providers", headers=member)).status_code == 200
+    if granted:
+        user = await identity_repository.user_by_email(session, "member@test.dev")
+        user.can_connect_accounts = True
+        await session.commit()
+    assert (await client.get("/ai/providers", headers=member)).status_code == 403
     url = "/ai/connections" + path.format(id=card["id"])
     r = await client.request(method, url, headers=member, json=body)
     assert r.status_code == 403
