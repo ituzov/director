@@ -208,7 +208,7 @@
     },
     "purpose": {
       "title": "Why",
-      "body": "To reply to you automatically, and so the account owner can see statistics: how many people wrote and how many of them got a reply. The data is not sold or used for advertising."
+      "body": "To reply to you automatically, and so the account owner can see statistics: how many people wrote and how many of them got a reply. If the owner has turned on the assistant, a reply to your comment may be written by an AI model following the owner's instructions. The data is not sold or used for advertising."
     },
     "storage": {
       "title": "Where it is stored",
@@ -220,7 +220,7 @@
     },
     "sharing": {
       "title": "Who we share it with",
-      "body": "Only Meta, through its API, when we send you a reply."
+      "body": "Meta, through its API, when we send you a reply. If the account owner has turned on the assistant, the text of your comment also goes to the AI provider they connected (for example, Anthropic or Timeweb) so it can write a reply. Your Instagram username and id are not sent to the AI provider."
     },
     "deletion": {
       "title": "How to delete your data",
