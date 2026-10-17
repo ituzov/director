@@ -1,0 +1,189 @@
+{
+ "data": [
+  {
+   "type": "model",
+   "id": "claude-haiku-5-5",
+   "display_name": "Claude Haiku 5.5",
+   "lifecycle": "active",
+   "capabilities": {
+    "structured_outputs": {
+     "supported": true
+    },
+    "thinking": {
+     "supported": true
+    }
+   }
+  },
+  {
+   "type": "model",
+   "id": "claude-sonnet-5-5",
+   "display_name": "Claude Sonnet 5.5",
+   "lifecycle": "active",
+   "capabilities": {
+    "structured_outputs": {
+     "supported": true
+    },
+    "thinking": {
+     "supported": true
+    }
+   }
+  },
+  {
+   "type": "model",
+   "id": "claude-opus-5-5",
+   "display_name": "Claude Opus 5.5",
+   "lifecycle": "active",
+   "capabilities": {
+    "structured_outputs": {
+     "supported": true
+    },
+    "thinking": {
+     "supported": true
+    }
+   }
+  },
+  {
+   "type": "model",
+   "id": "claude-fable-5-1",
+   "display_name": "Claude Fable 5.1",
+   "lifecycle": "active",
+   "capabilities": {
+    "structured_outputs": {
+     "supported": true
+    },
+    "thinking": {
+     "supported": true
+    }
+   }
+  },
+  {
+   "type": "model",
+   "id": "claude-opus-5",
+   "display_name": "Claude Opus 5",
+   "lifecycle": "active",
+   "capabilities": {
+    "structured_outputs": {
+     "supported": true
+    },
+    "thinking": {
+     "supported": true
+    }
+   }
+  },
+  {
+   "type": "model",
+   "id": "claude-sonnet-5",
+   "display_name": "Claude Sonnet 5",
+   "lifecycle": "active",
+   "capabilities": {
+    "structured_outputs": {
+     "supported": true
+    },
+    "thinking": {
+     "supported": true
+    }
+   }
+  },
+  {
+   "type": "model",
+   "id": "claude-fable-5",
+   "display_name": "Claude Fable 5",
+   "lifecycle": "active",
+   "capabilities": {
+    "structured_outputs": {
+     "supported": true
+    },
+    "thinking": {
+     "supported": true
+    }
+   }
+  },
+  {
+   "type": "model",
+   "id": "claude-opus-4-8",
+   "display_name": "Claude Opus 4.8",
+   "lifecycle": "active",
+   "capabilities": {
+    "structured_outputs": {
+     "supported": true
+    },
+    "thinking": {
+     "supported": true
+    }
+   }
+  },
+  {
+   "type": "model",
+   "id": "claude-opus-4-7",
+   "display_name": "Claude Opus 4.7",
+   "lifecycle": "active",
+   "capabilities": {
+    "structured_outputs": {
+     "supported": true
+    },
+    "thinking": {
+     "supported": true
+    }
+   }
+  },
+  {
+   "type": "model",
+   "id": "claude-sonnet-4-6",
+   "display_name": "Claude Sonnet 4.6",
+   "lifecycle": "active",
+   "capabilities": {
+    "structured_outputs": {
+     "supported": true
+    },
+    "thinking": {
+     "supported": true
+    }
+   }
+  },
+  {
+   "type": "model",
+   "id": "claude-opus-4-6",
+   "display_name": "Claude Opus 4.6",
+   "lifecycle": "active",
+   "capabilities": {
+    "structured_outputs": {
+     "supported": true
+    },
+    "thinking": {
+     "supported": true
+    }
+   }
+  },
+  {
+   "type": "model",
+   "id": "claude-opus-4-5-20251101",
+   "display_name": "Claude Opus 4.5",
+   "lifecycle": "active",
+   "capabilities": {
+    "structured_outputs": {
+     "supported": true
+    },
+    "thinking": {
+     "supported": true
+    }
+   }
+  },
+  {
+   "type": "model",
+   "id": "claude-haiku-4-5-20251001",
+   "display_name": "Claude Haiku 4.5",
+   "lifecycle": "active",
+   "capabilities": {
+    "structured_outputs": {
+     "supported": true
+    },
+    "thinking": {
+     "supported": true
+    }
+   }
+  }
+ ],
+ "has_more": false,
+ "first_id": "claude-haiku-5-5",
+ "last_id": "claude-haiku-4-5-20251001"
+}

@@ -42,6 +42,9 @@ class ModelInfo:
     id: str
     # для людей, если провайдер отдаёт; иначе экран покажет id
     name: str | None = None
+    # схему ответа соблюдает сам провайдер (NativeOutput); None: не знаем, идём
+    # через инструмент, как у всех
+    strict_json: bool | None = None
 
 
 def error_code(status: int) -> str:
