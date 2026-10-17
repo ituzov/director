@@ -135,6 +135,9 @@ class Reply(Base):
     comment_text: Mapped[str] = mapped_column(Text)
     # время коммента: старше 24 часов не отвечаем (expired)
     commented_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    # id запроса вебхука: цикл ассистента вешает его на свои логи и письма, и вся
+    # цепочка от Meta до ответа ищется по одному id, как у автоответов
+    request_id: Mapped[str | None] = mapped_column(String(64))
 
     stage: Mapped[str] = mapped_column(String(12), server_default="queued")
     outcome: Mapped[str | None] = mapped_column(String(12))

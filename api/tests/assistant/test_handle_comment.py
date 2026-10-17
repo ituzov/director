@@ -156,3 +156,14 @@ async def test_other_account_general_not_used(session):
     session.add(other)
     await session.commit()
     assert await handle(session, comment()) is None
+
+
+async def test_request_id_kept(session):
+    # id запроса вебхука уходит в строку: по нему потом склеиваются логи ответа
+    import structlog
+
+    await add_assistant(session)
+    with structlog.contextvars.bound_contextvars(request_id="req-123"):
+        await handle(session, comment())
+    [reply] = await queued(session)
+    assert reply.request_id == "req-123"

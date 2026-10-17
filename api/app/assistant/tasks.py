@@ -45,6 +45,7 @@ async def handle_comment(session: AsyncSession, comment: instagram.CommentRef) -
         person_id=comment.person_id,
         comment_text=comment.text,
         commented_at=comment.received_at,
+        request_id=structlog.contextvars.get_contextvars().get("request_id"),
     )
     if reply_id is not None:
         log.info("assistant.queued", assistant_id=str(assistant.id), reply_id=str(reply_id))
@@ -92,6 +93,7 @@ class _Job:
     taken_at: datetime
     text: str
     brief: prompt.Brief
+    request_id: str | None
 
 
 async def answer_once(make_session=SessionLocal) -> bool:
@@ -106,6 +108,13 @@ async def answer_once(make_session=SessionLocal) -> bool:
     if not isinstance(taken, _Job):
         # решилось без нейросети: пауза, предел, опоздал, человек занят
         return True
+    # id запроса вебхука на всё, что дальше: логи ai, решение и письмо в outbox
+    with structlog.contextvars.bound_contextvars(request_id=taken.request_id):
+        await _answer(make_session, taken)
+    return True
+
+
+async def _answer(make_session, taken: _Job) -> None:
     try:
         result = await ai.run(
             purpose=ANSWER,
@@ -117,10 +126,9 @@ async def answer_once(make_session=SessionLocal) -> bool:
     except ai.AiCallFailed as error:
         async with make_session() as session:
             await _failed(session, taken, error.code)
-        return True
+        return
     async with make_session() as session:
         await _record(session, taken, result.output)
-    return True
 
 
 async def _take(session: AsyncSession) -> _Job | bool | None:
@@ -173,6 +181,7 @@ async def _take(session: AsyncSession) -> _Job | bool | None:
         now,
         reply.comment_text,
         prompt.Brief(assistant.mode, assistant.instruction, assistant.knowledge),
+        reply.request_id,
     )
     await session.commit()
     return job

@@ -402,3 +402,24 @@ async def test_owner_gone_while_queued(session, make_session, brain, account):
     await assistant.answer_once(make_session)
     assert brain.calls == []
     assert (await fresh(session, reply)).outcome == "paused"
+
+
+async def test_request_id_reaches_logs_and_outbox(session, make_session, brain, account):
+    # цикл ассистента работает отдельно от вебхука: id запроса он берёт из строки,
+    # и тот же id у логов нейросети и у письма в очереди исходящих
+    import structlog
+
+    a = await add_assistant(session, account)
+    await add_reply(session, a, request_id="req-777")
+    seen = []
+
+    async def remember():
+        seen.append(structlog.contextvars.get_contextvars().get("request_id"))
+
+    brain.during = remember
+    await assistant.answer_once(make_session)
+    assert seen == ["req-777"]
+    [task] = await outbox(session)
+    assert task.request_id == "req-777"
+    # после ответа контекст не протекает в следующий коммент
+    assert structlog.contextvars.get_contextvars().get("request_id") is None
