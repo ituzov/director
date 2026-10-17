@@ -218,8 +218,8 @@ async def test_recheck_timeout_is_unchecked(session, net):
     connection = await create(session)
     net.answer = timeout
     connection = await service.recheck(session, connection.id)
-    # разовый сбой: про деньги ничего не узнали, красное не держим и не ставим
-    assert (connection.error_code, connection.checked_at) == (None, None)
+    # разовый сбой: про деньги ничего не узнали, карточка как была
+    assert (connection.error_code, connection.checked_at) == ("no_funds", None)
 
 
 async def test_recheck_unreadable_key(session, net):
@@ -287,3 +287,29 @@ async def test_key_changed_after_check(session, net):
     assert connection.key_changed_at > during[0]
     # а проверку помечаем временем, когда начали проверять
     assert connection.checked_at < during[0]
+
+
+async def test_recheck_older_than_call_result(session, net):
+    # пока шла проверка, вызов, начатый позже неё, уже прошёл: его итог свежее
+    connection = await create(session)
+
+    async def call_succeeded_meanwhile(request):
+        await session.execute(
+            update(Connection).values(checked_at=service._now() + timedelta(seconds=1))
+        )
+        await session.commit()
+        return httpx2.Response(402, json={"type": "error"})
+
+    net.answer = call_succeeded_meanwhile
+    connection = await service.recheck(session, connection.id)
+    assert connection.error_code is None and connection.checked_at is not None
+
+
+async def test_replace_unchecked_forgets_old_key(session, net):
+    # у старого ключа не было денег, новый проверить не удалось: про новый ничего
+    # не знаем, «нет денег» от старого на нём не висит
+    net.answer = status(402)
+    connection = await create(session)
+    net.answer = timeout
+    connection = await service.replace_key(session, connection.id, key=NEW_KEY)
+    assert (connection.error_code, connection.error_at, connection.checked_at) == (None, None, None)

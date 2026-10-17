@@ -33,13 +33,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.ai import providers, repository
 from app.ai.exceptions import AiCallFailed
 from app.ai.providers.base import (
-    KEY_REJECTED,
     MODEL_MISSING,
-    NO_FUNDS,
     Provider,
     ProviderError,
 )
-from app.ai.service import KEY_UNREADABLE
+from app.ai.service import KEY_UNREADABLE, apply_result
 from app.core import crypto
 from app.db import SessionLocal
 
@@ -77,6 +75,8 @@ class _Target:
     model: str
     key: str
     base_url: str | None
+    # отпечаток ключа: итог вызова ложится на карточку, только если ключ тот же
+    key_changed_at: datetime
 
 
 async def run(
@@ -138,12 +138,24 @@ async def _target(make_session: MakeSession, purpose: str, scope: str | None) ->
         try:
             key = crypto.decrypt(connection.key_encrypted)
         except crypto.DecryptError as exc:
-            connection.error_code, connection.error_at = KEY_UNREADABLE, _now()
+            apply_result(
+                connection,
+                key_changed_at=connection.key_changed_at,
+                started=_now(),
+                code=KEY_UNREADABLE,
+            )
             await session.commit()
             log.warning("ai.connection.key_unreadable", connection_id=str(connection.id))
             raise AiCallFailed(KEY_UNREADABLE) from exc
         return _Target(
-            purpose, scope, connection.id, provider, binding.model, key, connection.base_url
+            purpose,
+            scope,
+            connection.id,
+            provider,
+            binding.model,
+            key,
+            connection.base_url,
+            connection.key_changed_at,
         )
 
 
@@ -205,7 +217,7 @@ async def _record(
     error: ProviderError | None,
 ) -> None:
     """Строка журнала и итог на карточку подключения, отдельной транзакцией.
-    Карточку двигает только самый свежий по началу вызов."""
+    Карточку двигает только итог про текущий ключ, свежее записанного."""
     async with make_session() as session:
         connection = await repository.get_connection(session, target.connection_id, lock=True)
         repository.add_call(
@@ -226,7 +238,12 @@ async def _record(
             http_status=error.http_status if error else None,
         )
         if connection is not None:
-            _card(connection, started, error)
+            apply_result(
+                connection,
+                key_changed_at=target.key_changed_at,
+                started=started,
+                code=error.code if error else None,
+            )
         if error is not None and error.code == MODEL_MISSING:
             await _model_missing(session, target)
         await session.commit()
@@ -239,26 +256,6 @@ async def _record(
             code=error.code,
             http_status=error.http_status,
         )
-
-
-def _card(connection, started: datetime, error: ProviderError | None) -> None:
-    # вызов начат со старым ключом: про новый он ничего не знает
-    if started < connection.key_changed_at:
-        return
-    if error is None:
-        # успех снимает ошибку, записанную раньше, чем он начался
-        if connection.error_at is not None and started > connection.error_at:
-            connection.error_code, connection.error_at = None, None
-        if connection.checked_at is None or started > connection.checked_at:
-            connection.checked_at = started
-        return
-    if error.code not in (KEY_REJECTED, NO_FUNDS):
-        return
-    # успешный вызов, начатый позже этого, уже показал, что ключ в порядке
-    if connection.checked_at is not None and started < connection.checked_at:
-        return
-    connection.error_code, connection.error_at = error.code, started
-    connection.checked_at = None
 
 
 async def _model_missing(session: AsyncSession, target: _Target) -> None:

@@ -90,12 +90,36 @@ async def _check(provider: Provider, *, key: str, base_url: str | None) -> str |
     return None
 
 
-def _apply_check(connection: Connection, error: str | None, at: datetime) -> None:
-    """Итог проверки на карточку. Разовый сбой: «не проверен», ошибку не пишем."""
-    connection.checked_at = at if error is None else None
-    card = error if error in CARD_ERRORS else None
-    connection.error_code = card
-    connection.error_at = at if card else None
+def apply_result(
+    connection: Connection, *, key_changed_at: datetime, started: datetime, code: str | None
+) -> None:
+    """Итог проверки или вызова на карточку подключения. Одно правило для всех:
+    итог про тот ключ, что сейчас в базе, и не старше уже записанного. Успех
+    ставит «проверен» и снимает ошибку, поломка наоборот. Разовый сбой (таймаут,
+    5xx, лимит провайдера) ничего не говорит о ключе и карточку не трогает."""
+    # ключ заменили, пока шёл вызов или проверка: итог про старый ключ
+    if connection.key_changed_at != key_changed_at:
+        return
+    if code is not None and code not in CARD_ERRORS:
+        return
+    latest = max((t for t in (connection.checked_at, connection.error_at) if t), default=None)
+    # на карточке уже итог вызова, начатого позже этого
+    if latest is not None and started < latest:
+        return
+    if code is None:
+        connection.checked_at, connection.error_code, connection.error_at = started, None, None
+    else:
+        connection.checked_at, connection.error_code, connection.error_at = None, code, started
+
+
+def _new_key(connection: Connection, key: str) -> None:
+    """Новый ключ: всё, что знали про старый, к нему не относится."""
+    connection.key_encrypted = crypto.encrypt(key)
+    connection.key_hint = key[-HINT:]
+    # время записи, а не начала проверки: вызов, начатый пока проверяли, шёл
+    # ещё со старым ключом, и его итог не должен лечь на новый
+    connection.key_changed_at = _now()
+    connection.checked_at, connection.error_code, connection.error_at = None, None, None
 
 
 async def list_connections(session: AsyncSession) -> list[Connection]:
@@ -125,17 +149,17 @@ async def create_connection(
         session,
         provider=profile.kind,
         name=name.strip() or profile.kind,
-        key_encrypted=crypto.encrypt(key),
-        key_hint=key[-HINT:],
+        key_encrypted="",
+        key_hint="",
         base_url=base_url,
-        # с этого момента в базе новый ключ; проверка шла раньше (started)
-        key_changed_at=_now(),
+        key_changed_at=started,
         checked_at=None,
         error_code=None,
         error_at=None,
         created_by=created_by,
     )
-    _apply_check(connection, error, started)
+    _new_key(connection, key)
+    apply_result(connection, key_changed_at=connection.key_changed_at, started=started, code=error)
     await session.commit()
     log.info(
         "ai.connection.created",
@@ -162,12 +186,8 @@ async def replace_key(session: AsyncSession, connection_id: uuid.UUID, *, key: s
         raise KeyRejected
     # подключение могли удалить, пока шла проверка: тогда не создаём его заново
     connection = await _get(session, connection_id, lock=True)
-    connection.key_encrypted = crypto.encrypt(key)
-    connection.key_hint = key[-HINT:]
-    # время записи, а не начала проверки: вызов, начатый пока проверяли, шёл
-    # ещё со старым ключом, и его 401 не должен окрасить новый
-    connection.key_changed_at = _now()
-    _apply_check(connection, error, started)
+    _new_key(connection, key)
+    apply_result(connection, key_changed_at=connection.key_changed_at, started=started, code=error)
     await session.commit()
     log.info(
         "ai.connection.key_replaced",
@@ -188,7 +208,7 @@ async def recheck(session: AsyncSession, connection_id: uuid.UUID) -> Connection
     try:
         key = crypto.decrypt(connection.key_encrypted)
     except crypto.DecryptError:
-        _apply_check(connection, KEY_UNREADABLE, _now())
+        apply_result(connection, key_changed_at=changed_at, started=_now(), code=KEY_UNREADABLE)
         await session.commit()
         log.warning("ai.connection.key_unreadable", connection_id=str(connection_id))
         return connection
@@ -196,11 +216,7 @@ async def recheck(session: AsyncSession, connection_id: uuid.UUID) -> Connection
     started = _now()
     error = await _check(profile, key=key, base_url=base_url)
     connection = await _get(session, connection_id, lock=True)
-    if connection.key_changed_at != changed_at:
-        # ключ заменили, пока проверяли старый: итог про старый ключ не пишем
-        await session.commit()
-        return connection
-    _apply_check(connection, error, started)
+    apply_result(connection, key_changed_at=changed_at, started=started, code=error)
     await session.commit()
     return connection
 

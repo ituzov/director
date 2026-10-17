@@ -2,6 +2,7 @@
 журнал, ошибки нашими кодами, поломка на карточку подключения. Сеть подменена,
 сессии ai.run в тестах это сессия песочницы."""
 
+import contextlib
 import json
 import uuid
 from contextlib import asynccontextmanager
@@ -261,7 +262,18 @@ async def test_success_keeps_newer_error(session, make_session, net, connection)
     connection.error_code, connection.error_at = "no_funds", datetime.now(UTC) + SOON
     await session.commit()
     await run(make_session)
-    assert (await fresh(session, connection)).error_code == "no_funds"
+    connection = await fresh(session, connection)
+    # и «проверен» старый успех не ставит: ошибка и проверка вместе не бывают
+    assert (connection.error_code, connection.checked_at) == ("no_funds", None)
+
+
+async def test_older_error_keeps_newer_error(session, make_session, net, connection):
+    # опоздавший 402 от вызова, начатого раньше, не затирает свежий key_rejected
+    connection.error_code, connection.error_at = "key_rejected", datetime.now(UTC) + SOON
+    await session.commit()
+    net.answer = status(402)
+    await failed(make_session)
+    assert (await fresh(session, connection)).error_code == "key_rejected"
 
 
 async def test_error_older_than_success_not_on_card(session, make_session, net, connection):
@@ -424,3 +436,47 @@ async def test_stream_path_journaled(session, make_session, net, connection):
     assert json.loads(net.seen[0].content)["stream"] is True
     [call] = await journal(session)
     assert (call.outcome, call.model, call.input_tokens) == ("ok", MODEL, 30)
+
+
+def search_call(request):
+    call = {
+        "id": "c1",
+        "type": "function",
+        "function": {"name": "search_kb", "arguments": '{"query": "q"}'},
+    }
+    return completion(request, tool_calls=[call])
+
+
+@pytest.mark.parametrize(
+    ("final", "before", "after"),
+    [
+        # старый ключ отозван: его 401 рабочий новый не красит
+        (status(401), None, None),
+        # старый ключ ответил: «нет денег» нового не снимает
+        (completion, "no_funds", "no_funds"),
+    ],
+    ids=["401", "success"],
+)
+async def test_key_replaced_between_steps(
+    session, make_session, net, connection, final, before, after
+):
+    # шаг 1 ушёл в инструмент, тем временем владелец заменил ключ; шаг 2 идёт
+    # ещё со старым ключом, расшифрованным на старте запуска
+    agent = Agent()
+
+    @agent.tool_plain
+    async def search_kb(query: str) -> str:
+        now = datetime.now(UTC)
+        await session.execute(
+            update(Connection).values(
+                key_changed_at=now, error_code=before, error_at=now if before else None
+            )
+        )
+        await session.commit()
+        return "ничего"
+
+    net.answer = lambda request: search_call(request) if len(net.seen) == 1 else final(request)
+    with contextlib.suppress(ai.AiCallFailed):
+        await run(make_session, agent=agent)
+    assert len(net.seen) == 2
+    assert (await fresh(session, connection)).error_code == after
