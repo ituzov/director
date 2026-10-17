@@ -11,7 +11,7 @@
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import ClassVar
+from typing import Any, ClassVar
 
 import httpx2
 from pydantic_ai.exceptions import ModelAPIError, ModelHTTPError
@@ -96,6 +96,28 @@ class Provider(ABC):
     def error_code(self, status: int) -> str:
         """Наш код по HTTP-статусу провайдера."""
         return error_code(status)
+
+    async def get_json(
+        self,
+        http: httpx2.AsyncClient,
+        url: str,
+        *,
+        headers: dict[str, str],
+        params: dict[str, Any] | None = None,
+    ) -> Any:
+        """Свой запрос к провайдеру мимо SDK (список моделей): ошибки нашими кодами.
+        Сначала самая точная причина: не дошёл, ответил ошибкой, ответил не JSON."""
+        try:
+            response = await http.get(url, headers=headers, params=params)
+        except httpx2.TransportError as exc:
+            raise self.error_from(exc) from exc
+        if response.is_error:
+            raise ProviderError(self.error_code(response.status_code), response.status_code)
+        try:
+            return response.json()
+        except ValueError as exc:
+            # 200, но не JSON: прокси отдал свою страницу
+            raise ProviderError(SERVER, response.status_code) from exc
 
     def error_from(self, exc: BaseException) -> ProviderError | None:
         """Ошибка запроса к провайдеру нашим кодом: ответ со статусом из

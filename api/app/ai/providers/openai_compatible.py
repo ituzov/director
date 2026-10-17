@@ -29,6 +29,7 @@ class OpenAICompatible(Provider):
     def model(
         self, http: httpx2.AsyncClient, *, key: str, base_url: str | None, model_id: str
     ) -> Model:
+        # адрес всегда явно: без него SDK уйдёт на api.openai.com и унесёт туда ключ
         client = AsyncOpenAI(
             base_url=self.url(base_url), api_key=key, max_retries=0, http_client=http
         )
@@ -37,20 +38,14 @@ class OpenAICompatible(Provider):
     async def models(
         self, http: httpx2.AsyncClient, *, key: str, base_url: str | None
     ) -> list[ModelInfo]:
+        body = await self.get_json(
+            http, f"{self.url(base_url)}/models", headers={"Authorization": f"Bearer {key}"}
+        )
         try:
-            response = await http.get(
-                f"{self.url(base_url)}/models", headers={"Authorization": f"Bearer {key}"}
-            )
-        except httpx2.TransportError as exc:
-            raise self.error_from(exc) from exc
-        if response.is_error:
-            raise ProviderError(self.error_code(response.status_code), response.status_code)
-        try:
-            listed = response.json()["data"]
-            return [ModelInfo(str(raw["id"])) for raw in listed if self.keep(raw)]
-        except (ValueError, KeyError, TypeError) as exc:
-            # 200, но не список моделей: прокси отдал свою страницу или формат другой
-            raise ProviderError(SERVER, response.status_code) from exc
+            return [ModelInfo(str(raw["id"])) for raw in body["data"] if self.keep(raw)]
+        except (KeyError, TypeError) as exc:
+            # JSON, но не список моделей: формат другой
+            raise ProviderError(SERVER, 200) from exc
 
     def keep(self, raw: dict[str, Any]) -> bool:
         """Показывать ли модель владельцу. По умолчанию все: в /models OpenAI нет
