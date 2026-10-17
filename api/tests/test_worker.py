@@ -12,7 +12,7 @@ import httpx
 import pytest
 from sqlalchemy import func, select
 
-from app import autoreplies, instagram, worker
+from app import assistant, autoreplies, instagram, worker
 from app.autoreplies.models import Autoreply, Keyword
 from app.core import crypto
 from app.instagram import tasks, webhook
@@ -90,9 +90,50 @@ async def test_inbox_goes_to_autoreplies(monkeypatch, handler, module_fn, taken,
         got.append(ref)
         return taken
 
+    async def nobody(session, ref):
+        return None
+
     monkeypatch.setattr(autoreplies, module_fn, fake)
+    # ассистент здесь не берёт ничего: проверяем путь до автоответов
+    monkeypatch.setattr(assistant, "handle_comment", nobody)
     assert await getattr(worker.HANDLERS, handler)(None, "ref") == handled
     assert got == ["ref"]
+
+
+ASSISTANT_ID = uuid.uuid7()
+
+
+@pytest.mark.parametrize(
+    ("by_word", "by_assistant", "handled"),
+    [
+        # слово сработало: ассистента не зовём вовсе
+        (
+            autoreplies.Taken(AUTOREPLY_ID),
+            "boom",
+            instagram.Handled("autoreplies", str(AUTOREPLY_ID)),
+        ),
+        # слова нет: коммент берёт ассистент
+        (None, assistant.Taken(ASSISTANT_ID), instagram.Handled("assistant", str(ASSISTANT_ID))),
+        (None, None, None),
+    ],
+    ids=["word-first", "assistant-next", "nobody"],
+)
+async def test_comment_words_first_then_assistant(monkeypatch, by_word, by_assistant, handled):
+    asked = []
+
+    async def words(session, ref):
+        return by_word
+
+    async def helper(session, ref):
+        asked.append(ref)
+        if by_assistant == "boom":
+            raise AssertionError("ассистента звать не должны")
+        return by_assistant
+
+    monkeypatch.setattr(autoreplies, "handle_comment", words)
+    monkeypatch.setattr(assistant, "handle_comment", helper)
+    assert await worker.HANDLERS.on_comment(None, "ref") == handled
+    assert asked == ([] if by_word else ["ref"])
 
 
 @pytest.mark.parametrize(("text", "taken"), [("хочу гайд", "autoreplies"), ("класс", None)])

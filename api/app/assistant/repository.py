@@ -5,6 +5,7 @@ from collections import defaultdict
 from datetime import datetime
 
 from sqlalchemy import delete, func, select, update
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assistant.models import Assistant, AssistantMedia, Reply
@@ -122,3 +123,24 @@ async def outcomes_since(
         if outcome is not None:
             counts[assistant_id][outcome] = count
     return counts
+
+
+async def post_holder(session: AsyncSession, media_id: str) -> Assistant | None:
+    """Живой частный ассистент поста (на паузе тоже держит пост)."""
+    return await session.scalar(
+        select(Assistant)
+        .join(AssistantMedia)
+        .where(AssistantMedia.media_id == media_id, AssistantMedia.archived.is_(False))
+        .limit(1)
+    )
+
+
+async def add_reply(session: AsyncSession, **fields) -> uuid.UUID | None:
+    """Коммент в очередь ассистента. None: этот коммент уже в очереди (повтор
+    вебхука), вторая строка не встаёт."""
+    return await session.scalar(
+        insert(Reply)
+        .values(**fields)
+        .on_conflict_do_nothing(index_elements=["comment_id"])
+        .returning(Reply.id)
+    )

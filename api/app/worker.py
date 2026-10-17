@@ -8,7 +8,7 @@ from contextlib import suppress
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app import autoreplies, instagram
+from app import assistant, autoreplies, instagram
 from app.config import settings
 from app.core.logging import setup_logging
 from app.db import SessionLocal, engine
@@ -35,8 +35,12 @@ def _autoreplies(taken: autoreplies.Taken | None) -> instagram.Handled | None:
 async def on_comment(
     session: AsyncSession, comment: instagram.CommentRef
 ) -> instagram.Handled | None:
-    # кто первый взял, того и имя в ленте входящих; ассистент встанет следующим
-    return _autoreplies(await autoreplies.handle_comment(session, comment))
+    # кто первый взял, того и имя в ленте входящих: сначала слово, потом ассистент
+    handled = _autoreplies(await autoreplies.handle_comment(session, comment))
+    if handled is not None:
+        return handled
+    taken = await assistant.handle_comment(session, comment)
+    return instagram.Handled("assistant", str(taken.assistant_id)) if taken else None
 
 
 async def on_postback(
