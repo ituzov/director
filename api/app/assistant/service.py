@@ -3,7 +3,7 @@
 архив отпускает."""
 
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import UTC, datetime
 
 import structlog
@@ -37,7 +37,7 @@ class Full:
     # None: настройки нет или подключение удалили
     binding: ai.BindingRef | None
     # итоги прочитанных за сутки UTC: answered, unsure, not_mine…
-    today: dict[str, int] = field(default_factory=dict)
+    today: dict[str, int]
 
 
 def day_start(now: datetime | None = None) -> datetime:
