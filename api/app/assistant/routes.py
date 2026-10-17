@@ -16,7 +16,15 @@ from app.assistant.exceptions import (
     AssistantNotFound,
     ConnectionMissing,
 )
-from app.assistant.schemas import AssistantForm, AssistantIn, AssistantOut, EnabledIn, TodayOut
+from app.assistant.schemas import (
+    AssistantForm,
+    AssistantIn,
+    AssistantOut,
+    EnabledIn,
+    TodayOut,
+    TryIn,
+    TryOut,
+)
 from app.db import SessionDep
 
 router = APIRouter(prefix="/assistants", tags=["assistant"])
@@ -84,6 +92,23 @@ async def create_assistant(
     body: AssistantIn, session: SessionDep, user: identity.CurrentOwner
 ) -> AssistantOut:
     return _out(await service.create(session, body, user))
+
+
+# выше /{assistant_id}: иначе «try» разбирался бы как id
+@router.post("/try")
+async def try_assistant(body: TryIn, user: identity.CurrentOwner) -> TryOut:
+    """Песочница. Сессии нет нарочно: модель думает секунды, держать соединение
+    с базой ради этого незачем."""
+    decision, error = await service.try_answer(body)
+    if decision is None:
+        return TryOut(decision=None, comment=None, direct=None, source=None, error=error)
+    return TryOut(
+        decision=decision.decision,
+        comment=decision.comment,
+        direct=decision.direct,
+        source=decision.source,
+        error=None,
+    )
 
 
 @router.get("/{assistant_id}")

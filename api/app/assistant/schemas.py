@@ -80,3 +80,28 @@ class AssistantOut(BaseModel):
     model_missing: bool
     today: TodayOut
     updated_at: datetime
+
+
+class TryIn(BaseModel):
+    """Песочница: поля формы, от которых зависит ответ, даже несохранённые, и
+    коммент. Ничего не отправляется и в предел ассистента не идёт."""
+
+    # правят существующего: в журнале вызовов видно, на кого потрачены проверки
+    assistant_id: uuid.UUID | None = None
+    mode: Literal["direct", "comment", "combo"]
+    instruction: Annotated[str, _text(MAX_INSTRUCTION)] = ""
+    knowledge: Annotated[str, _text(MAX_KNOWLEDGE)] = ""
+    connection_id: uuid.UUID
+    model: Model
+    # предел коммента в Instagram
+    comment: Annotated[str, _text(2200, 1)]
+
+
+class TryOut(BaseModel):
+    """Как ответил бы ассистент. error: нейросеть не ответила (код ai), остальное пусто."""
+
+    decision: Literal["answer", "unsure", "not_mine"] | None
+    comment: str | None
+    direct: str | None
+    source: str | None
+    error: str | None

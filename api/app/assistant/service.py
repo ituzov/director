@@ -11,7 +11,7 @@ from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import ai, identity, instagram
-from app.assistant import repository
+from app.assistant import prompt, repository
 from app.assistant.exceptions import (
     AccountUnavailable,
     AssistantArchived,
@@ -20,12 +20,14 @@ from app.assistant.exceptions import (
     ConnectionMissing,
 )
 from app.assistant.models import Assistant
-from app.assistant.schemas import AssistantForm, AssistantIn
+from app.assistant.schemas import AssistantForm, AssistantIn, TryIn
 
 log = structlog.get_logger("app.assistant")
 
 # задача в ai: через какое подключение и модель отвечает ассистент (scope = id)
 ANSWER = "assistant.answer"
+# проверка в песочнице: своя задача, траты на проверки видны отдельно
+TRY = "assistant.try"
 
 
 @dataclass(frozen=True, slots=True)
@@ -215,3 +217,22 @@ async def _check_conflicts(
 def _fields(form: AssistantForm) -> dict:
     """Поля самой строки: без постов (своя таблица) и модели (она в ai)."""
     return form.model_dump(exclude={"media_ids", "account_id", "connection_id", "model"})
+
+
+async def try_answer(body: TryIn) -> tuple[prompt.Decision | None, str | None]:
+    """Как ответил бы ассистент с этими полями: решение или код ошибки ai.
+    Без сессии вызывающего: ai.run берёт свои короткие, пока модель думает,
+    транзакция не открыта."""
+    brief = prompt.Brief(body.mode, body.instruction, body.knowledge)
+    try:
+        result = await ai.run(
+            purpose=TRY,
+            scope=str(body.assistant_id) if body.assistant_id else None,
+            agent=prompt.agent(brief),
+            prompt=prompt.comment_prompt(body.comment),
+            using=ai.Using(body.connection_id, body.model),
+        )
+    except ai.AiCallFailed as error:
+        log.info("assistant.try_failed", code=error.code)
+        return None, error.code
+    return result.output, None
