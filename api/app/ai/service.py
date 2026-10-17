@@ -7,6 +7,7 @@ CHECK_TIMEOUT), ни одна строка не заперта. Ключ в ло
 """
 
 import uuid
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import NamedTuple
 
@@ -26,7 +27,7 @@ from app.ai.exceptions import (
     UnknownProvider,
 )
 from app.ai.models import Binding, Connection
-from app.ai.providers.base import KEY_REJECTED, NO_FUNDS, Provider, ProviderError
+from app.ai.providers.base import KEY_REJECTED, NO_FUNDS, ModelInfo, Provider, ProviderError
 from app.core import crypto
 
 log = structlog.get_logger("app.ai")
@@ -42,6 +43,13 @@ CHECK_TIMEOUT = 15.0
 # настоящие ключи длиной в десятки символов; у короткого последние 4 это много
 MIN_KEY = 20
 HINT = 4
+
+
+class Models(NamedTuple):
+    """Модели подключения по id и код ошибки, если провайдер не ответил."""
+
+    models: list[ModelInfo]
+    error: str | None
 
 
 class Checked(NamedTuple):
@@ -98,11 +106,14 @@ def _key(key: str) -> str:
     return key
 
 
-async def _check(provider: Provider, *, key: str, base_url: str | None) -> str | None:
-    """Пробный запрос. None: ключ работает. Иначе наш код ошибки."""
+async def _call[T](
+    provider: Provider, request: Callable[[httpx2.AsyncClient], Awaitable[T]]
+) -> tuple[T | None, str | None]:
+    """Запрос к провайдеру: проверка ключа или список моделей. Итог и наш код
+    ошибки, None вместо кода: провайдер ответил."""
     try:
         async with _http() as http:
-            await provider.check_key(http, key=key, base_url=base_url)
+            return await request(http), None
     except ProviderError as error:
         log.warning(
             "ai.connection.check_failed",
@@ -110,8 +121,15 @@ async def _check(provider: Provider, *, key: str, base_url: str | None) -> str |
             code=error.code,
             http_status=error.http_status,
         )
-        return error.code
-    return None
+        return None, error.code
+
+
+async def _check(provider: Provider, *, key: str, base_url: str | None) -> str | None:
+    """Пробный запрос. None: ключ работает. Иначе наш код ошибки."""
+    _, error = await _call(
+        provider, lambda http: provider.check_key(http, key=key, base_url=base_url)
+    )
+    return error
 
 
 def apply_result(
@@ -238,6 +256,37 @@ async def replace_key(session: AsyncSession, connection_id: uuid.UUID, *, key: s
 async def recheck(session: AsyncSession, connection_id: uuid.UUID) -> Checked:
     """«Проверить ещё раз»: пополнил баланс или ключ поменяли в панели провайдера.
     Ключ не принят здесь пишется на карточку, а не бросается: ключ уже сохранён."""
+    connection, _, error = await _probe(
+        session, connection_id, lambda p, http, key, url: p.check_key(http, key=key, base_url=url)
+    )
+    log.info(
+        "ai.connection.rechecked",
+        connection_id=str(connection_id),
+        checked=connection.checked_at is not None,
+        error_code=connection.error_code,
+    )
+    return Checked(connection, error)
+
+
+async def list_models(session: AsyncSession, connection_id: uuid.UUID) -> Models:
+    """Модели подключения для выбора в задаче. Это тот же запрос, что проверка
+    ключа, поэтому итог ложится на карточку: иначе список сказал бы «ключ не
+    принят», а карточка осталась бы зелёной. Провайдер не ответил: пустой список и
+    код, а не исключение, окно выбора предложит повторить."""
+    _, models, error = await _probe(
+        session, connection_id, lambda p, http, key, url: p.models(http, key=key, base_url=url)
+    )
+    return Models(sorted(models or [], key=lambda m: m.id), error)
+
+
+async def _probe[T](
+    session: AsyncSession,
+    connection_id: uuid.UUID,
+    request: Callable[[Provider, httpx2.AsyncClient, str, str | None], Awaitable[T]],
+) -> tuple[Connection, T | None, str | None]:
+    """Запрос к провайдеру по сохранённому ключу и итог на карточку. Сеть вне
+    транзакции, итог под замком строки: замена ключа, успевшая за время запроса,
+    итог про старый ключ не получит (сверка отпечатка в apply_result)."""
     connection = await _get(session, connection_id)
     profile = _provider(connection.provider)
     base_url = connection.base_url
@@ -251,20 +300,14 @@ async def recheck(session: AsyncSession, connection_id: uuid.UUID) -> Checked:
         apply_result(connection, key_changed_at=changed_at, started=_now(), code=KEY_UNREADABLE)
         await session.commit()
         log.warning("ai.connection.key_unreadable", connection_id=str(connection_id))
-        return Checked(connection, KEY_UNREADABLE)
+        return connection, None, KEY_UNREADABLE
     await _before_network(session)
     started = _now()
-    error = await _check(profile, key=key, base_url=base_url)
+    result, error = await _call(profile, lambda http: request(profile, http, key, base_url))
     connection = await _get(session, connection_id, lock=True)
     apply_result(connection, key_changed_at=changed_at, started=started, code=error)
     await session.commit()
-    log.info(
-        "ai.connection.rechecked",
-        connection_id=str(connection_id),
-        checked=connection.checked_at is not None,
-        error_code=connection.error_code,
-    )
-    return Checked(connection, error)
+    return connection, result, error
 
 
 async def rename(session: AsyncSession, connection_id: uuid.UUID, *, name: str) -> Connection:

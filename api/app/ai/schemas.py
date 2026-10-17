@@ -74,3 +74,18 @@ class CheckedOut(BaseModel):
     connection: ConnectionOut
     # "ok" или код ошибки проверки
     check: str
+
+
+class ModelOut(BaseModel):
+    # как у провайдера: claude-haiku-5-5, anthropic/claude-haiku-5-5
+    id: str
+    # для людей, если провайдер отдаёт; иначе экран покажет id
+    name: str | None
+
+
+class ModelsOut(BaseModel):
+    """Модели подключения. Провайдер не ответил: пустой список и код ошибки, а не
+    502: подключение есть, окно выбора предложит повторить."""
+
+    models: list[ModelOut]
+    error: str | None

@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 
 import httpx2
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 
 from app.ai import service
 from app.ai.models import Binding, Connection
@@ -229,8 +229,11 @@ WRITES = [
 ]
 
 
+READS = [("GET", "", None), ("GET", "/{id}/models", None)]
+
+
 @pytest.mark.parametrize("granted", [False, True], ids=["member", "can_connect"])
-@pytest.mark.parametrize(("method", "path", "body"), [("GET", "", None), *WRITES])
+@pytest.mark.parametrize(("method", "path", "body"), [*READS, *WRITES])
 async def test_only_owner(client, owner, login_as, net, session, method, path, body, granted):
     # ключи общие на установку, платит за них владелец: участнику раздел закрыт
     # целиком, даже с правом подключать аккаунты Instagram
@@ -249,7 +252,7 @@ async def test_only_owner(client, owner, login_as, net, session, method, path, b
     assert (after["name"], after["key_hint"]) == ("Основной", "WXYZ")
 
 
-@pytest.mark.parametrize(("method", "path", "body"), [("GET", "", None), *WRITES])
+@pytest.mark.parametrize(("method", "path", "body"), [*READS, *WRITES])
 async def test_anonymous(client, net, method, path, body):
     url = "/ai/connections" + path.format(id=uuid.uuid7())
     assert (await client.request(method, url, json=body)).status_code == 401
@@ -312,3 +315,55 @@ async def test_tasks_on_several_cards(client, owner, net, session):
     # карточка одного подключения (ответ переименования) без задач соседей
     r = await client.patch(f"/ai/connections/{ids[2]}", headers=owner, json={"name": "c"})
     assert r.json()["tasks"] == []
+
+
+def models_page(*ids):
+    return lambda request: httpx2.Response(
+        200, json={"data": [{"id": i, "display_name": i.upper()} for i in ids], "has_more": False}
+    )
+
+
+async def models(client, owner, card):
+    r = await client.get(f"/ai/connections/{card['id']}/models", headers=owner)
+    assert r.status_code == 200
+    return r.json()
+
+
+async def test_models_listed(client, owner, net):
+    card = (await create(client, owner)).json()["connection"]
+    net.answer = models_page("claude-sonnet-5-5", "claude-haiku-5-5")
+    body = await models(client, owner, card)
+    # по id: так проще найти глазами в длинном списке Timeweb
+    assert [m["id"] for m in body["models"]] == ["claude-haiku-5-5", "claude-sonnet-5-5"]
+    assert body["models"][0]["name"] == "CLAUDE-HAIKU-5-5"
+    assert body["error"] is None
+
+
+async def test_models_provider_silent(client, owner, net):
+    # не ответил: пустой список с кодом, а не 502, и карточка как была
+    card = (await create(client, owner)).json()["connection"]
+    net.answer = timeout
+    assert await models(client, owner, card) == {"models": [], "error": "timeout"}
+    [after] = (await client.get("/ai/connections", headers=owner)).json()
+    assert (after["checked_at"], after["error_code"]) == (card["checked_at"], None)
+
+
+async def test_models_key_rejected_marks_card(client, owner, net):
+    # список это та же проверка ключа: «не принят» в окне и на карточке разом
+    card = (await create(client, owner)).json()["connection"]
+    net.answer = status(401)
+    assert (await models(client, owner, card))["error"] == "key_rejected"
+    [after] = (await client.get("/ai/connections", headers=owner)).json()
+    assert after["error_code"] == "key_rejected"
+
+
+async def test_models_unreadable_key(client, owner, net, session):
+    card = (await create(client, owner)).json()["connection"]
+    await session.execute(update(Connection).values(key_encrypted="not-a-fernet-token"))
+    await session.commit()
+    assert await models(client, owner, card) == {"models": [], "error": "key_unreadable"}
+
+
+async def test_models_not_found(client, owner, net):
+    r = await client.get(f"/ai/connections/{uuid.uuid7()}/models", headers=owner)
+    assert (r.status_code, r.json()) == (404, {"detail": "ConnectionNotFound"})

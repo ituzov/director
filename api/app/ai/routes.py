@@ -27,6 +27,8 @@ from app.ai.schemas import (
     ConnectionIn,
     ConnectionOut,
     KeyIn,
+    ModelOut,
+    ModelsOut,
     NameIn,
     ProviderOut,
     TaskOut,
@@ -140,6 +142,16 @@ async def recheck(
     connection_id: uuid.UUID, session: SessionDep, user: identity.CurrentOwner
 ) -> CheckedOut:
     return await _checked(session, await service.recheck(session, connection_id))
+
+
+@router.get("/connections/{connection_id}/models")
+async def list_models(
+    connection_id: uuid.UUID, session: SessionDep, user: identity.CurrentOwner
+) -> ModelsOut:
+    found = await service.list_models(session, connection_id)
+    return ModelsOut(
+        models=[ModelOut(id=m.id, name=m.name) for m in found.models], error=found.error
+    )
 
 
 @router.patch("/connections/{connection_id}")
