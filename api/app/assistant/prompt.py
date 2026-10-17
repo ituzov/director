@@ -6,6 +6,7 @@
 текстом коммента.
 """
 
+import re
 from dataclasses import dataclass
 from typing import Literal
 
@@ -18,6 +19,12 @@ DIRECT_BYTES = 1000
 COMMENT_CHARS = 500
 # в режиме combo под комментом только начало: остальное в директе
 SHORT_COMMENT_CHARS = 200
+
+
+# слово, где латиница и кириллица идут подряд («planируете»): так в живом тексте не
+# пишут, это сбой модели, и человек по нему сразу видит бота. Дефис и пробел слова
+# разделяют, поэтому «Telegram-канал» сюда не попадает
+_MIXED = re.compile(r"[^\W\d_]*(?:[a-zA-Z][а-яА-ЯёЁ]|[а-яА-ЯёЁ][a-zA-Z])[^\W\d_]*")
 
 
 @dataclass(frozen=True, slots=True)
@@ -120,4 +127,11 @@ def check(decision: Decision, mode: str) -> Decision:
             raise ModelRetry("Заполни direct: в этом режиме нужен ответ в личные сообщения.")
         if len(direct.encode()) > DIRECT_BYTES:
             raise ModelRetry(f"direct длиннее {DIRECT_BYTES // 2} знаков, сократи.")
+    for text in (comment, direct):
+        mixed = _MIXED.search(text or "")
+        if mixed:
+            word = mixed.group()
+            raise ModelRetry(
+                f"В слове «{word}» смешаны латиница и кириллица. Напиши его одним алфавитом."
+            )
     return decision.model_copy(update={"comment": comment, "direct": direct})

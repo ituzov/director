@@ -108,3 +108,27 @@ async def test_too_long_answer_is_retried():
     result = await prompt.agent(BRIEF).run(prompt.comment_prompt("?"), model=FunctionModel(model))
     assert result.output.comment == "Нельзя, подробно в директе"
     assert len(calls) == 2
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["С кем planируете поехать?", "Пиши в Teлеграм", "Цена 5000рублей и Ok"[0:0] + "ДобрыйDay"],
+)
+async def test_mixed_alphabets_ask_again(text):
+    # сбой модели: латиница и кириллица в одном слове, человек сразу видит бота
+    with pytest.raises(ModelRetry, match="латиница и кириллица"):
+        prompt.check(answer(direct=text), "direct")
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Пишите в Telegram-канал или WhatsApp",
+        "Сплав на SUP-досках, 5000₽",
+        "Модель claude-haiku-5-5 и iPhone",
+        "Цена 48000 ₽, 7 дней",
+    ],
+)
+async def test_normal_mixed_text_passes(text):
+    # разные алфавиты в разных словах и через дефис: обычный текст
+    assert prompt.check(answer(direct=text), "direct").direct == text
