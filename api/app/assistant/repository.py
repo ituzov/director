@@ -125,12 +125,18 @@ async def outcomes_since(
     return counts
 
 
-async def post_holder(session: AsyncSession, media_id: str) -> Assistant | None:
-    """Живой частный ассистент поста (на паузе тоже держит пост)."""
+async def post_holder(
+    session: AsyncSession, account_id: uuid.UUID, media_id: str
+) -> Assistant | None:
+    """Живой частный ассистент поста этого аккаунта (на паузе тоже живой)."""
     return await session.scalar(
         select(Assistant)
         .join(AssistantMedia)
-        .where(AssistantMedia.media_id == media_id, AssistantMedia.archived.is_(False))
+        .where(
+            Assistant.account_id == account_id,
+            AssistantMedia.media_id == media_id,
+            AssistantMedia.archived.is_(False),
+        )
         .limit(1)
     )
 
@@ -203,12 +209,20 @@ async def lock_assistant(session: AsyncSession, assistant_id: uuid.UUID) -> Assi
     )
 
 
-async def taken_since(session: AsyncSession, assistant_id: uuid.UUID, since: datetime) -> int:
-    """Сколько комментов ассистент прочитал с этого момента: предел в сутки."""
+async def taken_since(
+    session: AsyncSession, assistant_id: uuid.UUID, since: datetime, exclude_id: uuid.UUID
+) -> int:
+    """Сколько других комментов ассистент прочитал с этого момента: предел в
+    сутки. Этот коммент не считаем: при повтор после сбоя он уже прочитан и иначе
+    упёрся бы в предел сам о себя."""
     return await session.scalar(
         select(func.count())
         .select_from(Reply)
-        .where(Reply.assistant_id == assistant_id, Reply.taken_at >= since)
+        .where(
+            Reply.assistant_id == assistant_id,
+            Reply.taken_at >= since,
+            Reply.id != exclude_id,
+        )
     )
 
 

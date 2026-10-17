@@ -12,7 +12,8 @@ from sqlalchemy import select
 
 from app import ai, assistant
 from app.activity.models import Event
-from app.assistant.models import Assistant, Reply
+from app.assistant import tasks as assistant_tasks
+from app.assistant.models import Assistant, AssistantMedia, Reply
 from app.instagram.models import Account, OutboxTask
 
 
@@ -237,6 +238,16 @@ async def test_transient_failure_retried_then_failed(session, make_session, brai
     assert await journal(session) == ["assistant.failed"]
 
 
+# списком, а не той же константой: убранный из неё код тест иначе не заметит
+@pytest.mark.parametrize("code", ["timeout", "server", "rate_limited", "bad_response", "cancelled"])
+async def test_every_transient_code_retried(session, make_session, brain, account, code):
+    a = await add_assistant(session, account)
+    reply = await add_reply(session, a)
+    brain.fail = code
+    await assistant.answer_once(make_session)
+    assert (await fresh(session, reply)).stage == "queued"
+
+
 @pytest.mark.parametrize("code", ["key_rejected", "no_funds", "not_configured", "model_missing"])
 async def test_permanent_failure_not_retried(session, make_session, brain, account, code):
     a = await add_assistant(session, account)
@@ -250,7 +261,7 @@ async def test_permanent_failure_not_retried(session, make_session, brain, accou
 async def test_stuck_released_and_retaken(session, make_session, brain, account):
     # worker упал посреди запроса: строка висит в thinking
     a = await add_assistant(session, account)
-    stuck = datetime.now(UTC) - timedelta(minutes=6)
+    stuck = datetime.now(UTC) - assistant_tasks.STUCK - timedelta(minutes=1)
     reply = await add_reply(session, a, stage="thinking", taken_at=stuck, attempts=1)
     await assistant.answer_once(make_session)
     reply = await fresh(session, reply)
@@ -259,7 +270,7 @@ async def test_stuck_released_and_retaken(session, make_session, brain, account)
 
 async def test_stuck_too_often_fails(session, make_session, brain, account):
     a = await add_assistant(session, account)
-    stuck = datetime.now(UTC) - timedelta(minutes=6)
+    stuck = datetime.now(UTC) - assistant_tasks.STUCK - timedelta(minutes=1)
     reply = await add_reply(session, a, stage="thinking", taken_at=stuck, attempts=3)
     await assistant.answer_once(make_session)
     assert brain.calls == []
@@ -311,3 +322,83 @@ async def test_already_replied(session, make_session, brain, account):
     await assistant.answer_once(make_session)
     reply = await fresh(session, reply)
     assert (reply.stage, reply.error_code) == ("send_failed", "already_replied")
+
+
+async def test_retry_not_blocked_by_its_own_limit(session, make_session, brain, account):
+    # предел 1, первый ответ сорвался на таймауте: повтор этого же коммента
+    # не должен упереться в предел, который он сам и занял
+    a = await add_assistant(session, account, daily_limit=1)
+    reply = await add_reply(session, a)
+    brain.fail = "timeout"
+    await assistant.answer_once(make_session)
+    reply = await fresh(session, reply)
+    reply.run_at = datetime.now(UTC) - timedelta(seconds=1)
+    await session.commit()
+    brain.fail = None
+    await assistant.answer_once(make_session)
+    reply = await fresh(session, reply)
+    assert (reply.outcome, reply.error_code) == ("answered", None)
+    assert len(brain.calls) == 2
+
+
+async def test_old_error_cleared_on_success(session, make_session, brain, account):
+    a = await add_assistant(session, account)
+    reply = await add_reply(session, a)
+    brain.fail = "timeout"
+    await assistant.answer_once(make_session)
+    reply = await fresh(session, reply)
+    reply.run_at = datetime.now(UTC) - timedelta(seconds=1)
+    await session.commit()
+    brain.fail = None
+    await assistant.answer_once(make_session)
+    reply = await fresh(session, reply)
+    # ошибка прошлой попытки к ответу не относится, и в журнале её нет
+    assert reply.error_code is None
+    event = await session.scalar(select(Event).where(Event.kind == "assistant.answered"))
+    assert event.data["error_code"] is None
+
+
+@pytest.mark.parametrize(("before", "after"), [("direct", "comment"), ("comment", "direct")])
+async def test_mode_changed_while_thinking(session, make_session, brain, account, before, after):
+    # модель писала по старому режиму: ответ уходит так, как написан, а не пустым
+    # письмом по новому. Пустой Private Reply занял бы единственный ответ навсегда
+    a = await add_assistant(session, account, mode=before)
+    reply = await add_reply(session, a)
+    brain.answer = {"decision": "answer", "direct": "В директ.", "comment": "В комменте."}
+
+    async def switch():
+        a.mode = after
+        await session.commit()
+
+    brain.during = switch
+    await assistant.answer_once(make_session)
+    [task] = await outbox(session)
+    want = (
+        ("private_reply", "В директ.") if before == "direct" else ("comment_reply", "В комменте.")
+    )
+    assert (task.kind, task.payload["text"]) == want
+    assert (await fresh(session, reply)).outcome == "answered"
+
+
+async def test_post_moved_while_queued(session, make_session, brain, account):
+    # коммент ждал в очереди, а пост тем временем отдали другому частному:
+    # отвечает новый хозяин, со своей базой
+    general = await add_assistant(session, account)
+    altai = await add_assistant(session, account, scope="posts", name="Алтай")
+    session.add(AssistantMedia(assistant_id=altai.id, media_id="m1"))
+    await session.commit()
+    reply = await add_reply(session, general, media_id="m1")
+    await assistant.answer_once(make_session)
+    assert brain.calls[0]["scope"] == str(altai.id)
+    assert (await fresh(session, reply)).assistant_id == altai.id
+
+
+async def test_owner_gone_while_queued(session, make_session, brain, account):
+    # пока коммент ждал, единственного ассистента поставили на паузу
+    a = await add_assistant(session, account)
+    reply = await add_reply(session, a)
+    a.enabled = False
+    await session.commit()
+    await assistant.answer_once(make_session)
+    assert brain.calls == []
+    assert (await fresh(session, reply)).outcome == "paused"

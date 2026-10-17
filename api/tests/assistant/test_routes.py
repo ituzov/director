@@ -299,3 +299,33 @@ async def test_only_owner_changes(
     after = (await client.get(f"/assistants/{first['id']}", headers=owner)).json()
     assert (after["name"], after["enabled"], after["archived_at"]) == ("Все вопросы", True, None)
     assert await count(session, Assistant) == 1
+
+
+async def test_update_conflicts(client, owner, account, connection):
+    # правка в чужой пост или во второго общего: понятный 409, а не 500 от индекса
+    await create(client, owner, form(account, connection))
+    altai = form(account, connection, scope="posts", media_ids=["m1"], name="Алтай")
+    await create(client, owner, altai)
+    karelia = (
+        await create(
+            client,
+            owner,
+            form(account, connection, scope="posts", media_ids=["m2"], name="Карелия"),
+        )
+    ).json()
+    url = f"/assistants/{karelia['id']}"
+    body = without_account(
+        form(account, connection, scope="posts", media_ids=["m1"], name="Карелия")
+    )
+    r = await client.put(url, headers=owner, json=body)
+    assert (r.status_code, r.json()["conflict"]["kind"]) == (409, "post")
+    r = await client.put(url, headers=owner, json=without_account(form(account, connection)))
+    assert (r.status_code, r.json()["conflict"]["kind"]) == (409, "general")
+
+
+@pytest.mark.parametrize("path", ["", "/{id}"])
+async def test_anonymous(client, owner, account, connection, path):
+    first = (await create(client, owner, form(account, connection))).json()
+    url = "/assistants" + path.format(id=first["id"])
+    r = await client.get(url, params={"account_id": str(account.id)})
+    assert r.status_code == 401

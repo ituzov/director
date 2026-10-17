@@ -80,12 +80,36 @@ async def test_general_on_other_posts(session):
     assert await handle(session, comment(media_id="m2")) == assistant.Taken(general.id)
 
 
-async def test_paused_private_silences_post(session):
-    # пауза держит пост: общий там тоже молчит
-    await add_assistant(session)
+async def test_paused_private_lets_general_answer(session):
+    # как у автоответов: на паузе частный держит пост для других частных, а ответить
+    # пускает общего, иначе пауза сделала бы пост немым
+    general = await add_assistant(session)
+    await add_assistant(session, posts=["m1"], enabled=False, name="Алтай")
+    assert await handle(session, comment(media_id="m1")) == assistant.Taken(general.id)
+
+
+async def test_paused_private_without_general(session):
     await add_assistant(session, posts=["m1"], enabled=False, name="Алтай")
     assert await handle(session, comment(media_id="m1")) is None
     assert await queued(session) == []
+
+
+async def test_other_account_post_not_taken(session):
+    # пост с тем же id у ассистента другого аккаунта: не его коммент
+    other = Assistant(
+        account_id=uuid.uuid7(),
+        name="Чужой",
+        scope="posts",
+        mode="direct",
+        daily_limit=200,
+        created_by=uuid.uuid7(),
+    )
+    session.add(other)
+    await session.flush()
+    session.add(AssistantMedia(assistant_id=other.id, media_id="m1"))
+    await session.commit()
+    general = await add_assistant(session)
+    assert await handle(session, comment(media_id="m1")) == assistant.Taken(general.id)
 
 
 async def test_archived_private_releases_post(session):

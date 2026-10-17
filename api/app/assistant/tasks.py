@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import activity, ai, instagram
 from app.assistant import prompt, repository
-from app.assistant.models import Reply
+from app.assistant.models import Assistant, Reply
 from app.assistant.service import ANSWER, day_start
 from app.db import SessionLocal
 
@@ -28,16 +28,13 @@ class Taken:
 
 
 async def handle_comment(session: AsyncSession, comment: instagram.CommentRef) -> Taken | None:
-    """Коммент, который не взял ни один автоответ. Отвечает частный ассистент поста,
-    без него общий. На паузе держит своё место: тогда молчат все. None: не наш."""
+    """Коммент, который не взял ни один автоответ. None: отвечать некому."""
     if comment.parent_id is not None:
         # ответ на коммент, чаще всего под нашим же ответом: каждый такой давал бы
         # ещё одно сообщение в директ. Продолжение разговора потом
         return None
-    assistant = await repository.post_holder(session, comment.media_id)
+    assistant = await _owner(session, comment.account_id, comment.media_id)
     if assistant is None:
-        assistant = await repository.live_general(session, comment.account_id, None)
-    if assistant is None or not assistant.enabled:
         return None
     reply_id = await repository.add_reply(
         session,
@@ -54,11 +51,22 @@ async def handle_comment(session: AsyncSession, comment: instagram.CommentRef) -
     return Taken(assistant.id)
 
 
+async def _owner(session: AsyncSession, account_id: uuid.UUID, media_id: str) -> Assistant | None:
+    """Кто отвечает на коммент под постом: включённый частный ассистент поста,
+    иначе включённый общий. Частный на паузе пост для других частных держит, а
+    ответить пускает общего, как у автоответов: иначе пауза сделала бы пост немым."""
+    own = await repository.post_holder(session, account_id, media_id)
+    if own is not None and own.enabled:
+        return own
+    general = await repository.live_general(session, account_id, None)
+    return general if general is not None and general.enabled else None
+
+
 # на коммент сутками позже отвечать странно: такой остаётся без ответа (expired)
 TOO_OLD = timedelta(hours=24)
-# дольше думать нейросеть не может (ai.CALL_TIMEOUT 120 с и переспросы): строка
-# в thinking старше этого брошена упавшим worker
-STUCK = timedelta(minutes=5)
+# строка в thinking старше этого брошена упавшим worker. С запасом: ai.run это
+# до ai.STEPS запросов (переспросы по схеме), каждый до 120 с, то есть до 10 минут
+STUCK = timedelta(minutes=15)
 # разовые сбои нейросети: повтор через минуту, потом через пять, потом failed
 RETRY_DELAYS = (timedelta(minutes=1), timedelta(minutes=5))
 # всего попыток на коммент, вместе с брошенными упавшим worker
@@ -133,7 +141,14 @@ async def _take(session: AsyncSession) -> _Job | bool | None:
         reply.run_at = now + timedelta(seconds=5)
         await session.commit()
         return True
-    assistant = await repository.lock_assistant(session, reply.assistant_id)
+    # пока коммент ждал, пост могли отдать другому ассистенту или поставить на паузу:
+    # отвечает тот, кто хозяин сейчас
+    owner = await _owner(session, reply.account_id, reply.media_id)
+    if owner is None:
+        await _finish(session, reply, "paused")
+        return True
+    reply.assistant_id = owner.id
+    assistant = await repository.lock_assistant(session, owner.id)
     if assistant is None or assistant.archived_at is not None or not assistant.enabled:
         await _finish(session, reply, "paused")
         return True
@@ -146,7 +161,8 @@ async def _take(session: AsyncSession) -> _Job | bool | None:
         await _finish(session, reply, "failed")
         return True
     # предел под замком ассистента: два цикла не прочитают 201-й из 200
-    if await repository.taken_since(session, assistant.id, day_start(now)) >= assistant.daily_limit:
+    taken = await repository.taken_since(session, assistant.id, day_start(now), reply.id)
+    if taken >= assistant.daily_limit:
         await _finish(session, reply, "limit")
         return True
     reply.stage, reply.taken_at = "thinking", now
@@ -172,12 +188,16 @@ async def _record(session: AsyncSession, job: _Job, decision: prompt.Decision) -
     if assistant is None or assistant.archived_at is not None or not assistant.enabled:
         await _finish(session, reply, "paused")
         return
+    # ошибка прошлой попытки к этому решению не относится
+    reply.error_code = None
     reply.source = decision.source
     if decision.decision != "answer":
         await _finish(session, reply, "unsure" if decision.decision == "unsure" else "not_mine")
         return
     reply.comment_reply, reply.direct_reply = decision.comment, decision.direct
-    if assistant.mode == "comment":
+    # отправка по режиму, с которым писала модель: владелец мог сменить его, пока
+    # она думала, а текста для нового режима в ответе нет
+    if job.brief.mode == "comment":
         queued = await instagram.enqueue_comment_reply(
             session,
             account_id=reply.account_id,

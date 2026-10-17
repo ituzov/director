@@ -65,10 +65,9 @@ async def create(session: AsyncSession, form: AssistantIn, user: identity.UserRe
 
 async def update(session: AsyncSession, assistant_id: uuid.UUID, form: AssistantForm) -> Full:
     """Сохранить форму целиком: посты заменяются тем, что прислали."""
-    assistant = await _existing(session, assistant_id)
+    assistant = await _locked(session, assistant_id)
     if assistant.archived_at is not None:
         raise AssistantArchived
-    await repository.lock_account(session, assistant.account_id)
     await _check_conflicts(
         session, assistant.account_id, form.scope, form.media_ids, exclude_id=assistant.id
     )
@@ -84,7 +83,7 @@ async def update(session: AsyncSession, assistant_id: uuid.UUID, form: Assistant
 
 async def set_enabled(session: AsyncSession, assistant_id: uuid.UUID, enabled: bool) -> Full:
     """Пауза и обратно. Конфликтов нет: на паузе и так держит своё место."""
-    assistant = await _existing(session, assistant_id)
+    assistant = await _locked(session, assistant_id)
     if assistant.archived_at is not None:
         raise AssistantArchived
     if assistant.enabled != enabled:
@@ -97,7 +96,7 @@ async def set_enabled(session: AsyncSession, assistant_id: uuid.UUID, enabled: b
 
 async def archive(session: AsyncSession, assistant_id: uuid.UUID) -> Full:
     """В архив: перестаёт отвечать и отпускает посты. Повтор ничего не меняет."""
-    assistant = await _existing(session, assistant_id)
+    assistant = await _locked(session, assistant_id)
     if assistant.archived_at is None:
         assistant.archived_at = func.now()
         await repository.set_media_archived(session, assistant.id, True)
@@ -108,9 +107,8 @@ async def archive(session: AsyncSession, assistant_id: uuid.UUID) -> Full:
 
 async def unarchive(session: AsyncSession, assistant_id: uuid.UUID) -> Full:
     """Из архива, если место за это время никто не занял."""
-    assistant = await _existing(session, assistant_id)
+    assistant = await _locked(session, assistant_id)
     if assistant.archived_at is not None:
-        await repository.lock_account(session, assistant.account_id)
         media_ids = (await repository.media_by_assistant(session, [assistant.id])).get(
             assistant.id, []
         )
@@ -153,6 +151,18 @@ async def _with_details(session: AsyncSession, assistants: list[Assistant]) -> l
 
 async def _existing(session: AsyncSession, assistant_id: uuid.UUID) -> Assistant:
     assistant = await repository.get_assistant(session, assistant_id)
+    if assistant is None:
+        raise AssistantNotFound
+    return assistant
+
+
+async def _locked(session: AsyncSession, assistant_id: uuid.UUID) -> Assistant:
+    """Ассистент для изменения: под замком аккаунта и перечитанный после него.
+    Иначе архив, успевший между чтением и записью формы, получил бы обратно живые
+    посты: форма заменяет их строками с archived = false."""
+    account_id = (await _existing(session, assistant_id)).account_id
+    await repository.lock_account(session, account_id)
+    assistant = await repository.lock_assistant(session, assistant_id)
     if assistant is None:
         raise AssistantNotFound
     return assistant

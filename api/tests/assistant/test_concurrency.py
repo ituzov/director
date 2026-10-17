@@ -2,6 +2,7 @@
 покажет. Настоящие коммиты, после теста уборка."""
 
 import asyncio
+import contextlib
 import uuid
 from datetime import UTC, datetime, timedelta
 
@@ -15,9 +16,9 @@ from sqlalchemy.pool import NullPool
 from app import ai, assistant
 from app.ai.models import Connection
 from app.assistant import service
-from app.assistant.exceptions import AssistantConflict
+from app.assistant.exceptions import AssistantArchived, AssistantConflict
 from app.assistant.models import Assistant, Reply
-from app.assistant.schemas import AssistantIn
+from app.assistant.schemas import AssistantForm, AssistantIn
 from app.core import crypto
 from app.db import make_engine
 from app.identity import UserRef
@@ -173,3 +174,50 @@ async def test_one_person_not_answered_twice_at_once(sessions, setup, slow_brain
     await asyncio.gather(assistant.answer_once(sessions), assistant.answer_once(sessions))
     assert len(slow_brain) == 1
     assert await outcomes(sessions) == ["None", "answered"]
+
+
+async def test_archive_and_save_at_once(sessions, setup, monkeypatch):
+    # вкладка A сохраняет форму, вкладка B отправляет ассистента в архив. Без замка
+    # архив успевал между чтением и записью формы, и архивный оставался с живыми
+    # постами: они мешали бы другим частным, а комменты на них никто не взял бы
+    from app.assistant import repository
+    from app.assistant.models import AssistantMedia
+
+    account_id, connection_id = setup
+    body = form(account_id, connection_id, scope="posts", media_ids=["m1"], name="Алтай")
+    async with sessions() as session:
+        created = (await service.create(session, body, OWNER)).assistant.id
+
+    read = repository.get_assistant
+    archived = asyncio.Event()
+
+    async def read_then_archive(session, assistant_id):
+        found = await read(session, assistant_id)
+        if not archived.is_set():
+            archived.set()
+
+            async def archive():
+                async with sessions() as other:
+                    await service.archive(other, assistant_id)
+
+            task = asyncio.create_task(archive())
+            # с замком архив ждёт конца сохранения: не ждём его здесь вечно
+            with contextlib.suppress(TimeoutError):
+                await asyncio.wait_for(asyncio.shield(task), 0.5)
+            read_then_archive.task = task
+        return found
+
+    monkeypatch.setattr(repository, "get_assistant", read_then_archive)
+    async with sessions() as session:
+        # архив успел первым: сохранение честно отказывает, это тоже согласованный итог
+        with contextlib.suppress(AssistantArchived):
+            await service.update(
+                session, created, AssistantForm(**body.model_dump(exclude={"account_id"}))
+            )
+    await read_then_archive.task
+    async with sessions() as session:
+        a = await session.get(Assistant, created)
+        media = list(await session.scalars(select(AssistantMedia.archived)))
+    # итог согласован: в архиве, и посты отпущены
+    assert a.archived_at is not None
+    assert media == [True]

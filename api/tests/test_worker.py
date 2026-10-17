@@ -13,6 +13,7 @@ import pytest
 from sqlalchemy import func, select
 
 from app import assistant, autoreplies, instagram, worker
+from app.assistant.models import Assistant, Reply
 from app.autoreplies.models import Autoreply, Keyword
 from app.core import crypto
 from app.instagram import tasks, webhook
@@ -136,8 +137,18 @@ async def test_comment_words_first_then_assistant(monkeypatch, by_word, by_assis
     assert asked == ([] if by_word else ["ref"])
 
 
-@pytest.mark.parametrize(("text", "taken"), [("хочу гайд", "autoreplies"), ("класс", None)])
-async def test_comment_through_worker_knows_who_took_it(session, text, taken):
+@pytest.mark.parametrize(
+    ("text", "parent", "taken"),
+    [
+        ("хочу гайд", None, "autoreplies"),
+        # слова нет: коммент встаёт в очередь общего ассистента
+        ("а с собакой можно?", None, "assistant"),
+        # ответ на коммент ассистент не берёт
+        ("а с собакой можно?", "180000", None),
+    ],
+    ids=["word", "assistant", "reply-to-comment"],
+)
+async def test_comment_through_worker_knows_who_took_it(session, text, parent, taken):
     # вся цепочка без подмен: входящее, worker, настоящий автоответ, строка входящего
     account = Account(
         ig_user_id="17841400000000000",
@@ -159,6 +170,15 @@ async def test_comment_through_worker_knows_who_took_it(session, text, taken):
     session.add(autoreply)
     await session.flush()
     session.add(Keyword(autoreply_id=autoreply.id, word="гайд", normalized="гайд"))
+    helper = Assistant(
+        account_id=account.id,
+        name="Все вопросы",
+        scope="all",
+        mode="direct",
+        daily_limit=200,
+        created_by=uuid.uuid7(),
+    )
+    session.add(helper)
     event = InboxEvent(
         ig_account_id=account.ig_user_id,
         kind=webhook.COMMENT,
@@ -168,15 +188,18 @@ async def test_comment_through_worker_knows_who_took_it(session, text, taken):
             "text": text,
             "from": {"id": "500001", "username": "vasya"},
             "media": {"id": "190001"},
-        },
+        }
+        | ({"parent_id": parent} if parent else {}),
     )
     session.add(event)
     await session.commit()
 
     assert await worker.inbox_once(sessions(session)) is True
     await session.refresh(event)
-    ref = str(autoreply.id) if taken else None
+    ref = {"autoreplies": str(autoreply.id), "assistant": str(helper.id), None: None}[taken]
     assert (event.outcome, event.handled_by, event.handled_ref) == ("done", taken, ref)
+    replies = list(await session.scalars(select(Reply.comment_id)))
+    assert replies == (["180001"] if taken == "assistant" else [])
 
 
 async def test_comment_reaches_deliveries(client, session, login_as, monkeypatch):
@@ -361,5 +384,6 @@ async def test_main_starts_every_loop(monkeypatch):
         for sig in (signal.SIGTERM, signal.SIGINT):
             asyncio.get_running_loop().remove_signal_handler(sig)
     senders = [f"outbox-{n}" for n in range(worker.SENDERS)]
-    assistants = [f"assistant-{n}" for n in range(worker.ASSISTANTS)]
+    # числом, а не той же константой: ASSISTANTS = 0 тихо выключил бы ассистента
+    assistants = ["assistant-0", "assistant-1"]
     assert sorted(names) == sorted(["inbox", *senders, *assistants, "results", "periodic"])
