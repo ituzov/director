@@ -65,15 +65,17 @@ export function MetaAppForm({ metaApp }: { metaApp: MetaApp | null }) {
             description={t("appSecretHint")}
             validate={check(APP_SECRET, "InvalidAppSecret")}
           >
-            {/* new-password: Chrome не подставит сюда сохранённый пароль от Директора и не
-                предложит запомнить секрет как пароль; метки просят о том же менеджеры паролей */}
+            {/* не type="password": Safari принял бы форму за вход и предложил сохранить
+                секрет как пароль. Точки рисует стиль, как у ключа нейросети */}
             <Input
-              type="password"
-              autoComplete="new-password"
+              type="text"
+              autoComplete="off"
+              autoCapitalize="off"
               spellCheck={false}
               data-1p-ignore
               data-lpignore="true"
               data-bwignore
+              className="[-webkit-text-security:disc]"
             />
           </FormField>
         ) : (

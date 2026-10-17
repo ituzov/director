@@ -30,15 +30,19 @@ export function KeyField({ label, description, optional = false }: KeyFieldProps
         return code && t(code);
       }}
     >
-      {/* new-password: Chrome не подставит сюда сохранённый пароль от Директора и не
-          предложит запомнить ключ как пароль; метки просят о том же менеджеры паролей */}
+      {/* не type="password": поле-пароль рядом с текстовым Safari принимает за вход и
+          предлагает сохранить ключ как пароль, autocomplete он не слушает. Точки рисует
+          стиль; где его нет, ключ при вводе виден, это ввод один раз на своём экране.
+          Метки просят менеджеры паролей не трогать поле */}
       <Input
-        type="password"
-        autoComplete="new-password"
+        type="text"
+        autoComplete="off"
+        autoCapitalize="off"
         spellCheck={false}
         data-1p-ignore
         data-lpignore="true"
         data-bwignore
+        className="[-webkit-text-security:disc]"
       />
     </FormField>
   );
