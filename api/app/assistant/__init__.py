@@ -5,4 +5,12 @@
 Публичный интерфейс модуля: снаружи импортируют только отсюда.
 """
 
-__all__: list[str] = []
+from app.assistant.exceptions import AssistantError
+from app.assistant.routes import assistant_error_handler, router
+
+__all__ = [
+    # HTTP: экран ассистентов аккаунта
+    "router",
+    "assistant_error_handler",
+    "AssistantError",
+]
