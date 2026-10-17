@@ -106,9 +106,7 @@ async def list_providers(user: identity.CurrentOwner) -> list[ProviderOut]:
 
 
 @router.get("/connections")
-async def list_connections(
-    session: SessionDep, user: identity.CurrentOwner
-) -> list[ConnectionOut]:
+async def list_connections(session: SessionDep, user: identity.CurrentOwner) -> list[ConnectionOut]:
     connections = await service.list_connections(session)
     bindings = await service.bindings_by_connection(session, [c.id for c in connections])
     return [_out(c, bindings[c.id]) for c in connections]
