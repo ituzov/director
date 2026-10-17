@@ -1,0 +1,743 @@
+{
+ "object": "list",
+ "data": [
+  {
+   "id": "gemini/gemini-2.5-flash-lite",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "chat"
+  },
+  {
+   "id": "gemini/gemini-2.5-pro",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "chat"
+  },
+  {
+   "id": "openai/gpt-5.1",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "chat"
+  },
+  {
+   "id": "moonshot/kimi-k2.7-code",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "chat"
+  },
+  {
+   "id": "dashscope/qwen3.8-max",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "chat"
+  },
+  {
+   "id": "gemini/gemini-2.5-flash-preview-tts",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "audio_speech"
+  },
+  {
+   "id": "timeweb/qwen3.6-35b-a3b",
+   "object": "model",
+   "owned_by": "openai"
+  },
+  {
+   "id": "yandex/yandexgpt-pro-5.1",
+   "object": "model",
+   "owned_by": "openai"
+  },
+  {
+   "id": "gemini/gemini-3.7-flash",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "chat"
+  },
+  {
+   "id": "gemini/gemini-3.1-flash-image-preview",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "image_generation"
+  },
+  {
+   "id": "deepseek/deepseek-v4-flash",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "chat"
+  },
+  {
+   "id": "timeweb/kimi-k2.6",
+   "object": "model",
+   "owned_by": "openai"
+  },
+  {
+   "id": "yandex/yandexgpt-lite",
+   "object": "model",
+   "owned_by": "openai"
+  },
+  {
+   "id": "openai/gpt-5-mini",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "chat"
+  },
+  {
+   "id": "openai/gpt-5.4",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "chat"
+  },
+  {
+   "id": "xai/grok-4.6",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "chat"
+  },
+  {
+   "id": "openai/gpt-5.2",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "chat"
+  },
+  {
+   "id": "deepseek/deepseek-v4-pro",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "chat"
+  },
+  {
+   "id": "timeweb/gpt-oss-120b",
+   "object": "model",
+   "owned_by": "openai"
+  },
+  {
+   "id": "anthropic/claude-haiku-5-5",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "chat"
+  },
+  {
+   "id": "openai/gpt-5.4-nano",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "chat"
+  },
+  {
+   "id": "openai/gpt-6.1-sol",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "chat"
+  },
+  {
+   "id": "openai/gpt-5.5",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "chat"
+  },
+  {
+   "id": "openai/gpt-5.4-mini",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "chat"
+  },
+  {
+   "id": "openai/gpt-4.1-mini",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "chat"
+  },
+  {
+   "id": "timeweb/bge-multilingual-gemma2",
+   "object": "model",
+   "owned_by": "openai"
+  },
+  {
+   "id": "timeweb/glm-4-6-357b",
+   "object": "model",
+   "owned_by": "openai"
+  },
+  {
+   "id": "timeweb/llama-3-3-70b-instruct",
+   "object": "model",
+   "owned_by": "openai"
+  },
+  {
+   "id": "timeweb/kimi-k2-instruct",
+   "object": "model",
+   "owned_by": "openai"
+  },
+  {
+   "id": "gemini/gemini-embedding-2",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "embedding"
+  },
+  {
+   "id": "dashscope/text-embedding-v4",
+   "object": "model",
+   "owned_by": "openai"
+  },
+  {
+   "id": "timeweb/bge-m3",
+   "object": "model",
+   "owned_by": "openai"
+  },
+  {
+   "id": "zai/glm-5.3",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "chat"
+  },
+  {
+   "id": "black_forest_labs/flux-2-max",
+   "object": "model",
+   "owned_by": "openai"
+  },
+  {
+   "id": "openai/text-embedding-3-large",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "embedding"
+  },
+  {
+   "id": "timeweb/glm-5.2",
+   "object": "model",
+   "owned_by": "openai"
+  },
+  {
+   "id": "dashscope/qwen3-max",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "chat"
+  },
+  {
+   "id": "openai/gpt-5-nano",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "chat"
+  },
+  {
+   "id": "anthropic/claude-opus-4-5",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "chat"
+  },
+  {
+   "id": "anthropic/claude-opus-4-6",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "chat"
+  },
+  {
+   "id": "zai/glm-5.2",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "chat"
+  },
+  {
+   "id": "anthropic/claude-sonnet-5-5",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "chat"
+  },
+  {
+   "id": "openai/gpt-image-2",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "image_generation"
+  },
+  {
+   "id": "openai/omni-moderation-latest",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "moderation"
+  },
+  {
+   "id": "openai/gpt-4.1",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "chat"
+  },
+  {
+   "id": "dashscope/qwen3.6-plus",
+   "object": "model",
+   "owned_by": "openai"
+  },
+  {
+   "id": "dashscope/qwen3.6-flash",
+   "object": "model",
+   "owned_by": "openai"
+  },
+  {
+   "id": "yandex/text-embeddings-v2-doc",
+   "object": "model",
+   "owned_by": "openai"
+  },
+  {
+   "id": "anthropic/claude-sonnet-4-5",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "chat"
+  },
+  {
+   "id": "openai/gpt-5.3-codex",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "responses"
+  },
+  {
+   "id": "dashscope/qwen3.5-plus",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "chat"
+  },
+  {
+   "id": "xai/grok-4.5",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "chat"
+  },
+  {
+   "id": "yandex/text-embeddings-v2-query",
+   "object": "model",
+   "owned_by": "openai"
+  },
+  {
+   "id": "openai/gpt-4o-mini-transcribe",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "audio_transcription"
+  },
+  {
+   "id": "gemini/text-embedding-005",
+   "object": "model",
+   "owned_by": "openai"
+  },
+  {
+   "id": "openai/gpt-5.6-luna",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "chat"
+  },
+  {
+   "id": "gemini/gemini-3.5-flash-lite",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "chat"
+  },
+  {
+   "id": "dashscope/qwen3.8-flash",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "chat"
+  },
+  {
+   "id": "anthropic/claude-fable-5",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "chat"
+  },
+  {
+   "id": "openai/gpt-6-astra",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "chat"
+  },
+  {
+   "id": "openai/gpt-5.6-sol",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "chat"
+  },
+  {
+   "id": "dashscope/qwen3.7-max",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "chat"
+  },
+  {
+   "id": "zai/glm-4.7",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "chat"
+  },
+  {
+   "id": "dashscope/qwen3.7-plus",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "chat"
+  },
+  {
+   "id": "dashscope/qwen3.5-flash",
+   "object": "model",
+   "owned_by": "openai"
+  },
+  {
+   "id": "anthropic/claude-opus-5",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "chat"
+  },
+  {
+   "id": "openai/gpt-4o-mini-tts",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "audio_speech"
+  },
+  {
+   "id": "gemini/gemini-2.5-flash",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "chat"
+  },
+  {
+   "id": "gemini/gemini-4-argon",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "chat"
+  },
+  {
+   "id": "openai/gpt-image-2.5-sunburst",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "image_generation"
+  },
+  {
+   "id": "anthropic/claude-sonnet-4-6",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "chat"
+  },
+  {
+   "id": "xai/grok-code-fast-1",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "chat"
+  },
+  {
+   "id": "moonshot/kimi-k2.6",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "chat"
+  },
+  {
+   "id": "gemini/gemini-nano-banana-2.1",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "image_generation"
+  },
+  {
+   "id": "anthropic/claude-opus-4-7",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "chat"
+  },
+  {
+   "id": "anthropic/claude-opus-4-8",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "chat"
+  },
+  {
+   "id": "xai/grok-4.3",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "chat"
+  },
+  {
+   "id": "gemini/gemini-3-pro-image-preview",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "image_generation"
+  },
+  {
+   "id": "gemini/gemini-3.5-flash",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "chat"
+  },
+  {
+   "id": "anthropic/claude-sonnet-5",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "chat"
+  },
+  {
+   "id": "openai/gpt-4o-mini",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "chat"
+  },
+  {
+   "id": "yandex/aliceai-llm-latest",
+   "object": "model",
+   "owned_by": "openai"
+  },
+  {
+   "id": "moonshot/kimi-k3",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "chat"
+  },
+  {
+   "id": "zai/glm-4.7-flashx",
+   "object": "model",
+   "owned_by": "openai"
+  },
+  {
+   "id": "black_forest_labs/flux-2-klein-9b",
+   "object": "model",
+   "owned_by": "openai"
+  },
+  {
+   "id": "black_forest_labs/flux-2-pro",
+   "object": "model",
+   "owned_by": "openai"
+  },
+  {
+   "id": "zai/glm-5.3-flash",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "chat"
+  },
+  {
+   "id": "gemini/gemini-3.1-flash-lite",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "chat"
+  },
+  {
+   "id": "runway/klingO3_pro",
+   "object": "model",
+   "owned_by": "openai"
+  },
+  {
+   "id": "gemini/gemini-3.1-pro-preview",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "chat"
+  },
+  {
+   "id": "gemini/gemini-3.6-flash",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "chat"
+  },
+  {
+   "id": "gemini/gemini-3.8-flash",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "chat"
+  },
+  {
+   "id": "runway/klingO3_standard",
+   "object": "model",
+   "owned_by": "openai"
+  },
+  {
+   "id": "runway/klingO3_4k",
+   "object": "model",
+   "owned_by": "openai"
+  },
+  {
+   "id": "deepseek/deepseek-flash",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "chat"
+  },
+  {
+   "id": "anthropic/claude-fable-5-1",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "chat"
+  },
+  {
+   "id": "openai/gpt-5.6-terra",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "chat"
+  },
+  {
+   "id": "runway/seedance2_5",
+   "object": "model",
+   "owned_by": "openai"
+  },
+  {
+   "id": "runway/seedream5_pro",
+   "object": "model",
+   "owned_by": "openai"
+  },
+  {
+   "id": "runway/seedream5_lite",
+   "object": "model",
+   "owned_by": "openai"
+  },
+  {
+   "id": "runway/kling2.5_turbo_pro",
+   "object": "model",
+   "owned_by": "openai"
+  },
+  {
+   "id": "runway/kling3.0_pro",
+   "object": "model",
+   "owned_by": "openai"
+  },
+  {
+   "id": "timeweb/glm-5.3",
+   "object": "model",
+   "owned_by": "openai"
+  },
+  {
+   "id": "timeweb/gemma4:31b",
+   "object": "model",
+   "owned_by": "openai"
+  },
+  {
+   "id": "runway/kling3.0_standard",
+   "object": "model",
+   "owned_by": "openai"
+  },
+  {
+   "id": "runway/kling3.0_4k",
+   "object": "model",
+   "owned_by": "openai"
+  },
+  {
+   "id": "xai/grok-4.7",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "chat"
+  },
+  {
+   "id": "anthropic/claude-opus-5-5",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "chat"
+  },
+  {
+   "id": "runway/seedance2",
+   "object": "model",
+   "owned_by": "openai"
+  },
+  {
+   "id": "runway/seedance2_fast",
+   "object": "model",
+   "owned_by": "openai"
+  },
+  {
+   "id": "runway/seedance2_mini",
+   "object": "model",
+   "owned_by": "openai"
+  },
+  {
+   "id": "openai/gpt-6-sol",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "chat"
+  },
+  {
+   "id": "runway/hailuo3",
+   "object": "model",
+   "owned_by": "openai"
+  },
+  {
+   "id": "runway/h3_max",
+   "object": "model",
+   "owned_by": "openai"
+  },
+  {
+   "id": "runway/wan3",
+   "object": "model",
+   "owned_by": "openai"
+  },
+  {
+   "id": "runway/wan3_prime",
+   "object": "model",
+   "owned_by": "openai"
+  },
+  {
+   "id": "runway/gen4.5",
+   "object": "model",
+   "owned_by": "openai"
+  },
+  {
+   "id": "runway/gen4_turbo",
+   "object": "model",
+   "owned_by": "openai"
+  },
+  {
+   "id": "runway/gen4_image",
+   "object": "model",
+   "owned_by": "openai"
+  },
+  {
+   "id": "runway/gen4_image_turbo",
+   "object": "model",
+   "owned_by": "openai"
+  },
+  {
+   "id": "runway/veo3.1",
+   "object": "model",
+   "owned_by": "openai"
+  },
+  {
+   "id": "runway/veo3.1_fast",
+   "object": "model",
+   "owned_by": "openai"
+  },
+  {
+   "id": "openai/gpt-4o-transcribe",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "audio_transcription"
+  },
+  {
+   "id": "openai/gpt-5",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "chat"
+  },
+  {
+   "id": "openai/gpt-6-luna",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "chat"
+  },
+  {
+   "id": "openai/gpt-image-2.5-flare",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "image_generation"
+  },
+  {
+   "id": "openai/text-embedding-3-small",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "embedding"
+  },
+  {
+   "id": "openai/gpt-realtime-2",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "realtime"
+  },
+  {
+   "id": "openai/gpt-4o",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "chat"
+  },
+  {
+   "id": "anthropic/claude-haiku-4-5",
+   "object": "model",
+   "owned_by": "openai",
+   "mode": "chat"
+  },
+  {
+   "id": "jev-latest",
+   "object": "model",
+   "owned_by": "typesafe",
+   "mode": "systemone"
+  }
+ ]
+}
