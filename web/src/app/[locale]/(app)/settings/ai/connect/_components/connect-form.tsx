@@ -36,6 +36,8 @@ export function ConnectForm() {
       onSubmit={(event) => {
         event.preventDefault();
         const data = new FormData(event.currentTarget);
+        // пустое название: имя провайдера для людей, как обещает подсказка в поле
+        if (!String(data.get("name") ?? "").trim()) data.set("name", tProviders(kind));
         startTransition(() => action(data));
       }}
       className="grid gap-6"

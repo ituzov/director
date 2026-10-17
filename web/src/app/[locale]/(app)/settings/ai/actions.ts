@@ -1,11 +1,12 @@
 "use server";
 
 // Ключ приходит только внутри FormData: Next в dev печатает аргументы серверных
-// функций в терминал, и ключ обычным аргументом оказался бы в логе целиком
+// функций в терминал, и ключ обычным аргументом оказался бы в логе целиком.
+// Пустое название заменяет именем провайдера форма: getTranslations в серверном
+// действии next-intl не умеет (язык он берёт из next/root-params, а там его нет)
 
 import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
-import { getTranslations } from "next-intl/server";
 
 import {
   type AiChecked,
@@ -13,7 +14,6 @@ import {
   type CheckResult,
   type FormErrors,
   formErrorsOf,
-  isKnownProvider,
   stampOf,
 } from "@/lib/ai";
 import { ApiError, apiFetch } from "@/lib/api";
@@ -35,7 +35,7 @@ export async function connect(_prev: ConnectState, form: FormData): Promise<Conn
       method: "POST",
       body: {
         provider,
-        name: await nameOrDefault(text(form, "name"), provider),
+        name: text(form, "name"),
         key: text(form, "key"),
       },
       token: await getToken(),
@@ -81,7 +81,7 @@ export type EditResult = { errors: FormErrors } | Partial<Checked> | Gone;
 export async function editConnection(form: FormData): Promise<EditResult> {
   const id = text(form, "id");
   const key = text(form, "key");
-  const name = await nameOrDefault(text(form, "name"), text(form, "provider"));
+  const name = text(form, "name");
   const token = await getToken();
   try {
     let checked: Partial<Checked> = {};
@@ -129,12 +129,4 @@ function text(form: FormData, key: string): string {
 
 function isGone(e: unknown): boolean {
   return e instanceof ApiError && e.status === 404;
-}
-
-/** Пустое название: имя провайдера для людей, как обещает подсказка в поле.
- * Иначе api подставил бы вид («timeweb»). */
-async function nameOrDefault(name: string, provider: string): Promise<string> {
-  if (name || !isKnownProvider(provider)) return name;
-  const t = await getTranslations("Ai.providers");
-  return t(provider);
 }

@@ -16,7 +16,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import type { AiConnection } from "@/lib/ai";
+import { type AiConnection, isKnownProvider } from "@/lib/ai";
 
 import { type Checked, disconnect, editConnection, recheck } from "../actions";
 
@@ -62,6 +62,7 @@ export function ConnectionActions({ connection, canChange, onChecked }: Props) {
 function EditDialog({ connection, onChecked }: Omit<Props, "canChange">) {
   const t = useTranslations("Ai.actions.edit");
   const tErrors = useTranslations("Ai.connect.errors");
+  const tProviders = useTranslations("Ai.providers");
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -86,6 +87,15 @@ function EditDialog({ connection, onChecked }: Omit<Props, "canChange">) {
             event.preventDefault();
             // FormData, а не объект: ключ не попадёт в лог серверных функций
             const data = new FormData(event.currentTarget);
+            // пустое название: имя провайдера, как при подключении
+            if (!String(data.get("name") ?? "").trim()) {
+              data.set(
+                "name",
+                isKnownProvider(connection.provider)
+                  ? tProviders(connection.provider)
+                  : connection.provider,
+              );
+            }
             data.set("id", connection.id);
             data.set("provider", connection.provider);
             data.set("current_name", connection.name);
