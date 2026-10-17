@@ -21,6 +21,7 @@ from typing import Any
 
 import anyio
 import httpx2
+import pydantic_ai
 import structlog
 from pydantic_ai import Agent
 from pydantic_ai.agent import AgentRunResult
@@ -40,6 +41,10 @@ from app.core import crypto
 from app.db import SessionLocal
 
 log = structlog.get_logger("app.ai")
+
+# баннер о первом запуске Pydantic AI печатает текст посреди JSON-логов worker:
+# в проде это мусор, который ломает разбор логов построчно
+pydantic_ai.BANNER_ENABLED = False
 
 NOT_CONFIGURED = "not_configured"
 STEP_LIMIT = "step_limit"
