@@ -104,8 +104,10 @@ def setup_logging(level: str = "INFO", json: bool | None = None) -> None:
     logging.getLogger("uvicorn.access").handlers.clear()
     logging.getLogger("uvicorn.access").propagate = False
     # httpx на INFO пишет полный адрес запроса, а токен Instagram ходит в нём
-    # (?access_token=...). Вызовы Meta логируем сами, без строки запроса
-    for name in ("httpx", "httpcore"):
+    # (?access_token=...). Вызовы Meta логируем сами, без строки запроса.
+    # httpx2 то же самое для SDK моделей, а сами SDK на DEBUG пишут параметры
+    # запроса, где тексты комментов: вызовы моделей логирует сервис ai
+    for name in ("httpx", "httpcore", "httpx2", "httpcore2", "openai", "anthropic"):
         logging.getLogger(name).setLevel(logging.WARNING)
 
 

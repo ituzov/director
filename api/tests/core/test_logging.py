@@ -46,9 +46,13 @@ async def test_query_string_not_logged(client):
     assert "secret-marker" not in repr(logs)
 
 
-def test_httpx_urls_not_logged():
-    # токен Instagram ходит в адресе запроса, а httpx пишет адрес на INFO
-    assert logging.getLogger("httpx").getEffectiveLevel() >= logging.WARNING
+@pytest.mark.parametrize(
+    "name", ["httpx", "httpcore", "httpx2", "httpcore2", "openai", "anthropic"]
+)
+def test_http_clients_quiet(name):
+    # токен Instagram ходит в адресе запроса, а httpx пишет адрес на INFO;
+    # SDK моделей на DEBUG пишут параметры запроса, а там комменты людей
+    assert logging.getLogger(name).getEffectiveLevel() >= logging.WARNING
 
 
 def test_secrets_masked_in_output(real_logging, capsys):
