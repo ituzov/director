@@ -134,15 +134,28 @@ def net(monkeypatch, sessions):
     return locks
 
 
-@pytest.mark.parametrize("action", ["replace", "recheck"])
+@pytest.mark.parametrize("action", ["create", "replace", "recheck"])
 async def test_no_transaction_during_key_check(sessions, net, action):
-    # пока провайдер проверяет ключ (до 15 с), подключения не заперты
+    # пока провайдер проверяет ключ (до 15 с), подключения не заперты, даже если
+    # ручка до этого уже читала из той же сессии
     connection_id = await add_connection(sessions, provider="anthropic")
     async with sessions() as session:
-        if action == "replace":
+        seen = await service.list_connections(session)
+        if action == "create":
+            await service.create_connection(
+                session,
+                provider="anthropic",
+                name="x",
+                key=KEY,
+                base_url=None,
+                created_by=uuid.uuid7(),
+            )
+        elif action == "replace":
             await service.replace_key(session, connection_id, key=KEY + "new")
         else:
             await service.recheck(session, connection_id)
+        # прочитанное ручкой до вызова не протухло: обращение без перечитывания
+        assert seen[0].name == "anthropic"
     assert net.free == [True]
 
 

@@ -51,6 +51,15 @@ def _now() -> datetime:
     return datetime.now(UTC)
 
 
+async def _before_network(session: AsyncSession) -> None:
+    """Закрыть транзакцию перед сетью: проверка ключа идёт до 15 с, а открытая
+    транзакция держит соединение и замки чтения. Транзакцию могла открыть и ручка
+    (текущий пользователь). commit, а не rollback: в ней только читали, а
+    rollback пометил бы устаревшими все объекты сессии, и ручка, обратившись к
+    пользователю, упала бы на неявном перечитывании."""
+    await session.commit()
+
+
 def _provider(kind: str) -> Provider:
     provider = providers.get(kind)
     if provider is None:
@@ -142,6 +151,7 @@ async def create_connection(
     profile = _provider(provider)
     base_url = _base_url(profile, base_url)
     key = _key(key)
+    await _before_network(session)
     started = _now()
     error = await _check(profile, key=key, base_url=base_url)
     if error == KEY_REJECTED:
@@ -180,7 +190,7 @@ async def replace_key(session: AsyncSession, connection_id: uuid.UUID, *, key: s
     base_url = connection.base_url
     key = _key(key)
     # сеть вне транзакции: прочитанное выше не держим, после проверки перечитаем
-    await session.rollback()
+    await _before_network(session)
     started = _now()
     error = await _check(profile, key=key, base_url=base_url)
     if error == KEY_REJECTED:
@@ -216,7 +226,7 @@ async def recheck(session: AsyncSession, connection_id: uuid.UUID) -> Connection
         await session.commit()
         log.warning("ai.connection.key_unreadable", connection_id=str(connection_id))
         return connection
-    await session.rollback()
+    await _before_network(session)
     started = _now()
     error = await _check(profile, key=key, base_url=base_url)
     connection = await _get(session, connection_id, lock=True)
