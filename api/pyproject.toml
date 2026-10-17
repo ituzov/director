@@ -57,7 +57,7 @@ name = "Модули зависят только вниз"
 type = "layers"
 layers = [
     "app.main | app.worker",
-    "app.autoreplies | app.updates",
+    "app.autoreplies | app.updates | app.assistant",
     "app.instagram | app.ai",
     "app.identity",
     "app.activity",
@@ -69,6 +69,12 @@ name = "autoreplies: только через публичный интерфей
 type = "protected"
 protected_modules = ["app.autoreplies.*"]
 allowed_importers = ["app.autoreplies", "app.autoreplies.**", "app.db_models"]
+
+[[tool.importlinter.contracts]]
+name = "assistant: только через публичный интерфейс"
+type = "protected"
+protected_modules = ["app.assistant.*"]
+allowed_importers = ["app.assistant", "app.assistant.**", "app.db_models"]
 
 [[tool.importlinter.contracts]]
 name = "updates: только через публичный интерфейс"

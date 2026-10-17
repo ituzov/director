@@ -16,7 +16,7 @@ from app.config import settings
 
 # Схема Postgres на каждый модуль: владелец таблицы виден прямо в базе.
 # Отсюда env.py Alembic берёт, какие схемы считать своими
-SCHEMAS = ("identity", "instagram", "autoreplies", "updates", "activity", "core", "ai")
+SCHEMAS = ("identity", "instagram", "autoreplies", "updates", "activity", "core", "ai", "assistant")
 
 # psycopg 3 в одном URL умеет и sync, и async, async-движок берёт async-режим
 
