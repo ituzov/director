@@ -672,3 +672,18 @@ async def test_record_survives_cancel(session, make_session, net, connection, an
             await run(slow_second)
     [call] = await journal(session)
     assert call.outcome == ("ok" if answer is completion else "error")
+
+
+async def test_anthropic_forbidden_marks_task_not_card(session, make_session, net):
+    # модель закрыта для workspace: задача «модели нет», ключ остаётся рабочим
+    connection = await add_connection(session, provider="anthropic")
+    await ai.set_binding(
+        session, purpose=PURPOSE, scope=SCOPE, connection_id=connection.id, model="claude-x"
+    )
+    await session.commit()
+    net.answer = lambda request: httpx2.Response(
+        403, json={"type": "error", "error": {"type": "permission_error", "message": "x"}}
+    )
+    assert await failed(make_session) == "model_missing"
+    assert (await fresh(session, connection)).error_code is None
+    assert (await session.scalar(select(Binding))).model_missing_at is not None

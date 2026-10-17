@@ -2,17 +2,22 @@
 
 Формат не OpenAI, поэтому наследник Provider, а не OpenAICompatible: и сборка
 модели, и список моделей свои. Ключ идёт в x-api-key, а не в Authorization.
+
+Серверные инструменты Anthropic (веб-поиск, выполнение кода) не включать без
+счётчика на уровне HTTP: с ними сервер отвечает pause_turn, SDK сам шлёт
+продолжения внутри одного шага, и журнал с пределом шагов их не видят.
 """
 
 from typing import Any
 
 import httpx2
 from anthropic import AsyncAnthropic
+from pydantic_ai.exceptions import ModelHTTPError
 from pydantic_ai.models import Model
 from pydantic_ai.models.anthropic import AnthropicModel
 from pydantic_ai.providers.anthropic import AnthropicProvider as PydanticAnthropicProvider
 
-from app.ai.providers.base import SERVER, ModelInfo, Provider, ProviderError
+from app.ai.providers.base import MODEL_MISSING, SERVER, ModelInfo, Provider, ProviderError
 
 API = "https://api.anthropic.com"
 # версия протокола в заголовке, без неё Anthropic не отвечает
@@ -25,6 +30,15 @@ MAX_PAGES = 10
 
 class AnthropicProvider(Provider):
     kind = "anthropic"
+
+    def error_from(self, exc: BaseException) -> ProviderError | None:
+        # 403 permission_error на вызове модели: у ключа нет прав на эту модель
+        # (закрыта для workspace). Ключ рабочий: помечаем задачу, а не карточку,
+        # иначе она мигала бы от других задач на этом же ключе. На списке моделей
+        # (проверка ключа) 403 остаётся «ключ не принят»: такой ключ ни на что не годен
+        if isinstance(exc, ModelHTTPError) and exc.status_code == 403:
+            return ProviderError(MODEL_MISSING, 403)
+        return super().error_from(exc)
 
     def url(self, base_url: str | None) -> str:
         return (base_url or API).rstrip("/")

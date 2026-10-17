@@ -222,3 +222,15 @@ async def test_owner_url_and_trailing_slash():
 
     await listed(handler, base_url="https://proxy.local/")
     assert seen == ["https://proxy.local/v1/models"]
+
+
+def test_forbidden_model_is_not_key():
+    # по документации Anthropic 403 значит «у ключа нет прав на ресурс». На вызове
+    # модели это закрытая модель, а не плохой ключ; неверный ключ это 401
+    provider = AnthropicProvider()
+    forbidden = ModelHTTPError(403, "claude-x", body={"type": "permission_error"})
+    assert provider.error_from(forbidden).code == base.MODEL_MISSING
+    assert provider.error_from(ModelHTTPError(401, "claude-x")).code == base.KEY_REJECTED
+    assert provider.error_from(ModelHTTPError(402, "claude-x")).code == base.NO_FUNDS
+    # на списке моделей (проверка ключа) 403 это по-прежнему «ключ не принят»
+    assert provider.error_code(403) == base.KEY_REJECTED
