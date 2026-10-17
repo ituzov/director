@@ -61,6 +61,19 @@ async def journal(session) -> list[Event]:
     return list(await session.scalars(select(Event)))
 
 
+async def test_reply_to_comment_carries_parent(session, account):
+    # ответ на коммент: Meta кладёт id того, на который ответили. По нему
+    # ассистент не отвечает на ответы под своим же комментом
+    await add_event(session, payload=comment_payload(parent_id="180000"))
+    got = []
+
+    async def on_comment(s, comment):
+        got.append(comment)
+
+    await instagram.process_inbox_event(session, instagram.InboxHandlers(on_comment=on_comment))
+    assert got[0].parent_id == "180000"
+
+
 async def test_nothing_to_do(session):
     assert await instagram.process_inbox_event(session, NOBODY) is False
 

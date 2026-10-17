@@ -152,6 +152,7 @@ def _comment_ref(event: InboxEvent, account: Account) -> CommentRef | None:
         username=author.get("username"),
         text=text,
         received_at=event.received_at,
+        parent_id=str(value["parent_id"]) if value.get("parent_id") else None,
     )
 
 

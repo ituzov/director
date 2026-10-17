@@ -35,6 +35,8 @@ class CommentRef:
     text: str
     # когда Meta прислала вебхук: время коммента для журнала
     received_at: datetime
+    # коммент написан ответом на этот; None: коммент под самим постом
+    parent_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
