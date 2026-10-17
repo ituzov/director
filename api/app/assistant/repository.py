@@ -4,7 +4,7 @@ import uuid
 from collections import defaultdict
 from datetime import datetime
 
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import and_, delete, func, or_, select, tuple_, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -233,3 +233,57 @@ async def lock_reply(session: AsyncSession, reply_id: uuid.UUID) -> Reply | None
         .with_for_update()
         .execution_options(populate_existing=True)
     )
+
+
+# вкладки журнала: что в каждую попадает. Не ответил: и сбой до решения, и ответ,
+# который написали, но он не дошёл
+TAB_FILTERS = {
+    "answered": lambda: and_(Reply.outcome == "answered", Reply.stage != "send_failed"),
+    "unsure": lambda: Reply.outcome == "unsure",
+    "not_mine": lambda: Reply.outcome == "not_mine",
+    "missed": lambda: or_(
+        Reply.outcome.in_(("failed", "limit", "expired", "paused")),
+        Reply.stage == "send_failed",
+    ),
+}
+
+
+async def replies_page(
+    session: AsyncSession,
+    account_id: uuid.UUID,
+    tab: str | None,
+    *,
+    before: uuid.UUID | None,
+    limit: int,
+) -> list[tuple[Reply, str]]:
+    """Ответы аккаунта с названием ассистента, свежие сверху. before: старше этого
+    ответа. На одну больше limit: видно, есть ли дальше."""
+    query = (
+        select(Reply, Assistant.name)
+        .join(Assistant, Assistant.id == Reply.assistant_id)
+        .where(Reply.account_id == account_id)
+    )
+    if tab is not None:
+        query = query.where(TAB_FILTERS[tab]())
+    if before is not None:
+        anchor = await session.get(Reply, before)
+        # закладка чужого аккаунта резала бы список по чужому времени: считаем её неизвестной
+        if anchor is None or anchor.account_id != account_id:
+            return []
+        query = query.where(tuple_(Reply.created_at, Reply.id) < (anchor.created_at, anchor.id))
+    rows = await session.execute(
+        query.order_by(Reply.created_at.desc(), Reply.id.desc()).limit(limit + 1)
+    )
+    return [(reply, name) for reply, name in rows.all()]
+
+
+async def outcome_counts(
+    session: AsyncSession, account_id: uuid.UUID
+) -> list[tuple[str | None, str, int]]:
+    """Сколько ответов аккаунта на каждой паре итог и стадия: из неё считаются вкладки."""
+    rows = await session.execute(
+        select(Reply.outcome, Reply.stage, func.count())
+        .where(Reply.account_id == account_id)
+        .group_by(Reply.outcome, Reply.stage)
+    )
+    return [(outcome, stage, count) for outcome, stage, count in rows.all()]

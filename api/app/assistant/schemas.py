@@ -106,3 +106,55 @@ class TryOut(BaseModel):
     direct: str | None
     source: str | None
     error: str | None
+
+
+Tab = Literal["answered", "unsure", "not_mine", "missed"]
+
+
+class ReplyOut(BaseModel):
+    id: uuid.UUID
+    comment_id: str
+    person_id: str
+    # ник человека; None: во входящих его не найти
+    username: str | None
+    text: str
+    media_id: str
+    assistant_id: uuid.UUID
+    assistant_name: str
+    # None: ещё в очереди или у нейросети
+    outcome: str | None
+    stage: str
+    comment_reply: str | None
+    direct_reply: str | None
+    source: str | None
+    error_code: str | None
+    created_at: datetime
+    decided_at: datetime | None
+
+
+class ReplyPageOut(BaseModel):
+    items: list[ReplyOut]
+    # закладка для следующей страницы, в before; None: дальше пусто
+    next: uuid.UUID | None
+
+
+class TabCountsOut(BaseModel):
+    """Сколько ответов в каждой вкладке «Ассистента» и всего (all)."""
+
+    counts: dict[str, int]
+
+
+class StepOut(BaseModel):
+    """Шаг ассистента: код для текста в web и подробности, если они есть."""
+
+    step: str
+    at: datetime
+    assistant_id: uuid.UUID | None
+    part: str | None
+    reason: str | None
+
+
+class HistoryOut(BaseModel):
+    """Шаги ассистента по комментам. Коммента без шагов в ответе нет."""
+
+    comments: dict[str, list[StepOut]]

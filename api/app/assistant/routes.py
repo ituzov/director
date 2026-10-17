@@ -2,8 +2,10 @@
 Смотрят все вошедшие, правит владелец: ассистент тратит его ключ к нейросети."""
 
 import uuid
+from dataclasses import asdict
+from typing import Annotated
 
-from fastapi import APIRouter, Request, status
+from fastapi import APIRouter, Query, Request, status
 from fastapi.responses import JSONResponse
 
 from app import identity
@@ -21,6 +23,12 @@ from app.assistant.schemas import (
     AssistantIn,
     AssistantOut,
     EnabledIn,
+    HistoryOut,
+    ReplyOut,
+    ReplyPageOut,
+    StepOut,
+    Tab,
+    TabCountsOut,
     TodayOut,
     TryIn,
     TryOut,
@@ -92,6 +100,43 @@ async def create_assistant(
     body: AssistantIn, session: SessionDep, user: identity.CurrentOwner
 ) -> AssistantOut:
     return _out(await service.create(session, body, user))
+
+
+# журнал: выше /{assistant_id}, иначе «replies» и «history» разбирались бы как id
+@router.get("/replies")
+async def list_replies(
+    account_id: uuid.UUID,
+    session: SessionDep,
+    user: identity.CurrentUserRef,
+    tab: Tab | None = None,
+    before: uuid.UUID | None = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+) -> ReplyPageOut:
+    """Что ассистенты аккаунта сделали с комментами, свежие сверху."""
+    page = await service.replies(session, account_id, tab=tab, before=before, limit=limit)
+    return ReplyPageOut(items=[ReplyOut(**asdict(i)) for i in page.items], next=page.next)
+
+
+@router.get("/replies/counts")
+async def get_tab_counts(
+    account_id: uuid.UUID, session: SessionDep, user: identity.CurrentUserRef
+) -> TabCountsOut:
+    return TabCountsOut(counts=await service.tab_counts(session, account_id))
+
+
+@router.get("/history")
+async def get_history(
+    account_id: uuid.UUID,
+    comment_id: Annotated[list[str], Query(max_length=100)],
+    session: SessionDep,
+    user: identity.CurrentUserRef,
+) -> HistoryOut:
+    """Шаги ассистента по комментам: для развёрнутой строки во «Всех событиях»."""
+    comments: dict[str, list[StepOut]] = {}
+    for s in await service.history(session, account_id, comment_id):
+        step = asdict(s)
+        comments.setdefault(step.pop("comment_id"), []).append(StepOut(**step))
+    return HistoryOut(comments=comments)
 
 
 # выше /{assistant_id}: иначе «try» разбирался бы как id

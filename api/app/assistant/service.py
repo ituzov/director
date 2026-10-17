@@ -10,7 +10,7 @@ import structlog
 from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app import ai, identity, instagram
+from app import activity, ai, identity, instagram
 from app.assistant import prompt, repository
 from app.assistant.exceptions import (
     AccountUnavailable,
@@ -236,3 +236,125 @@ async def try_answer(body: TryIn) -> tuple[prompt.Decision | None, str | None]:
         log.info("assistant.try_failed", code=error.code)
         return None, error.code
     return result.output, None
+
+
+# вкладки журнала, как их понимает repository.TAB_FILTERS
+TABS = ("answered", "unsure", "not_mine", "missed")
+_MISSED = frozenset({"failed", "limit", "expired", "paused"})
+
+
+@dataclass(frozen=True, slots=True)
+class ReplyItem:
+    """Строка вкладки «Ассистент»: коммент, чей ассистент, что решил и что ушло."""
+
+    id: uuid.UUID
+    comment_id: str
+    person_id: str
+    username: str | None
+    text: str
+    media_id: str
+    assistant_id: uuid.UUID
+    assistant_name: str
+    # None: ещё в очереди или у нейросети
+    outcome: str | None
+    stage: str
+    comment_reply: str | None
+    direct_reply: str | None
+    source: str | None
+    error_code: str | None
+    created_at: datetime
+    decided_at: datetime | None
+
+
+@dataclass(frozen=True, slots=True)
+class ReplyPage:
+    items: list[ReplyItem]
+    # закладка для следующей страницы; None: дальше пусто
+    next: uuid.UUID | None
+
+
+async def replies(
+    session: AsyncSession,
+    account_id: uuid.UUID,
+    *,
+    tab: str | None,
+    before: uuid.UUID | None,
+    limit: int,
+) -> ReplyPage:
+    """Ответы ассистентов аккаунта страницами, свежие сверху; tab: одна вкладка."""
+    rows = await repository.replies_page(session, account_id, tab, before=before, limit=limit)
+    more = len(rows) > limit
+    rows = rows[:limit]
+    nicks = await instagram.usernames(session, account_id, sorted({r.person_id for r, _ in rows}))
+    items = [
+        ReplyItem(
+            id=r.id,
+            comment_id=r.comment_id,
+            person_id=r.person_id,
+            username=nicks.get(r.person_id),
+            text=r.comment_text,
+            media_id=r.media_id,
+            assistant_id=r.assistant_id,
+            assistant_name=name,
+            outcome=r.outcome,
+            stage=r.stage,
+            comment_reply=r.comment_reply,
+            direct_reply=r.direct_reply,
+            source=r.source,
+            error_code=r.error_code,
+            created_at=r.created_at,
+            decided_at=r.decided_at,
+        )
+        for r, name in rows
+    ]
+    return ReplyPage(items=items, next=rows[-1][0].id if more else None)
+
+
+async def tab_counts(session: AsyncSession, account_id: uuid.UUID) -> dict[str, int]:
+    """Сколько ответов в каждой вкладке и всего. Те же правила, что у фильтров
+    repository.TAB_FILTERS: счётчик и список не должны расходиться."""
+    counts = dict.fromkeys(("all", *TABS), 0)
+    for outcome, stage, count in await repository.outcome_counts(session, account_id):
+        counts["all"] += count
+        if stage == "send_failed" or outcome in _MISSED:
+            counts["missed"] += count
+        elif outcome in ("answered", "unsure", "not_mine"):
+            counts[outcome] += count
+    return counts
+
+
+@dataclass(frozen=True, slots=True)
+class Step:
+    """Шаг ассистента по комменту для журнала: код для текста в web и подробности."""
+
+    comment_id: str
+    step: str
+    at: datetime
+    assistant_id: uuid.UUID | None
+    # direct или comment у отправки
+    part: str | None
+    # код Meta или наша причина у неудачи отправки, код ai у сбоя нейросети
+    reason: str | None
+
+
+async def history(
+    session: AsyncSession, account_id: uuid.UUID, comment_ids: list[str]
+) -> list[Step]:
+    """Шаги ассистента по комментам аккаунта, по порядку. Чужие события пропускаем."""
+    steps = []
+    for e in await activity.comment_history(session, account_id, comment_ids):
+        prefix, _, step = e.kind.partition(".")
+        if prefix != "assistant" or e.comment_id is None:
+            continue
+        assistant_id = e.data.get("assistant_id")
+        steps.append(
+            Step(
+                e.comment_id,
+                step,
+                e.occurred_at,
+                uuid.UUID(assistant_id) if assistant_id else None,
+                part=e.data.get("part"),
+                reason=e.data.get("reason") or e.data.get("error_code"),
+            )
+        )
+    return steps

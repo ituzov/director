@@ -116,6 +116,10 @@ class Reply(Base):
         Index("ix_reply_stuck", "taken_at", postgresql_where=text("stage = 'thinking'")),
         # счётчики «сегодня» и предел: прочитанные ассистентом за сутки
         Index("ix_reply_assistant_taken", "assistant_id", "taken_at"),
+        # вкладка «Ассистент» в журнале: ответы аккаунта страницами, свежие сверху
+        Index("ix_reply_account_created", "account_id", "created_at", "id"),
+        # счётчики вкладок: сколько у аккаунта на каждом итоге и стадии
+        Index("ix_reply_account_outcome", "account_id", "outcome", "stage"),
         {"schema": "assistant"},
     )
     __mapper_args__ = {"eager_defaults": True}
