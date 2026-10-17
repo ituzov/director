@@ -19,7 +19,16 @@ from structlog.tracebacks import ExceptionDictTransformer
 from structlog.typing import Processor
 
 # ключи, значения которых в лог не попадают никогда, даже если их передали по ошибке
-_SECRETS = {"authorization", "token", "access_token", "app_secret", "secret", "password"}
+_SECRETS = {
+    "authorization",
+    "token",
+    "access_token",
+    "app_secret",
+    "secret",
+    "password",
+    "key",
+    "api_key",
+}
 
 # имя логгера постоянное, по нему ищут в логах: при переезде файла не меняется
 log = structlog.get_logger("app.core")

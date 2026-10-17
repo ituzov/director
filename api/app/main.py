@@ -5,10 +5,12 @@
 """
 
 from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
 
 from app import ai, autoreplies, identity, instagram, updates
 from app.config import settings
 from app.core.logging import log_requests, setup_logging
+from app.core.validation import validation_error_handler
 
 # до создания приложения: uvicorn уже настроил свои логи, перехватываем их
 setup_logging(settings.log_level, settings.log_json)
@@ -16,6 +18,7 @@ setup_logging(settings.log_level, settings.log_json)
 app = FastAPI(
     title="Director API",
     exception_handlers={
+        RequestValidationError: validation_error_handler,
         identity.IdentityError: identity.identity_error_handler,
         instagram.InstagramError: instagram.instagram_error_handler,
         autoreplies.AutoreplyError: autoreplies.autoreply_error_handler,

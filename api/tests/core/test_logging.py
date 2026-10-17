@@ -12,9 +12,10 @@ from structlog.testing import capture_logs
 from app.core.logging import _mask_secrets
 
 
-def test_secrets_masked():
-    event = _mask_secrets(None, "info", {"event": "x", "token": "IGAA", "app_secret": "s", "n": 1})
-    assert event == {"event": "x", "token": "***", "app_secret": "***", "n": 1}
+@pytest.mark.parametrize("name", ["token", "app_secret", "key", "api_key"])
+def test_secrets_masked(name):
+    event = _mask_secrets(None, "info", {"event": "x", name: "IGAA", "n": 1})
+    assert event == {"event": "x", name: "***", "n": 1}
 
 
 async def test_request_logged_with_id(client):
