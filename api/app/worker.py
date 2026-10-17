@@ -24,6 +24,10 @@ PERIODIC_SECONDS = 12 * 60 * 60
 # Одно письмо дважды не уйдёт: задачу запирает SKIP LOCKED
 SENDERS = 4
 
+# ассистенты: почти всё время ждут нейросеть (секунды), поэтому свои циклы, чтобы
+# не держать разбор входящих и отправку. Больше двух упрётся в лимиты провайдера
+ASSISTANTS = 2
+
 
 def _autoreplies(taken: autoreplies.Taken | None) -> instagram.Handled | None:
     if taken is None:
@@ -118,13 +122,15 @@ async def main() -> None:
     for sig in (signal.SIGTERM, signal.SIGINT):
         loop.add_signal_handler(sig, stop.set)
 
-    log.info("worker.started", senders=SENDERS)
+    log.info("worker.started", senders=SENDERS, assistants=ASSISTANTS)
     # разбор входящих не ждёт сеть: отправка в Meta идёт своими циклами.
     # Разбор один, чтобы события человека шли по порядку: коммент раньше кнопки
     async with asyncio.TaskGroup() as group:
         group.create_task(run_loop("inbox", inbox_once, stop))
         for number in range(SENDERS):
             group.create_task(run_loop(f"outbox-{number}", outbox_once, stop))
+        for number in range(ASSISTANTS):
+            group.create_task(run_loop(f"assistant-{number}", assistant.answer_once, stop))
         # не дошедшие отчёты: иначе потерянный итог не узнал бы никто
         group.create_task(run_loop("results", results_once, stop))
         group.create_task(periodic_loop(stop))

@@ -361,4 +361,5 @@ async def test_main_starts_every_loop(monkeypatch):
         for sig in (signal.SIGTERM, signal.SIGINT):
             asyncio.get_running_loop().remove_signal_handler(sig)
     senders = [f"outbox-{n}" for n in range(worker.SENDERS)]
-    assert sorted(names) == sorted(["inbox", *senders, "results", "periodic"])
+    assistants = [f"assistant-{n}" for n in range(worker.ASSISTANTS)]
+    assert sorted(names) == sorted(["inbox", *senders, *assistants, "results", "periodic"])

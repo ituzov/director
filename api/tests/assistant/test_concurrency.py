@@ -3,16 +3,20 @@
 
 import asyncio
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
-from sqlalchemy import text
+from pydantic_ai.messages import ModelResponse, ToolCallPart
+from pydantic_ai.models.function import AgentInfo, FunctionModel
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import async_sessionmaker
 from sqlalchemy.pool import NullPool
 
+from app import ai, assistant
 from app.ai.models import Connection
 from app.assistant import service
 from app.assistant.exceptions import AssistantConflict
+from app.assistant.models import Assistant, Reply
 from app.assistant.schemas import AssistantIn
 from app.core import crypto
 from app.db import make_engine
@@ -31,7 +35,8 @@ async def sessions():
         await conn.execute(
             text(
                 "TRUNCATE assistant.reply, assistant.assistant_media, assistant.assistant, "
-                "ai.binding, ai.connection, instagram.account CASCADE"
+                "ai.binding, ai.connection, instagram.outbox, instagram.account, "
+                "activity.event CASCADE"
             )
         )
     await engine.dispose()
@@ -97,3 +102,74 @@ async def test_two_tabs_save_at_once(sessions, setup, kw):
         save(sessions, form(account_id, connection_id, name="Второй", **kw)),
     )
     assert sorted(results) == sorted(["created", "general" if not kw else "post"])
+
+
+@pytest.fixture
+def slow_brain(monkeypatch):
+    """ai.run, который думает заметное время: оба цикла успевают взять своё."""
+    calls = []
+
+    async def run(*, agent, prompt, **kw):
+        calls.append(prompt)
+        await asyncio.sleep(0.3)
+
+        def model(messages, info: AgentInfo):
+            args = {"decision": "answer", "direct": "Нельзя."}
+            return ModelResponse(parts=[ToolCallPart(info.output_tools[0].name, args)])
+
+        return await agent.run(prompt, model=FunctionModel(model))
+
+    monkeypatch.setattr(ai, "run", run)
+    return calls
+
+
+async def queue(sessions, account_id, *, daily_limit=200, people=("p1", "p2")):
+    async with sessions() as session:
+        a = Assistant(
+            account_id=account_id,
+            name="Все вопросы",
+            scope="all",
+            mode="direct",
+            daily_limit=daily_limit,
+            created_by=uuid.uuid7(),
+        )
+        session.add(a)
+        await session.flush()
+        past = datetime.now(UTC) - timedelta(seconds=1)
+        session.add_all(
+            Reply(
+                assistant_id=a.id,
+                account_id=account_id,
+                comment_id=f"c{n}",
+                media_id="m1",
+                person_id=person,
+                comment_text="?",
+                commented_at=past,
+                run_at=past,
+            )
+            for n, person in enumerate(people)
+        )
+        await session.commit()
+
+
+async def outcomes(sessions) -> list[str | None]:
+    async with sessions() as session:
+        return sorted(str(r.outcome) for r in await session.scalars(select(Reply)))
+
+
+async def test_limit_not_passed_by_two_loops(sessions, setup, slow_brain):
+    # предел 1, два цикла разом: нейросеть спросят один раз, второй упрётся в предел
+    account_id, _ = setup
+    await queue(sessions, account_id, daily_limit=1)
+    await asyncio.gather(assistant.answer_once(sessions), assistant.answer_once(sessions))
+    assert len(slow_brain) == 1
+    assert await outcomes(sessions) == ["answered", "limit"]
+
+
+async def test_one_person_not_answered_twice_at_once(sessions, setup, slow_brain):
+    # два коммента одного человека: пока первый у нейросети, второй ждёт
+    account_id, _ = setup
+    await queue(sessions, account_id, people=("p1", "p1"))
+    await asyncio.gather(assistant.answer_once(sessions), assistant.answer_once(sessions))
+    assert len(slow_brain) == 1
+    assert await outcomes(sessions) == ["None", "answered"]

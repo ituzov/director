@@ -7,7 +7,7 @@
 
 from app.assistant.exceptions import AssistantError
 from app.assistant.routes import assistant_error_handler, router
-from app.assistant.tasks import Taken, handle_comment
+from app.assistant.tasks import Taken, answer_once, handle_comment
 
 __all__ = [
     # HTTP: экран ассистентов аккаунта
@@ -16,5 +16,6 @@ __all__ = [
     "AssistantError",
     # задачи worker
     "handle_comment",
+    "answer_once",
     "Taken",
 ]

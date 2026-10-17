@@ -144,3 +144,78 @@ async def add_reply(session: AsyncSession, **fields) -> uuid.UUID | None:
         .on_conflict_do_nothing(index_elements=["comment_id"])
         .returning(Reply.id)
     )
+
+
+async def release_stuck(session: AsyncSession, older_than: datetime) -> int:
+    """Взятые и брошенные посреди запроса к нейросети (worker упал): обратно в
+    очередь. Попытка уже засчитана при взятии."""
+    result = await session.execute(
+        update(Reply)
+        .where(Reply.stage == "thinking", Reply.taken_at < older_than)
+        .values(stage="queued", run_at=func.now())
+    )
+    return result.rowcount
+
+
+async def claim_reply(session: AsyncSession, now: datetime) -> Reply | None:
+    """Следующий коммент к ответу, запертый до конца транзакции. Чужие запертые
+    пропускаем (SKIP LOCKED): каждый коммент берёт один цикл."""
+    return await session.scalar(
+        select(Reply)
+        .where(Reply.stage == "queued", Reply.run_at <= now)
+        .order_by(Reply.run_at, Reply.id)
+        .limit(1)
+        .with_for_update(skip_locked=True)
+    )
+
+
+async def lock_person(session: AsyncSession, account_id: uuid.UUID, person_id: str) -> None:
+    """Комменты одного человека по очереди: взятия его комментов ждут друг друга
+    до конца транзакции. Своё зерно хэша, не пересекается с замком аккаунта."""
+    key = f"{account_id}:{person_id}"
+    await session.execute(select(func.pg_advisory_xact_lock(func.hashtextextended(key, 2))))
+
+
+async def person_busy(session: AsyncSession, reply: Reply) -> bool:
+    """Другой коммент этого человека сейчас у нейросети."""
+    return bool(
+        await session.scalar(
+            select(func.count())
+            .select_from(Reply)
+            .where(
+                Reply.account_id == reply.account_id,
+                Reply.person_id == reply.person_id,
+                Reply.stage == "thinking",
+                Reply.id != reply.id,
+            )
+        )
+    )
+
+
+async def lock_assistant(session: AsyncSession, assistant_id: uuid.UUID) -> Assistant | None:
+    """Ассистент под замком: предел считаем и отмечаем «прочитал» одним действием,
+    соседний цикл подождёт. Значения перечитываются из базы."""
+    return await session.scalar(
+        select(Assistant)
+        .where(Assistant.id == assistant_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+
+
+async def taken_since(session: AsyncSession, assistant_id: uuid.UUID, since: datetime) -> int:
+    """Сколько комментов ассистент прочитал с этого момента: предел в сутки."""
+    return await session.scalar(
+        select(func.count())
+        .select_from(Reply)
+        .where(Reply.assistant_id == assistant_id, Reply.taken_at >= since)
+    )
+
+
+async def lock_reply(session: AsyncSession, reply_id: uuid.UUID) -> Reply | None:
+    return await session.scalar(
+        select(Reply)
+        .where(Reply.id == reply_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
