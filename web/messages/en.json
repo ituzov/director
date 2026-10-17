@@ -48,7 +48,8 @@
       "accounts": "Accounts",
       "metaApp": "Meta app",
       "journal": "Journal",
-      "ai": "AI models"
+      "ai": "AI models",
+      "assistants": "Assistants"
     },
     "account": {
       "label": "Accounts",
@@ -674,6 +675,150 @@
         "title": "Posts for the assistant",
         "takenBy": "Assistant “{name}”",
         "takenByDisabled": "Assistant “{name}”, paused"
+      }
+    }
+  },
+  "Assistants": {
+    "title": "Assistants",
+    "description": "Answer comments with AI when no auto-reply took them. An assistant for chosen posts takes them over entirely; the general one hears the rest.",
+    "create": "New assistant",
+    "empty": "No assistants yet.",
+    "emptyArchive": "The archive is empty.",
+    "noAccount": "Connect an Instagram account in <link>Accounts</link> first.",
+    "tabs": {
+      "label": "Assistants",
+      "active": "Active",
+      "archive": "Archive"
+    },
+    "enabled": "Assistant “{name}” is on",
+    "menu": "Actions",
+    "edit": "Open",
+    "archive": "Archive",
+    "unarchive": "Restore",
+    "allPosts": "All posts",
+    "allPostsExcept": "{count, plural, one {All posts except # with its own assistant} other {All posts except # with their own assistants}}",
+    "posts": "{count, plural, one {# post} other {# posts}}",
+    "modes": {
+      "direct": "In DMs",
+      "comment": "In comments",
+      "combo": "Short comment and DM"
+    },
+    "noConnection": "no connection",
+    "paused": {
+      "all": "Paused: no assistant answers posts without their own.",
+      "posts": "Paused: the general assistant answers its posts."
+    },
+    "today": "Today answered {answered}, didn't know {unsure}",
+    "conflict": {
+      "general": "There's already a general assistant: “{name}”.",
+      "post": "A post already belongs to “{name}”."
+    },
+    "form": {
+      "newTitle": "New assistant",
+      "description": "Answers only from what's written below. If it doesn't know, it stays silent.",
+      "name": "Name",
+      "today": "Today: answered {answered}, didn't know {unsure}, not its business {notMine}",
+      "on": "On",
+      "off": "Paused",
+      "archivedNotice": "This assistant is archived: it doesn't answer or hold posts. Restore it from the list to edit it.",
+      "ownerOnly": "Only the owner can change assistants, since they use the owner's AI key.",
+      "where": {
+        "title": "Where it works",
+        "description": "The assistant only gets comments that no keyword auto-reply took.",
+        "all": {
+          "title": "All posts",
+          "about": "The account's general assistant. There can be only one."
+        },
+        "posts": {
+          "title": "Chosen posts",
+          "about": "Takes these posts over entirely: the general one stays silent there."
+        }
+      },
+      "how": {
+        "title": "How it answers",
+        "description": "Where the answer goes and which AI model writes it.",
+        "direct": {
+          "title": "In DMs",
+          "about": "A private message. Nothing under the comment."
+        },
+        "comment": {
+          "title": "In comments",
+          "about": "A public reply under the comment. Everyone sees it."
+        },
+        "combo": {
+          "title": "Short comment and DM",
+          "about": "A short reply under the comment, the full one in DMs. The comment appears once the DM is delivered."
+        }
+      },
+      "model": {
+        "connection": "Connection",
+        "model": "Model",
+        "placeholder": "Find a model",
+        "readonly": "Answers with {model}.",
+        "none": "No model chosen.",
+        "noConnections": "No AI connections yet. <link>Connect one</link>",
+        "broken": "This connection's key is broken, so the assistant stays silent. Replace the key in AI models.",
+        "missing": "The provider no longer knows this model. Choose another.",
+        "loading": "Loading models…",
+        "loadFailed": "The model list didn't load. You can type the name yourself.",
+        "count": "{count, plural, one {# model} other {# models}} on this connection",
+        "nothing": "This connection has no such model."
+      },
+      "limit": {
+        "label": "Comments per day, at most",
+        "hint": "Every comment the assistant reads counts, even if it stays silent. After that it's silent until the end of the UTC day; auto-replies work as usual."
+      },
+      "instruction": {
+        "title": "Instructions",
+        "description": "Tone and rules. What you'd tell a new manager on their first day.",
+        "label": "Instructions"
+      },
+      "knowledge": {
+        "title": "Knowledge base",
+        "description": "Everything the assistant can tell people. What isn't here, it doesn't know.",
+        "label": "Knowledge base"
+      },
+      "chars": "{used, number} of {max, number} characters",
+      "cancel": "Cancel",
+      "back": "Back to list",
+      "submit": "Save",
+      "saving": "Saving…",
+      "errors": {
+        "required": "Fill in this field.",
+        "tooLong": "Too long.",
+        "outOfRange": "A number from 1 to 10,000.",
+        "posts_required": "Choose at least one post.",
+        "posts_not_allowed": "A general assistant has no posts of its own.",
+        "ConnectionMissing": "This connection was deleted. Choose another.",
+        "noAccount": "No Instagram account selected.",
+        "AccountUnavailable": "The account is disconnected, so there's nowhere to answer.",
+        "AssistantArchived": "This assistant is archived and can't be edited."
+      },
+      "conflict": {
+        "general": "The account already has a general assistant: “{name}”{state, select, off {, paused} other {}}.",
+        "post": "One of the posts already belongs to “{name}”{state, select, off {, paused} other {}}.",
+        "open": "Open"
+      }
+    },
+    "try": {
+      "title": "Try a comment",
+      "description": "Nothing is sent. The AI request is real and paid to the provider, but it doesn't count toward the assistant's limit.",
+      "comment": "Comment",
+      "placeholder": "Type a comment the way a person would",
+      "run": "Try",
+      "thinking": "Thinking…",
+      "failed": "The AI didn't answer ({code}). Check the connection in AI models.",
+      "decision": {
+        "answer": "Will answer",
+        "unsure": "Doesn't know, stays silent",
+        "not_mine": "Not its business, stays silent"
+      },
+      "inComment": "Under the comment",
+      "inDirect": "In DMs",
+      "source": "From the base: “{source}”",
+      "why": {
+        "unsure": "With a real comment, the assistant stays silent and marks “didn't know” in the journal. If the question comes up often, add the answer to the base.",
+        "not_mine": "It's not a question or a request, so there's nothing to answer."
       }
     }
   }

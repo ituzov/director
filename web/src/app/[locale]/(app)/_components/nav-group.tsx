@@ -2,6 +2,7 @@
 
 import {
   AtSign,
+  Bot,
   KeyRound,
   LayoutDashboard,
   MessageSquareReply,
@@ -27,6 +28,7 @@ const GROUPS = {
   work: [
     { href: "/", key: "overview", icon: LayoutDashboard },
     { href: "/autoreplies", key: "autoreplies", icon: MessageSquareReply },
+    { href: "/assistants", key: "assistants", icon: Bot },
     { href: "/journal", key: "journal", icon: ScrollText },
     { href: "/accounts", key: "accounts", icon: AtSign },
   ],
