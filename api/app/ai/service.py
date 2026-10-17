@@ -209,6 +209,9 @@ async def recheck(session: AsyncSession, connection_id: uuid.UUID) -> Connection
     try:
         key = crypto.decrypt(connection.key_encrypted)
     except crypto.DecryptError:
+        # читали без замка: перечитываем под замком, сверка отпечатка в apply_result.
+        # Удалили между чтением и записью: ConnectionNotFound, а не StaleDataError
+        connection = await _get(session, connection_id, lock=True)
         apply_result(connection, key_changed_at=changed_at, started=_now(), code=KEY_UNREADABLE)
         await session.commit()
         log.warning("ai.connection.key_unreadable", connection_id=str(connection_id))

@@ -43,10 +43,12 @@ def add_connection(
 async def get_connection(
     session: AsyncSession, connection_id: uuid.UUID, *, lock: bool = False
 ) -> Connection | None:
-    """lock: запереть строку до конца транзакции, чтобы соседняя замена ключа ждала."""
+    """lock: запереть строку до конца транзакции, чтобы соседняя замена ключа ждала.
+    Под замком значения перечитываются: объект, прочитанный раньше в этой же
+    сессии, иначе остался бы со старыми."""
     query = select(Connection).where(Connection.id == connection_id)
     if lock:
-        query = query.with_for_update()
+        query = query.with_for_update().execution_options(populate_existing=True)
     return await session.scalar(query)
 
 
@@ -62,7 +64,7 @@ async def get_binding(
         Binding.scope.is_(None) if scope is None else Binding.scope == scope,
     )
     if lock:
-        query = query.with_for_update()
+        query = query.with_for_update().execution_options(populate_existing=True)
     return await session.scalar(query)
 
 

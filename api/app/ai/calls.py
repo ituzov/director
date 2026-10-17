@@ -120,6 +120,20 @@ async def run(
         # сбой провайдера, прятать её под AiCallFailed нельзя
 
 
+async def _unreadable(
+    session: AsyncSession, connection_id: uuid.UUID, key_changed_at: datetime
+) -> None:
+    """Ключ не расшифровать: на карточку, но только про этот ключ. Читали без
+    замка: перечитываем под замком и сверяем отпечаток, иначе замена ключа,
+    успевшая между чтением и записью, получила бы «не расшифровать»."""
+    connection = await repository.get_connection(session, connection_id, lock=True)
+    if connection is None:
+        raise AiCallFailed(NOT_CONFIGURED)
+    apply_result(connection, key_changed_at=key_changed_at, started=_now(), code=KEY_UNREADABLE)
+    await session.commit()
+    log.warning("ai.connection.key_unreadable", connection_id=str(connection_id))
+
+
 def _spent(conversation: Any) -> int:
     """Запросы, которые разговор принёс из прошлых ответов. Pydantic AI считает
     предел по счётчику разговора, а не запуска: без поправки шестое сообщение
@@ -142,16 +156,9 @@ async def _target(make_session: MakeSession, purpose: str, scope: str | None) ->
             raise AiCallFailed(NOT_CONFIGURED)
         try:
             key = crypto.decrypt(connection.key_encrypted)
-        except crypto.DecryptError as exc:
-            apply_result(
-                connection,
-                key_changed_at=connection.key_changed_at,
-                started=_now(),
-                code=KEY_UNREADABLE,
-            )
-            await session.commit()
-            log.warning("ai.connection.key_unreadable", connection_id=str(connection.id))
-            raise AiCallFailed(KEY_UNREADABLE) from exc
+        except crypto.DecryptError:
+            await _unreadable(session, connection.id, connection.key_changed_at)
+            raise AiCallFailed(KEY_UNREADABLE) from None
         return _Target(
             purpose,
             scope,
@@ -250,8 +257,8 @@ async def _record(
                 started=started,
                 code=error.code if error else None,
             )
-        if error is not None and error.code == MODEL_MISSING:
-            await _model_missing(session, target)
+        if error is not None and error.code == MODEL_MISSING and connection is not None:
+            await _model_missing(session, target, connection)
         await session.commit()
     if error is not None:
         log.warning(
@@ -264,10 +271,17 @@ async def _record(
         )
 
 
-async def _model_missing(session: AsyncSession, target: _Target) -> None:
+async def _model_missing(session: AsyncSession, target: _Target, connection) -> None:
+    """404 по модели помечает настройку задачи, только если это та же настройка,
+    с которой шёл вызов: та же модель, то же подключение, тот же ключ. Иначе
+    пометка заблокировала бы новую настройку, которую 404 не касался."""
     binding = await repository.get_binding(
         session, purpose=target.purpose, scope=target.scope, lock=True
     )
-    # модель сменили, пока шёл вызов: 404 был про старую
-    if binding is not None and binding.model == target.model:
+    if (
+        binding is not None
+        and binding.model == target.model
+        and binding.connection_id == target.connection_id
+        and connection.key_changed_at == target.key_changed_at
+    ):
         binding.model_missing_at = _now()

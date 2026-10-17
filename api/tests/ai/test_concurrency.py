@@ -239,3 +239,67 @@ async def test_recheck_vs_replace_between_read_and_write(sessions, monkeypatch):
         assert crypto.decrypt(connection.key_encrypted) == new_key
         # итог про новый ключ: проверен, без ошибки старого
         assert (connection.error_code, connection.checked_at is not None) == (None, True)
+
+
+@pytest.fixture
+def ok_net(monkeypatch):
+    monkeypatch.setattr(
+        service,
+        "_http",
+        lambda: httpx2.AsyncClient(
+            transport=httpx2.MockTransport(lambda r: httpx2.Response(200, json=EMPTY))
+        ),
+    )
+
+
+@pytest.mark.parametrize("where", ["run", "recheck"])
+@pytest.mark.parametrize("meanwhile", ["replace", "delete"])
+async def test_unreadable_vs_change_between_read_and_write(
+    sessions, monkeypatch, ok_net, where, meanwhile
+):
+    # ключ не расшифровать (сменился SECRET_KEY), и ровно между чтением строки и
+    # записью «не расшифровать» владелец заменил ключ или удалил подключение
+    connection_id = await add_connection(sessions, provider="anthropic", key_encrypted="bad")
+    async with sessions() as session:
+        await ai.set_binding(
+            session, purpose="p", scope=None, connection_id=connection_id, model="m"
+        )
+        await session.commit()
+    new_key = KEY + "new"
+
+    async def change():
+        async with sessions() as other:
+            if meanwhile == "replace":
+                await service.replace_key(other, connection_id, key=new_key)
+            else:
+                await service.delete_connection(other, connection_id)
+
+    read = repository.get_connection
+    armed = [True]
+
+    async def change_then_read(session, connection_id, *, lock=False):
+        if lock and armed[0]:
+            armed[0] = False
+            await change()
+        return await read(session, connection_id, lock=lock)
+
+    monkeypatch.setattr(repository, "get_connection", change_then_read)
+    async with sessions() as session:
+        if where == "run":
+            with pytest.raises(ai.AiCallFailed) as caught:
+                await ai.run(
+                    purpose="p", scope=None, agent=Agent(), prompt="?", make_session=sessions
+                )
+            want = "key_unreadable" if meanwhile == "replace" else "not_configured"
+            assert caught.value.code == want
+        elif meanwhile == "replace":
+            await service.recheck(session, connection_id)
+        else:
+            with pytest.raises(service.ConnectionNotFound):
+                await service.recheck(session, connection_id)
+    if meanwhile == "replace":
+        async with sessions() as session:
+            connection = await session.get(Connection, connection_id)
+        # новый ключ рабочий: «не расшифровать» про старый на нём нет
+        assert crypto.decrypt(connection.key_encrypted) == new_key
+        assert connection.error_code is None and connection.checked_at is not None

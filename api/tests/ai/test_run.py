@@ -557,3 +557,26 @@ async def test_step_limit_still_stops_loop_in_conversation(session, make_session
         await failed(make_session, agent=agent, steps=3, conversation=conversation) == ai.STEP_LIMIT
     )
     assert len(net.seen) == 3
+
+
+@pytest.mark.parametrize("change", ["connection", "key"])
+async def test_model_missing_only_for_same_setting(session, make_session, net, connection, change):
+    # пока шёл вызов, задачу перевели на другое подключение или заменили ключ:
+    # 404 был про старую настройку и новую не блокирует
+    other = await add_connection(session, name="второй")
+
+    async def change_meanwhile(request):
+        if change == "connection":
+            await session.execute(update(Binding).values(connection_id=other.id))
+        else:
+            await session.execute(
+                update(Connection)
+                .where(Connection.id == connection.id)
+                .values(key_changed_at=datetime.now(UTC))
+            )
+        await session.commit()
+        return httpx2.Response(404, json={"error": {"message": "x"}})
+
+    net.answer = change_meanwhile
+    await failed(make_session)
+    assert (await session.scalar(select(Binding))).model_missing_at is None
