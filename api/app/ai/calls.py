@@ -103,7 +103,7 @@ async def run(
                 model=model,
                 deps=deps,
                 conversation=conversation,
-                usage_limits=UsageLimits(request_limit=steps),
+                usage_limits=UsageLimits(request_limit=steps + _spent(conversation)),
             )
         # from None: в цепочке исключений Pydantic AI лежит тело ответа провайдера,
         # а там бывают куски запроса. Код и статус и так в журнале
@@ -118,6 +118,14 @@ async def run(
             raise AiCallFailed(BAD_OUTPUT) from None
         # остальное летит как есть: это ошибка в инструменте вызывающего, а не
         # сбой провайдера, прятать её под AiCallFailed нельзя
+
+
+def _spent(conversation: Any) -> int:
+    """Запросы, которые разговор принёс из прошлых ответов. Pydantic AI считает
+    предел по счётчику разговора, а не запуска: без поправки шестое сообщение
+    человека упёрлось бы в предел ещё до запроса к модели."""
+    usage = getattr(conversation, "usage", None)
+    return usage.requests if usage is not None else 0
 
 
 async def _target(make_session: MakeSession, purpose: str, scope: str | None) -> _Target:

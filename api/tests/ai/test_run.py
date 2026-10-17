@@ -530,3 +530,30 @@ async def test_set_binding_needs_model(session, connection):
         await ai.set_binding(
             session, purpose=PURPOSE, scope=SCOPE, connection_id=connection.id, model="  "
         )
+
+
+async def test_step_limit_per_run_in_conversation(session, make_session, net, connection):
+    # разговор в директе: каждое сообщение человека это свой запуск со своими
+    # шагами, а не общий бюджет на весь разговор
+    conversation = None
+    for _ in range(7):
+        result = await run(make_session, steps=2, conversation=conversation)
+        conversation = result.conversation
+    assert conversation.usage.requests == 7
+
+
+async def test_step_limit_still_stops_loop_in_conversation(session, make_session, net, connection):
+    # но зацикленный запуск внутри разговора всё равно стопорится на своих шагах
+    conversation = (await run(make_session)).conversation
+    agent = Agent()
+
+    @agent.tool_plain
+    def search_kb(query: str) -> str:
+        return "ничего"
+
+    net.answer = search_call
+    net.seen.clear()
+    assert (
+        await failed(make_session, agent=agent, steps=3, conversation=conversation) == ai.STEP_LIMIT
+    )
+    assert len(net.seen) == 3
