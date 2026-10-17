@@ -236,11 +236,16 @@ async def lock_reply(session: AsyncSession, reply_id: uuid.UUID) -> Reply | None
 
 
 # вкладки журнала: что в каждую попадает. Не ответил: и сбой до решения, и ответ,
-# который написали, но он не дошёл
+# который не дошёл. Не дошедший в других вкладках не бывает ни при каком итоге:
+# вкладки не пересекаются по самому фильтру, а не по тому, как устроен worker
+def _delivered():
+    return Reply.stage != "send_failed"
+
+
 TAB_FILTERS = {
-    "answered": lambda: and_(Reply.outcome == "answered", Reply.stage != "send_failed"),
-    "unsure": lambda: Reply.outcome == "unsure",
-    "not_mine": lambda: Reply.outcome == "not_mine",
+    "answered": lambda: and_(Reply.outcome == "answered", _delivered()),
+    "unsure": lambda: and_(Reply.outcome == "unsure", _delivered()),
+    "not_mine": lambda: and_(Reply.outcome == "not_mine", _delivered()),
     "missed": lambda: or_(
         Reply.outcome.in_(("failed", "limit", "expired", "paused")),
         Reply.stage == "send_failed",

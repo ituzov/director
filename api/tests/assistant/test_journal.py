@@ -166,3 +166,81 @@ async def test_anonymous(client, journal):
     for path in ("/assistants/replies", "/assistants/replies/counts"):
         r = await client.get(path, params={"account_id": str(account_id)})
         assert r.status_code == 401
+
+
+OUTCOMES = [None, "answered", "unsure", "not_mine", "limit", "failed", "expired", "paused"]
+STAGES = ["queued", "thinking", "sending", "sent", "send_failed", "done"]
+
+
+async def test_every_allowed_row_in_one_tab(client, owner, session):
+    # все пары итог и стадия, которые пропускают проверки базы: каждая решённая строка
+    # ровно в одной вкладке, нерешённая только во «Всех», счётчики совпадают со списками
+    account_id = uuid.uuid7()
+    a = await add_assistant(session, account_id)
+    rows = {}
+    n = 0
+    for outcome in OUTCOMES:
+        for stage in STAGES:
+            if outcome is None and stage not in ("queued", "thinking"):
+                continue
+            n += 1
+            rows[(await add_reply(session, a, n, outcome, stage)).id] = (outcome, stage)
+    seen: dict[str, list[str]] = {str(i): [] for i in rows}
+    counts = (
+        await client.get(
+            "/assistants/replies/counts", headers=owner, params={"account_id": str(account_id)}
+        )
+    ).json()["counts"]
+    for tab in ("answered", "unsure", "not_mine", "missed"):
+        items = (await page(client, owner, account_id, tab=tab, limit=100))["items"]
+        assert counts[tab] == len(items), tab
+        for item in items:
+            seen[item["id"]].append(tab)
+    for reply_id, (outcome, stage) in rows.items():
+        tabs = seen[str(reply_id)]
+        assert len(tabs) == (0 if outcome is None else 1), (outcome, stage, tabs)
+    assert counts["all"] == len(rows)
+
+
+async def test_paging_with_same_time(client, owner, session):
+    # строки с одним временем: закладка делит их по id, ничего не теряется и не повторяется
+    account_id = uuid.uuid7()
+    a = await add_assistant(session, account_id)
+    ids = []
+    for _ in range(5):
+        r = await add_reply(session, a, 0, "answered", "sent")
+        ids.append(str(r.id))
+    first = await page(client, owner, account_id, limit=2)
+    second = await page(client, owner, account_id, before=first["next"], limit=2)
+    third = await page(client, owner, account_id, before=second["next"], limit=2)
+    got = [i["id"] for p in (first, second, third) for i in p["items"]]
+    assert sorted(got) == sorted(ids) and len(set(got)) == 5
+
+
+async def test_history_other_account_hidden(client, owner, journal, session):
+    account_id, a, rows = journal
+    reply = rows[0]
+    activity.record(
+        session,
+        "assistant.answered",
+        account_id=account_id,
+        person_id="p1",
+        comment_id=reply.comment_id,
+        data={"assistant_id": str(a.id)},
+    )
+    await session.commit()
+    r = await client.get(
+        "/assistants/history",
+        headers=owner,
+        params={"account_id": str(uuid.uuid7()), "comment_id": [reply.comment_id]},
+    )
+    assert r.json()["comments"] == {}
+
+
+async def test_history_anonymous(client, journal):
+    account_id, _, rows = journal
+    r = await client.get(
+        "/assistants/history",
+        params={"account_id": str(account_id), "comment_id": [rows[0].comment_id]},
+    )
+    assert r.status_code == 401
