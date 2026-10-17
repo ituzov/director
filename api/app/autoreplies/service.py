@@ -73,10 +73,9 @@ async def create(session: AsyncSession, form: AutoreplyIn, user: identity.UserRe
 
 async def update(session: AsyncSession, autoreply_id: uuid.UUID, form: AutoreplyForm) -> Full:
     """Сохранить форму целиком: слова и посты заменяются тем, что прислали."""
-    autoreply = await _existing(session, autoreply_id)
+    autoreply = await _locked(session, autoreply_id)
     if autoreply.archived_at is not None:
         raise AutoreplyArchived
-    await repository.lock_account(session, autoreply.account_id)
     words = _words(form)
     await _check_conflicts(
         session, autoreply.account_id, form.scope, words, form.media_ids, exclude_id=autoreply.id
@@ -95,7 +94,7 @@ async def update(session: AsyncSession, autoreply_id: uuid.UUID, form: Autoreply
 
 async def set_enabled(session: AsyncSession, autoreply_id: uuid.UUID, enabled: bool) -> Full:
     """Пауза и обратно. Конфликтов нет: выключенный и так держит свои слова и посты."""
-    autoreply = await _existing(session, autoreply_id)
+    autoreply = await _locked(session, autoreply_id)
     if autoreply.archived_at is not None:
         raise AutoreplyArchived
     if autoreply.enabled != enabled:
@@ -108,7 +107,7 @@ async def set_enabled(session: AsyncSession, autoreply_id: uuid.UUID, enabled: b
 
 async def archive(session: AsyncSession, autoreply_id: uuid.UUID) -> Full:
     """В архив: перестаёт отвечать и отпускает посты и слова. Повтор ничего не меняет."""
-    autoreply = await _existing(session, autoreply_id)
+    autoreply = await _locked(session, autoreply_id)
     if autoreply.archived_at is None:
         autoreply.archived_at = func.now()
         await repository.set_media_archived(session, autoreply.id, True)
@@ -119,9 +118,8 @@ async def archive(session: AsyncSession, autoreply_id: uuid.UUID) -> Full:
 
 async def unarchive(session: AsyncSession, autoreply_id: uuid.UUID) -> Full:
     """Из архива, если слова и посты за это время никто не занял."""
-    autoreply = await _existing(session, autoreply_id)
+    autoreply = await _locked(session, autoreply_id)
     if autoreply.archived_at is not None:
-        await repository.lock_account(session, autoreply.account_id)
         media_ids = (await repository.media_by_autoreply(session, [autoreply.id])).get(
             autoreply.id, []
         )
@@ -138,6 +136,18 @@ async def unarchive(session: AsyncSession, autoreply_id: uuid.UUID) -> Full:
         await session.commit()
         log.info("autoreply.unarchived", autoreply_id=str(autoreply.id))
     return await get(session, autoreply.id)
+
+
+async def _locked(session: AsyncSession, autoreply_id: uuid.UUID) -> Autoreply:
+    """Автоответ для изменения: под замком аккаунта и перечитанный после него.
+    Иначе архив, успевший между чтением и записью формы, получил бы обратно живые
+    посты: форма заменяет их строками с archived = false."""
+    account_id = (await _existing(session, autoreply_id)).account_id
+    await repository.lock_account(session, account_id)
+    autoreply = await repository.lock_autoreply(session, autoreply_id)
+    if autoreply is None:
+        raise AutoreplyNotFound
+    return autoreply
 
 
 async def _existing(session: AsyncSession, autoreply_id: uuid.UUID) -> Autoreply:
