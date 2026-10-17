@@ -687,3 +687,75 @@ async def test_anthropic_forbidden_marks_task_not_card(session, make_session, ne
     assert await failed(make_session) == "model_missing"
     assert (await fresh(session, connection)).error_code is None
     assert (await session.scalar(select(Binding))).model_missing_at is not None
+
+
+TRY = "assistant.try"
+
+
+async def tried(make_session, using, purpose=TRY):
+    return await ai.run(
+        purpose=purpose,
+        scope=SCOPE,
+        agent=Agent(),
+        prompt="вопрос",
+        using=using,
+        make_session=make_session,
+    )
+
+
+async def test_using_given_connection_and_model(session, make_session, net, connection):
+    # песочница: несохранённые подключение и модель, настройка задачи не читается
+    other = await add_connection(session, name="второе")
+    result = await tried(make_session, ai.Using(other.id, "  other-model "))
+    assert result.output == "ок"
+    assert json.loads(net.seen[0].content)["model"] == "other-model"
+    [call] = await journal(session)
+    # траты на проверки видны отдельно от настоящих ответов
+    assert (call.purpose, call.connection_id, call.model) == (TRY, other.id, "other-model")
+
+
+async def test_using_skips_marked_binding(session, make_session, net, connection):
+    # у настройки задачи пометка «модели нет», а проверяют другую модель
+    binding = await session.scalar(select(Binding))
+    binding.model_missing_at = datetime.now(UTC)
+    await session.commit()
+    result = await tried(make_session, ai.Using(connection.id, "other"), purpose=PURPOSE)
+    assert result.output == "ок"
+
+
+async def test_using_404_does_not_mark_binding(session, make_session, net, connection):
+    # те же purpose, scope, подключение и модель, что у настройки: вызов всё равно
+    # шёл не по ней, и пометка «модели нет» её не трогает
+    net.answer = status(404)
+    with pytest.raises(ai.AiCallFailed) as caught:
+        await tried(make_session, ai.Using(connection.id, MODEL), purpose=PURPOSE)
+    assert caught.value.code == "model_missing"
+    assert (await session.scalar(select(Binding))).model_missing_at is None
+
+
+@pytest.mark.parametrize("case", ["deleted", "empty_model"])
+async def test_using_not_configured(session, make_session, net, connection, case):
+    model = "m"
+    if case == "deleted":
+        await session.delete(connection)
+        await session.commit()
+    else:
+        model = "  "
+    with pytest.raises(ai.AiCallFailed) as caught:
+        await tried(make_session, ai.Using(connection.id, model))
+    assert caught.value.code == "not_configured"
+    assert net.seen == []
+
+
+async def test_using_overrides_saved_binding(session, make_session, net, connection):
+    # главный случай песочницы: у задачи уже сохранены подключение и модель, а
+    # владелец проверяет другие. Уйти должны введённые, а не сохранённые
+    other = await add_connection(
+        session, name="второе", key_encrypted=crypto.encrypt("sk-other-0123456789abc")
+    )
+    await tried(make_session, ai.Using(other.id, "other-model"), purpose=PURPOSE)
+    request = net.seen[0]
+    assert json.loads(request.content)["model"] == "other-model"
+    assert request.headers["authorization"] == "Bearer sk-other-0123456789abc"
+    [call] = await journal(session)
+    assert (call.connection_id, call.model) == (other.id, "other-model")

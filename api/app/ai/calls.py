@@ -65,6 +65,15 @@ def _now() -> datetime:
 
 
 @dataclass(frozen=True, slots=True)
+class Using:
+    """Подключение и модель явно, мимо настройки задачи. Для песочницы: она
+    проверяет поля, которые владелец ещё не сохранил."""
+
+    connection_id: uuid.UUID
+    model: str
+
+
+@dataclass(frozen=True, slots=True)
 class _Target:
     """Что прочитали из настроек до сети: дальше в базу не ходим до ответа."""
 
@@ -77,6 +86,8 @@ class _Target:
     base_url: str | None
     # отпечаток ключа: итог вызова ложится на карточку, только если ключ тот же
     key_changed_at: datetime
+    # вызов по настройке задачи, а не по Using: только тогда 404 её помечает
+    by_binding: bool = True
 
 
 async def run(
@@ -88,11 +99,16 @@ async def run(
     deps: Any = None,
     conversation: Any = None,
     steps: int = STEPS,
+    using: Using | None = None,
     make_session: MakeSession = SessionLocal,
 ) -> AgentRunResult[Any]:
     """Запустить агента задачи через её подключение и модель. Зовут вне своей
-    транзакции. Ответа нет: AiCallFailed с кодом, вызывающий молчит."""
-    target = await _target(make_session, purpose, scope)
+    транзакции. Ответа нет: AiCallFailed с кодом, вызывающий молчит.
+
+    using: подключение и модель явно, настройка задачи не читается. Журнал пишется
+    с этими purpose и scope как обычно, а 404 «модели нет» настройку не помечает:
+    пометка ставится, только если вызов шёл по ней."""
+    target = await _target(make_session, purpose, scope, using)
     async with _http() as http:
         model = _Journaled(
             target.provider.model(
@@ -146,15 +162,23 @@ def _spent(conversation: Any) -> int:
     return usage.requests if usage is not None else 0
 
 
-async def _target(make_session: MakeSession, purpose: str, scope: str | None) -> _Target:
+async def _target(
+    make_session: MakeSession, purpose: str, scope: str | None, using: Using | None = None
+) -> _Target:
     async with make_session() as session:
-        binding = await repository.get_binding(session, purpose=purpose, scope=scope)
-        if binding is None or binding.connection_id is None:
-            raise AiCallFailed(NOT_CONFIGURED)
-        if binding.model_missing_at is not None:
-            # владелец должен выбрать другую модель: эту провайдер уже не знает
-            raise AiCallFailed(MODEL_MISSING)
-        connection = await repository.get_connection(session, binding.connection_id)
+        if using is None:
+            binding = await repository.get_binding(session, purpose=purpose, scope=scope)
+            if binding is None or binding.connection_id is None:
+                raise AiCallFailed(NOT_CONFIGURED)
+            if binding.model_missing_at is not None:
+                # владелец должен выбрать другую модель: эту провайдер уже не знает
+                raise AiCallFailed(MODEL_MISSING)
+            connection_id, model = binding.connection_id, binding.model
+        else:
+            connection_id, model = using.connection_id, using.model.strip()
+            if not model:
+                raise AiCallFailed(NOT_CONFIGURED)
+        connection = await repository.get_connection(session, connection_id)
         provider = providers.get(connection.provider) if connection else None
         if connection is None or provider is None:
             raise AiCallFailed(NOT_CONFIGURED)
@@ -168,10 +192,11 @@ async def _target(make_session: MakeSession, purpose: str, scope: str | None) ->
             scope,
             connection.id,
             provider,
-            binding.model,
+            model,
             key,
             connection.base_url,
             connection.key_changed_at,
+            by_binding=using is None,
         )
 
 
@@ -285,7 +310,12 @@ async def _record(
                 started=started,
                 code=error.code if error else None,
             )
-        if error is not None and error.code == MODEL_MISSING and connection is not None:
+        if (
+            error is not None
+            and error.code == MODEL_MISSING
+            and connection is not None
+            and target.by_binding
+        ):
             await _model_missing(session, target, connection)
         await session.commit()
     if error is not None:

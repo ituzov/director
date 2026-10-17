@@ -4,7 +4,7 @@
 Meta. Публичный интерфейс модуля: снаружи импортируют только отсюда.
 """
 
-from app.ai.calls import BAD_OUTPUT, NOT_CONFIGURED, STEP_LIMIT, run
+from app.ai.calls import BAD_OUTPUT, NOT_CONFIGURED, STEP_LIMIT, Using, run
 from app.ai.exceptions import AiCallFailed, AiError
 from app.ai.routes import ai_error_handler, router
 from app.ai.service import set_binding
@@ -12,6 +12,8 @@ from app.ai.service import set_binding
 __all__ = [
     # вызов модели для задачи: вне своей транзакции, ответа нет значит AiCallFailed
     "run",
+    # подключение и модель явно, мимо настройки задачи: для песочницы
+    "Using",
     "AiCallFailed",
     "AiError",
     # коды AiCallFailed сверх кодов провайдера
