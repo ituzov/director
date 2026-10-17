@@ -8,6 +8,7 @@ CHECK_TIMEOUT), ни одна строка не заперта. Ключ в ло
 
 import uuid
 from datetime import UTC, datetime
+from typing import NamedTuple
 
 import httpx2
 import structlog
@@ -40,6 +41,15 @@ CHECK_TIMEOUT = 15.0
 # настоящие ключи длиной в десятки символов; у короткого последние 4 это много
 MIN_KEY = 20
 HINT = 4
+
+
+class Checked(NamedTuple):
+    """Подключение и итог проверки ключа (None: ключ работает). Итог отдельно от
+    карточки: разовый сбой карточку не меняет, и без него «Проверить ещё раз» с
+    таймаутом выглядело бы как кнопка, которая ничего не делает."""
+
+    connection: Connection
+    error: str | None
 
 
 def _http() -> httpx2.AsyncClient:
@@ -144,7 +154,7 @@ async def create_connection(
     key: str,
     base_url: str | None,
     created_by: uuid.UUID,
-) -> Connection:
+) -> Checked:
     """Сохранить ключ. Ключ, который провайдер не принял, не сохраняем: он не
     заработает, а владелец скорее скопировал его не целиком. Остальное сохраняем:
     нет денег чинится пополнением, сбой пройдёт сам."""
@@ -179,10 +189,10 @@ async def create_connection(
         checked=connection.checked_at is not None,
         error_code=connection.error_code,
     )
-    return connection
+    return Checked(connection, error)
 
 
-async def replace_key(session: AsyncSession, connection_id: uuid.UUID, *, key: str) -> Connection:
+async def replace_key(session: AsyncSession, connection_id: uuid.UUID, *, key: str) -> Checked:
     """Новый ключ вместо старого, с той же проверкой. key_changed_at сдвигается:
     401 от старого ключа, долетевший после замены, новый не окрасит."""
     connection = await _get(session, connection_id)
@@ -208,10 +218,10 @@ async def replace_key(session: AsyncSession, connection_id: uuid.UUID, *, key: s
         checked=connection.checked_at is not None,
         error_code=connection.error_code,
     )
-    return connection
+    return Checked(connection, error)
 
 
-async def recheck(session: AsyncSession, connection_id: uuid.UUID) -> Connection:
+async def recheck(session: AsyncSession, connection_id: uuid.UUID) -> Checked:
     """«Проверить ещё раз»: пополнил баланс или ключ поменяли в панели провайдера.
     Ключ не принят здесь пишется на карточку, а не бросается: ключ уже сохранён."""
     connection = await _get(session, connection_id)
@@ -227,20 +237,27 @@ async def recheck(session: AsyncSession, connection_id: uuid.UUID) -> Connection
         apply_result(connection, key_changed_at=changed_at, started=_now(), code=KEY_UNREADABLE)
         await session.commit()
         log.warning("ai.connection.key_unreadable", connection_id=str(connection_id))
-        return connection
+        return Checked(connection, KEY_UNREADABLE)
     await _before_network(session)
     started = _now()
     error = await _check(profile, key=key, base_url=base_url)
     connection = await _get(session, connection_id, lock=True)
     apply_result(connection, key_changed_at=changed_at, started=started, code=error)
     await session.commit()
-    return connection
+    log.info(
+        "ai.connection.rechecked",
+        connection_id=str(connection_id),
+        checked=connection.checked_at is not None,
+        error_code=connection.error_code,
+    )
+    return Checked(connection, error)
 
 
 async def rename(session: AsyncSession, connection_id: uuid.UUID, *, name: str) -> Connection:
     connection = await _get(session, connection_id)
     connection.name = name.strip() or connection.provider
     await session.commit()
+    log.info("ai.connection.renamed", connection_id=str(connection_id))
     return connection
 
 

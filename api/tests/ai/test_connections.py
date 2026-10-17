@@ -67,6 +67,10 @@ def timeout(request):
 
 
 async def create(session, **kw):
+    return (await create_checked(session, **kw)).connection
+
+
+async def create_checked(session, **kw):
     return await service.create_connection(
         session,
         **{"provider": "anthropic", "name": "Anthropic", "key": KEY, "base_url": None} | kw,
@@ -115,8 +119,10 @@ async def test_no_funds_saved_with_error(session, net):
 async def test_unchecked_saved_without_error(session, net, answer):
     # провайдер не ответил толком: «не проверен», карточку не краснит
     net.answer = answer
-    connection = await create(session)
+    connection, checked = await create_checked(session)
     assert (connection.checked_at, connection.error_code, connection.error_at) == (None, None, None)
+    # сохранили, но экран говорит, что ключ не проверен и почему
+    assert checked is not None
 
 
 async def test_unknown_provider(session, net):
@@ -155,7 +161,7 @@ async def test_replace_key(session, net):
     connection = await create(session)
     before = connection.key_changed_at
     net.answer = lambda request: httpx2.Response(200, json=EMPTY)
-    connection = await service.replace_key(session, connection.id, key=NEW_KEY)
+    connection, _ = await service.replace_key(session, connection.id, key=NEW_KEY)
     await session.refresh(connection)
     assert crypto.decrypt(connection.key_encrypted) == NEW_KEY
     assert connection.key_hint == "QRST"
@@ -200,16 +206,16 @@ async def test_recheck_writes_card_error(session, net, code, error):
     # ключ уже сохранён: отозвали в панели или кончились деньги, пишем на карточку
     connection = await create(session)
     net.answer = status(code)
-    connection = await service.recheck(session, connection.id)
-    assert (connection.error_code, connection.checked_at) == (error, None)
+    connection, checked = await service.recheck(session, connection.id)
+    assert (connection.error_code, connection.checked_at, checked) == (error, None, error)
 
 
 async def test_recheck_clears_error(session, net):
     net.answer = status(402)
     connection = await create(session)
     net.answer = lambda request: httpx2.Response(200, json=EMPTY)
-    connection = await service.recheck(session, connection.id)
-    assert (connection.error_code, connection.error_at) == (None, None)
+    connection, checked = await service.recheck(session, connection.id)
+    assert (connection.error_code, connection.error_at, checked) == (None, None, None)
     assert connection.checked_at is not None
 
 
@@ -217,9 +223,11 @@ async def test_recheck_timeout_is_unchecked(session, net):
     net.answer = status(402)
     connection = await create(session)
     net.answer = timeout
-    connection = await service.recheck(session, connection.id)
-    # разовый сбой: про деньги ничего не узнали, карточка как была
+    connection, checked = await service.recheck(session, connection.id)
+    # разовый сбой: про деньги ничего не узнали, карточка как была. Но человек
+    # нажал кнопку и должен узнать, что провайдер не ответил
     assert (connection.error_code, connection.checked_at) == ("no_funds", None)
+    assert checked == "timeout"
 
 
 async def test_recheck_unreadable_key(session, net):
@@ -228,8 +236,8 @@ async def test_recheck_unreadable_key(session, net):
     await session.execute(update(Connection).values(key_encrypted="not-a-fernet-token"))
     await session.commit()
     net.seen.clear()
-    connection = await service.recheck(session, connection.id)
-    assert connection.error_code == "key_unreadable"
+    connection, checked = await service.recheck(session, connection.id)
+    assert connection.error_code == checked == "key_unreadable"
     assert net.seen == []
 
 
@@ -247,7 +255,7 @@ async def test_recheck_ignores_result_for_replaced_key(session, net):
         return httpx2.Response(401, json={"type": "error"})
 
     net.answer = replace_meanwhile
-    connection = await service.recheck(session, connection.id)
+    connection, _ = await service.recheck(session, connection.id)
     assert connection.error_code is None
 
 
@@ -283,7 +291,7 @@ async def test_key_changed_after_check(session, net):
         return httpx2.Response(200, json=EMPTY)
 
     net.answer = check
-    connection = await service.replace_key(session, connection.id, key=NEW_KEY)
+    connection, _ = await service.replace_key(session, connection.id, key=NEW_KEY)
     assert connection.key_changed_at > during[0]
     # а проверку помечаем временем, когда начали проверять
     assert connection.checked_at < during[0]
@@ -301,7 +309,7 @@ async def test_recheck_older_than_call_result(session, net):
         return httpx2.Response(402, json={"type": "error"})
 
     net.answer = call_succeeded_meanwhile
-    connection = await service.recheck(session, connection.id)
+    connection, _ = await service.recheck(session, connection.id)
     assert connection.error_code is None and connection.checked_at is not None
 
 
@@ -311,8 +319,9 @@ async def test_replace_unchecked_forgets_old_key(session, net):
     net.answer = status(402)
     connection = await create(session)
     net.answer = timeout
-    connection = await service.replace_key(session, connection.id, key=NEW_KEY)
+    connection, checked = await service.replace_key(session, connection.id, key=NEW_KEY)
     assert (connection.error_code, connection.error_at, connection.checked_at) == (None, None, None)
+    assert checked == "timeout"
 
 
 @pytest.mark.parametrize("action", ["create", "recheck"])
@@ -330,7 +339,7 @@ async def test_checked_at_is_check_start(session, net, action):
     if action == "create":
         connection = await create(session)
     else:
-        connection = await service.recheck(session, connection.id)
+        connection, _ = await service.recheck(session, connection.id)
     assert connection.checked_at < during[0]
 
 
