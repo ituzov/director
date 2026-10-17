@@ -106,6 +106,9 @@ class Call(Base):
         CheckConstraint("(outcome = 'error') = (error_code IS NOT NULL)", name="error_when_failed"),
         # предохранитель: вызовы задачи за сутки
         Index("ix_call_purpose_started", "purpose", "started_at"),
+        # удаление подключения обнуляет ссылку в журнале: без индекса это проход
+        # по всему журналу под замком подключения
+        Index("ix_call_connection", "connection_id"),
         {"schema": "ai"},
     )
 
