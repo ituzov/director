@@ -198,7 +198,7 @@ class _Journaled(WrapperModel):
             raise
         except Exception as exc:
             raise await self._failed(exc, started, clock) from None
-        await _record(self.make_session, self.target, started, clock, response.usage, None)
+        await self._record(started, clock, response.usage, None)
         return response
 
     @asynccontextmanager
@@ -220,24 +220,32 @@ class _Journaled(WrapperModel):
             raise
         except Exception as exc:
             raise await self._failed(exc, started, clock) from None
-        await _record(self.make_session, self.target, started, clock, stream.usage, None)
+        await self._record(started, clock, stream.usage, None)
 
     async def _cancelled(self, started: datetime, clock: float) -> None:
         """Запрос оборвал вызывающий (свой таймаут, остановка worker). Токены могли
-        уже списать: строка в журнал всё равно. Pydantic AI работает на anyio, а
-        там отмена повторяется на каждом await: asyncio.shield её не удержит,
-        запись нужна под защищённой областью anyio."""
+        уже списать: строка в журнал всё равно."""
+        await self._record(started, clock, None, ProviderError(CANCELLED))
+
+    async def _record(
+        self,
+        started: datetime,
+        clock: float,
+        usage: RequestUsage | None,
+        error: ProviderError | None,
+    ) -> None:
+        """Любая запись итога под защитой от отмены: ответ уже получен и, может быть,
+        оплачен, а запись ждёт соединение или замок строки. Pydantic AI работает на
+        anyio, там отмена повторяется на каждом await, asyncio.shield её не удержит."""
         with anyio.CancelScope(shield=True):
-            await _record(
-                self.make_session, self.target, started, clock, None, ProviderError(CANCELLED)
-            )
+            await _record(self.make_session, self.target, started, clock, usage, error)
 
     async def _failed(self, exc: BaseException, started: datetime, clock: float) -> ProviderError:
         """Любая ошибка запроса к модели: строка в журнал и наш код. Неопознанное
         (пустой ответ, чужой формат) это bad_response: токены могли списать, и
         предохранитель должен этот вызов увидеть."""
         error = self.target.provider.error_from(exc) or ProviderError(BAD_RESPONSE)
-        await _record(self.make_session, self.target, started, clock, None, error)
+        await self._record(started, clock, None, error)
         return error
 
 

@@ -650,3 +650,25 @@ async def test_replace_key_clears_model_missing(
     net.seen.clear()
     assert (await run(make_session)).output == "ок"
     assert len(net.seen) == 1
+
+
+@pytest.mark.parametrize("answer", [completion, status(402)], ids=["ok", "402"])
+async def test_record_survives_cancel(session, make_session, net, connection, answer):
+    # ответ пришёл, а запись итога ждёт соединение или замок строки, и тут срабатывает
+    # таймаут вызывающего: запрос уже оплачен, строка в журнале должна остаться
+    entered = []
+
+    @asynccontextmanager
+    async def slow_second():
+        entered.append(1)
+        if len(entered) == 2:
+            await asyncio.sleep(0.5)
+        async with make_session() as s:
+            yield s
+
+    net.answer = answer
+    with pytest.raises(TimeoutError):
+        async with asyncio.timeout(0.2):
+            await run(slow_second)
+    [call] = await journal(session)
+    assert call.outcome == ("ok" if answer is completion else "error")
