@@ -18,7 +18,7 @@ from sqlalchemy.pool import NullPool
 
 from app import ai
 from app.ai import calls, providers, repository, service
-from app.ai.models import Call, Connection
+from app.ai.models import Binding, Call, Connection
 from app.ai.providers.base import NO_FUNDS, ProviderError
 from app.core import crypto
 from app.db import make_engine
@@ -316,3 +316,39 @@ async def test_unreadable_vs_change_between_read_and_write(
         # новый ключ рабочий: «не расшифровать» про старый на нём нет
         assert crypto.decrypt(connection.key_encrypted) == new_key
         assert connection.error_code is None and connection.checked_at is not None
+
+
+async def test_set_binding_vs_delete(sessions, monkeypatch):
+    # подключение удаляют, пока задаче выбирают модель на нём. С замком удаление
+    # ждёт: настройка записалась, потом удаление сделало её «не настроенной».
+    # Без замка запись упала бы на внешнем ключе
+    connection_id = await add_connection(sessions)
+    get = service._get
+    armed = [True]
+
+    async def get_then_delete(session, connection_id, *, lock=False):
+        connection = await get(session, connection_id, lock=lock)
+        # удаление само ходит через _get: запускаем его один раз
+        if not armed[0]:
+            return connection
+        armed[0] = False
+
+        async def delete():
+            async with sessions() as other:
+                await service.delete_connection(other, connection_id)
+
+        get_then_delete.deleting = asyncio.create_task(delete())
+        with contextlib.suppress(TimeoutError):
+            await asyncio.wait_for(asyncio.shield(get_then_delete.deleting), 0.5)
+        return connection
+
+    monkeypatch.setattr(service, "_get", get_then_delete)
+    async with sessions() as session:
+        await ai.set_binding(
+            session, purpose="p", scope=None, connection_id=connection_id, model="m"
+        )
+        await session.commit()
+    await get_then_delete.deleting
+    async with sessions() as session:
+        [binding] = list(await session.scalars(select(Binding)))
+    assert (binding.model, binding.connection_id) == ("m", None)

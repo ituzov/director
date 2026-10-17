@@ -273,7 +273,9 @@ async def set_binding(
     model = model.strip()
     if not model:
         raise ModelRequired
-    await _get(session, connection_id)
+    # под замком: удаление между проверкой и записью дало бы IntegrityError по
+    # внешнему ключу вместо ConnectionNotFound
+    await _get(session, connection_id, lock=True)
     await repository.upsert_binding(
         session, purpose=purpose, scope=scope, connection_id=connection_id, model=model
     )

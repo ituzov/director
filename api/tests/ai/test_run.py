@@ -522,7 +522,21 @@ async def test_failure_without_provider_body(session, make_session, net, connect
         await run(make_session)
     error = caught.value
     assert error.__cause__ is None and error.__suppress_context__
-    assert "секретный" not in repr(error) and "секретный" not in str(error)
+    # по всей цепочке, включая скрытый контекст и группы исключений: лог или
+    # трейсбек покажут любое звено, а тело ответа не должно быть ни в одном
+    texts = [f"{type(e).__name__}: {e!r} {e}" for e in chain(error)]
+    assert not [t for t in texts if "секретный" in t], texts
+
+
+def chain(error: BaseException) -> list[BaseException]:
+    seen, todo = [], [error]
+    while todo:
+        e = todo.pop()
+        if e is None or any(e is s for s in seen):
+            continue
+        seen.append(e)
+        todo += [e.__cause__, e.__context__, *getattr(e, "exceptions", ())]
+    return seen
 
 
 async def test_set_binding_needs_model(session, connection):
@@ -596,3 +610,22 @@ async def test_cancelled_request_journaled(session, make_session, net, connectio
     [call] = await journal(session)
     assert (call.outcome, call.error_code) == ("error", "cancelled")
     assert (await fresh(session, connection)).error_code is None
+
+
+async def test_stream_failure_without_provider_body(session, make_session, net, connection):
+    # то же для потока (run_stream): тело ответа ни в одном звене цепочки
+    net.answer = lambda request: httpx2.Response(
+        400, json={"error": {"message": "в запросе: секретный коммент человека"}}
+    )
+    target = await calls._target(make_session, PURPOSE, SCOPE)
+    async with calls._http() as http:
+        model = calls._Journaled(
+            target.provider.model(http, key=target.key, base_url=None, model_id=MODEL),
+            target,
+            make_session,
+        )
+        with pytest.raises(Exception) as caught:  # noqa: B017
+            async with Agent(model).run_stream("вопрос") as result:
+                await result.get_output()
+    texts = [f"{type(e).__name__}: {e!r} {e}" for e in chain(caught.value)]
+    assert not [t for t in texts if "секретный" in t], texts

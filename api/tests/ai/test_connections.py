@@ -313,3 +313,31 @@ async def test_replace_unchecked_forgets_old_key(session, net):
     net.answer = timeout
     connection = await service.replace_key(session, connection.id, key=NEW_KEY)
     assert (connection.error_code, connection.error_at, connection.checked_at) == (None, None, None)
+
+
+@pytest.mark.parametrize("action", ["create", "recheck"])
+async def test_checked_at_is_check_start(session, net, action):
+    # «проверен» помечаем временем начала проверки: вызов, начатый во время неё и
+    # записавший ошибку, свежее, и проверка его не перекроет
+    connection = await create(session) if action == "recheck" else None
+    during = []
+
+    def check(request):
+        during.append(service._now())
+        return httpx2.Response(200, json=EMPTY)
+
+    net.answer = check
+    if action == "create":
+        connection = await create(session)
+    else:
+        connection = await service.recheck(session, connection.id)
+    assert connection.checked_at < during[0]
+
+
+def test_equal_start_later_writer_wins():
+    # два итога с одним и тем же началом: побеждает записанный позже
+    at = service._now()
+    connection = Connection(key_changed_at=at, checked_at=None, error_code=None, error_at=None)
+    service.apply_result(connection, key_changed_at=at, started=at, code="no_funds")
+    service.apply_result(connection, key_changed_at=at, started=at, code=None)
+    assert (connection.error_code, connection.checked_at) == (None, at)
