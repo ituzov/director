@@ -198,6 +198,8 @@ async def replace_key(session: AsyncSession, connection_id: uuid.UUID, *, key: s
     # подключение могли удалить, пока шла проверка: тогда не создаём его заново
     connection = await _get(session, connection_id, lock=True)
     _new_key(connection, key)
+    # 404 «модели нет» получал старый ключ: на другом аккаунте провайдера модель есть
+    await repository.clear_model_missing(session, connection_id)
     apply_result(connection, key_changed_at=connection.key_changed_at, started=started, code=error)
     await session.commit()
     log.info(

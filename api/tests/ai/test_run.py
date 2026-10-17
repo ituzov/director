@@ -17,7 +17,7 @@ from sqlalchemy import select, update
 from structlog.testing import capture_logs
 
 from app import ai
-from app.ai import calls
+from app.ai import calls, service
 from app.ai.exceptions import ConnectionNotFound, ModelRequired
 from app.ai.models import Binding, Call, Connection
 from app.core import crypto
@@ -629,3 +629,24 @@ async def test_stream_failure_without_provider_body(session, make_session, net, 
                 await result.get_output()
     texts = [f"{type(e).__name__}: {e!r} {e}" for e in chain(caught.value)]
     assert not [t for t in texts if "секретный" in t], texts
+
+
+async def test_replace_key_clears_model_missing(
+    session, make_session, net, connection, monkeypatch
+):
+    # на старом ключе модели нет (другой аккаунт провайдера), пришёл 404. Владелец
+    # поставил ключ, где она есть: задача снова идёт в сеть, а не стоит «модели нет»
+    net.answer = status(404)
+    await failed(make_session)
+    monkeypatch.setattr(
+        service,
+        "_http",
+        lambda: httpx2.AsyncClient(
+            transport=httpx2.MockTransport(lambda r: httpx2.Response(200, json={"data": []}))
+        ),
+    )
+    await service.replace_key(session, connection.id, key="sk-new-key-0123456789abcd")
+    net.answer = completion
+    net.seen.clear()
+    assert (await run(make_session)).output == "ок"
+    assert len(net.seen) == 1

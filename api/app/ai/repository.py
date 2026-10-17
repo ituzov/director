@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -90,3 +90,10 @@ def add_call(session: AsyncSession, **fields) -> Call:
     call = Call(**fields)
     session.add(call)
     return call
+
+
+async def clear_model_missing(session: AsyncSession, connection_id: uuid.UUID) -> None:
+    """Пометка «модели нет» была про старый ключ: новому модель может быть доступна."""
+    await session.execute(
+        update(Binding).where(Binding.connection_id == connection_id).values(model_missing_at=None)
+    )
