@@ -47,7 +47,8 @@
       "autoreplies": "Auto-replies",
       "accounts": "Accounts",
       "metaApp": "Meta app",
-      "journal": "Journal"
+      "journal": "Journal",
+      "ai": "AI models"
     },
     "account": {
       "label": "Accounts",
@@ -546,5 +547,125 @@
       "hours": "waiting {count, plural, =0 {under an hour} one {# hour} other {# hours}}",
       "days": "waiting {count, plural, one {# day} other {# days}}"
     }
+  },
+  "Ai": {
+    "title": "AI models",
+    "description": "Keys to AI providers. You pay the provider directly for answers, and each task picks its own model.",
+    "empty": "No connections yet. Add a provider with the “Connect” button.",
+    "providers": {
+      "anthropic": "Anthropic",
+      "timeweb": "Timeweb AI Gateway"
+    },
+    "status": {
+      "checked": "Checked {date}",
+      "unchecked": "Not checked",
+      "since": "Since {date}",
+      "errors": {
+        "key_rejected": {
+          "title": "Key rejected",
+          "body": "The provider doesn't accept this key: it was revoked or is wrong. Tasks on this connection won't answer until the key is replaced."
+        },
+        "no_funds": {
+          "title": "No funds left",
+          "body": "Top up your balance with the provider and check the key again."
+        },
+        "key_unreadable": {
+          "title": "Can't read the key",
+          "body": "The saved key can't be decrypted after SECRET_KEY changed. Enter it again."
+        }
+      }
+    },
+    "tasks": {
+      "title": "Tasks using it",
+      "empty": "No tasks yet. Each task picks its model in its own settings.",
+      "models": "{count, plural, one {# model} other {# models}}",
+      "modelMissing": "model gone",
+      "more": "{count, plural, one {# more task} other {# more tasks}}"
+    },
+    "connectButton": "Connect",
+    "connect": {
+      "title": "Connect an AI provider",
+      "description": "We check the key with a free request to the provider when you connect.",
+      "provider": "Provider",
+      "about": {
+        "anthropic": "Claude models directly. Paid by card in US dollars.",
+        "timeweb": "Claude, GPT, Gemini, YandexGPT, and more with one key. Paid in rubles."
+      },
+      "soon": "Coming soon",
+      "name": "Name",
+      "nameHint": "Only you see it. Useful if you have several keys from one provider.",
+      "key": "Key",
+      "keyHint": "Stored encrypted. Only the last 4 characters are shown.",
+      "whereKey": {
+        "anthropic": "Get a key: Anthropic console, API keys",
+        "timeweb": "Get a key: Timeweb panel, AI Gateway → API keys"
+      },
+      "submit": "Connect",
+      "checking": "Checking the key…",
+      "cancel": "Cancel",
+      "errors": {
+        "UnknownProvider": "Choose a provider.",
+        "NameTooLong": "The name is longer than 60 characters.",
+        "KeyTooShort": "The key is too short. It probably wasn't copied in full.",
+        "KeyTooLong": "The key is longer than 500 characters. Something extra was probably copied with it.",
+        "KeyInvalidChars": "The key has extra characters, like a space or a non-Latin letter. Copy it again.",
+        "KeyRejected": "The provider didn't accept the key. Make sure it was copied in full and wasn't deleted in the provider's panel."
+      },
+      "saved": {
+        "no_funds": {
+          "title": "Connected, but there are no funds",
+          "body": "Top up your balance with the provider, then press “Check again” on the connection card."
+        },
+        "timeout": {
+          "title": "Connected, but the provider didn't answer within 15 seconds",
+          "body": "The key is saved but not checked yet. We'll check it on the first call, or you can press “Check again” on the card."
+        },
+        "other": {
+          "title": "Connected, but the key isn't checked",
+          "body": "The provider returned an error or asked us to wait. The key is saved: press “Check again” on the card in a minute."
+        },
+        "toList": "Back to connections",
+        "model_missing": {
+          "title": "Connected, but the provider couldn't find the model list",
+          "body": "The key is saved but not checked. Press “Check again” on the card. If that doesn't help, update Director: the provider may have changed its address."
+        }
+      }
+    },
+    "check": {
+      "replaced": "The key was replaced.",
+      "ok": "The key works.",
+      "key_rejected": "The provider didn't accept the key.",
+      "no_funds": "There are still no funds on the balance.",
+      "key_unreadable": "Can't read the key. Enter it again.",
+      "rate_limited": "The provider asked us to wait. The key isn't checked, try again in a minute.",
+      "timeout": "The provider didn't answer within 15 seconds. The key isn't checked.",
+      "server": "The provider returned an error. The key isn't checked, try again later.",
+      "bad_response": "The provider sent an unexpected answer. The key isn't checked, try again later.",
+      "model_missing": "The provider couldn't find the model list. The key isn't checked."
+    },
+    "actions": {
+      "recheck": "Check again",
+      "checking": "Checking…",
+      "edit": {
+        "open": "Edit",
+        "title": "Edit connection",
+        "description": "If the provider doesn't accept the new key, the current one stays. Leave the field empty to keep the key.",
+        "name": "Name",
+        "key": "New key",
+        "keyHint": "The current key ends in …{hint}.",
+        "save": "Save",
+        "saving": "Saving…",
+        "cancel": "Cancel"
+      },
+      "disconnect": {
+        "open": "Disconnect",
+        "title": "Disconnect “{name}”?",
+        "withTasks": "The key will be deleted, and tasks on this connection will stop answering until they get another one.",
+        "withoutTasks": "The key will be deleted. No tasks use this connection.",
+        "confirm": "Disconnect",
+        "cancel": "Cancel"
+      }
+    },
+    "unknownProvider": "This version of Director doesn't know this provider. You can only disconnect it."
   }
 }

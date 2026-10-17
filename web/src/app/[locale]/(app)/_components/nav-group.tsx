@@ -1,6 +1,13 @@
 "use client";
 
-import { AtSign, KeyRound, LayoutDashboard, MessageSquareReply, ScrollText } from "lucide-react";
+import {
+  AtSign,
+  KeyRound,
+  LayoutDashboard,
+  MessageSquareReply,
+  ScrollText,
+  Sparkles,
+} from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Suspense } from "react";
 
@@ -23,7 +30,10 @@ const GROUPS = {
     { href: "/journal", key: "journal", icon: ScrollText },
     { href: "/accounts", key: "accounts", icon: AtSign },
   ],
-  settings: [{ href: "/settings/meta", key: "metaApp", icon: KeyRound }],
+  settings: [
+    { href: "/settings/meta", key: "metaApp", icon: KeyRound },
+    { href: "/settings/ai", key: "ai", icon: Sparkles },
+  ],
 } as const;
 
 /** Пункт меню, в чьём разделе мы сейчас: самый длинный подходящий адрес,
