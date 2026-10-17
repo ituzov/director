@@ -35,11 +35,12 @@ class AssistantForm(BaseModel):
 
     @model_validator(mode="after")
     def _posts_match_scope(self) -> Self:
-        # общий на всех постах, частный без постов ни на что бы не отвечал
+        # общий на всех постах, частный без постов ни на что бы не отвечал.
+        # Код, а не фраза: по нему web выбирает текст, как у автоответов
         if self.scope == "all" and self.media_ids:
-            raise ValueError("у общего ассистента нет своих постов")
+            raise ValueError("posts_not_allowed")
         if self.scope == "posts" and not self.media_ids:
-            raise ValueError("выберите хотя бы один пост")
+            raise ValueError("posts_required")
         self.media_ids = sorted(set(self.media_ids))
         return self
 

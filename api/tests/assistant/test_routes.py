@@ -162,6 +162,19 @@ async def test_form_errors(client, owner, account, connection, session, kw):
     assert await count(session, Assistant) == 0
 
 
+@pytest.mark.parametrize(
+    ("kw", "code"),
+    [
+        ({"scope": "all", "media_ids": ["m1"]}, "posts_not_allowed"),
+        ({"scope": "posts", "media_ids": []}, "posts_required"),
+    ],
+)
+async def test_scope_error_codes(client, owner, account, connection, kw, code):
+    # по коду web выбирает текст у поля «Где работает»
+    r = await create(client, owner, form(account, connection, **kw))
+    assert code in r.json()["detail"][0]["msg"]
+
+
 async def test_connection_gone(client, owner, account, connection, session):
     # подключение удалили в другой вкладке: ошибка поля, и не сохранилось ничего
     r = await create(client, owner, form(account, connection, connection_id=str(uuid.uuid7())))
