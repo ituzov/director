@@ -38,8 +38,6 @@ export type AiConnection = {
  * проверка не прошла. */
 export type AiChecked = { connection: AiConnection; check: CheckResult };
 
-export type AiProvider = { kind: string; needs_base_url: boolean };
-
 /** Провайдеры, которых знает эта версия web, и где владелец берёт ключ. У
  * Timeweb точный адрес раздела снаружи не проверить: панель целиком, а путь до
  * ключей словами в подсказке. Новый провайдер добавляется сюда и в реестр api. */

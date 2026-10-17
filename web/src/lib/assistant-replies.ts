@@ -53,7 +53,7 @@ export function assistantTabQuery(tab: AssistantTab): [string, string][] {
 /** Что с комментом сейчас, ключом текстов Inbox.assistant.state, и цвет точки.
  * Написанный, но не дошедший ответ это неудача, а не «ответил». */
 // имена совпадают с ключами Inbox.assistant.state в messages
-export type ReplyStateKey =
+type ReplyStateKey =
   | "queued"
   | "thinking"
   | "sending"
@@ -99,7 +99,7 @@ export function repliesQuery(
 
 // коды, которые знает эта версия web: ai (сбой нейросети), наши и итоги отправки.
 // Код Meta числом, незнакомое общим текстом с самим кодом
-export const REPLY_ERRORS = [
+const REPLY_ERRORS = [
   "key_rejected",
   "no_funds",
   "key_unreadable",
@@ -117,7 +117,7 @@ export const REPLY_ERRORS = [
   "expired",
   "failed",
 ] as const;
-export type ReplyError = (typeof REPLY_ERRORS)[number];
+type ReplyError = (typeof REPLY_ERRORS)[number];
 
 /** Ключ текста для кода ошибки: известный код, код Meta числом или «другое». */
 export function errorKind(code: string): ReplyError | "meta" | "other" {

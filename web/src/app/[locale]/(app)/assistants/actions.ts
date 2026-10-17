@@ -3,7 +3,6 @@
 import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
 
-import type { AiConnection } from "@/lib/ai";
 import { ApiError, apiFetch } from "@/lib/api";
 import type { Assistant, AssistantConflict, TryResult } from "@/lib/assistants";
 import { type MediaPage, mediaPage, type SelectedMedia, selectedMedia } from "@/lib/media";
@@ -102,16 +101,6 @@ export async function tryAssistant(form: FormData): Promise<TryResult> {
     },
     token: await getToken(),
   });
-}
-
-/** Подключения для выбора: только у владельца, участнику api отвечает 403. */
-export async function loadConnections(): Promise<AiConnection[] | null> {
-  try {
-    return await apiFetch<AiConnection[]>("/ai/connections", { token: await getToken() });
-  } catch (e) {
-    if (e instanceof ApiError && e.status === 403) return null;
-    throw e;
-  }
 }
 
 export type ModelsResult = { models: { id: string; name: string | null }[]; error: string | null };

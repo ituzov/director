@@ -11,7 +11,7 @@ import { getToken } from "@/lib/session";
 export type TakenBy = { id: string; name: string; enabled: boolean };
 
 /** Владелец постов из списка модуля: автоответ или ассистент. */
-export type PostOwner = TakenBy & { media_ids: string[] };
+type PostOwner = TakenBy & { media_ids: string[] };
 
 // аккаунт отключён или токен истёк: повтор не поможет. Meta не ответила: поможет
 type Failed = { failed: "AccountUnavailable" | "MetaUnavailable" };

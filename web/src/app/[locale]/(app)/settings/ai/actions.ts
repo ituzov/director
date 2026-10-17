@@ -74,7 +74,7 @@ export async function recheck(id: string): Promise<Checked | Gone> {
   }
 }
 
-export type EditResult = { errors: FormErrors } | Partial<Checked> | Gone;
+type EditResult = { errors: FormErrors } | Partial<Checked> | Gone;
 
 /** Окно «Изменить»: сначала новый ключ, если ввели, потом название. Ключ не
  * приняли: не меняется ничего, и название тоже. */
