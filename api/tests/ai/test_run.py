@@ -480,3 +480,45 @@ async def test_key_replaced_between_steps(
         await run(make_session, agent=agent)
     assert len(net.seen) == 2
     assert (await fresh(session, connection)).error_code == after
+
+
+async def test_empty_answer_journaled(session, make_session, net, connection):
+    # шлюз ответил 200 без choices, токены списаны: строка в журнале есть, наружу
+    # AiCallFailed, как обещано, а не IndexError из глубин SDK
+    def empty(request):
+        response = completion(request)
+        body = json.loads(response.content)
+        return httpx2.Response(200, json=body | {"choices": []})
+
+    net.answer = empty
+    assert await failed(make_session) == "bad_response"
+    [call] = await journal(session)
+    assert (call.outcome, call.error_code) == ("error", "bad_response")
+    assert (await fresh(session, connection)).error_code is None
+
+
+async def test_tool_error_is_not_provider_failure(session, make_session, net, connection):
+    # сеть упала в инструменте вызывающего, а не у провайдера: это его ошибка,
+    # её не прячем под «провайдер сбоит» и в журнал как сбой вызова не пишем
+    agent = Agent()
+
+    @agent.tool_plain
+    def search_kb(query: str) -> str:
+        raise httpx2.ConnectError("база знаний недоступна")
+
+    net.answer = search_call
+    with pytest.raises(httpx2.ConnectError):
+        await run(make_session, agent=agent)
+    assert [c.outcome for c in await journal(session)] == ["ok"]
+
+
+async def test_failure_without_provider_body(session, make_session, net, connection):
+    # тело ответа провайдера бывает с кусками запроса: в цепочке исключения его нет
+    net.answer = lambda request: httpx2.Response(
+        400, json={"error": {"message": "в запросе: секретный коммент человека"}}
+    )
+    with pytest.raises(ai.AiCallFailed) as caught:
+        await run(make_session)
+    error = caught.value
+    assert error.__cause__ is None and error.__suppress_context__
+    assert "секретный" not in repr(error) and "секретный" not in str(error)

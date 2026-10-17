@@ -24,6 +24,8 @@ MODEL_MISSING = "model_missing"
 RATE_LIMITED = "rate_limited"
 TIMEOUT = "timeout"
 SERVER = "server"
+# ответил, но не тем: пустой ответ, чужой формат. Токены могли списать
+BAD_RESPONSE = "bad_response"
 
 
 class ProviderError(Exception):

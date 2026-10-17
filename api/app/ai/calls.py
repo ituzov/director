@@ -32,11 +32,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai import providers, repository
 from app.ai.exceptions import AiCallFailed
-from app.ai.providers.base import (
-    MODEL_MISSING,
-    Provider,
-    ProviderError,
-)
+from app.ai.providers.base import BAD_RESPONSE, MODEL_MISSING, Provider, ProviderError
 from app.ai.service import KEY_UNREADABLE, apply_result
 from app.core import crypto
 from app.db import SessionLocal
@@ -109,18 +105,19 @@ async def run(
                 conversation=conversation,
                 usage_limits=UsageLimits(request_limit=steps),
             )
-        except UsageLimitExceeded as exc:
+        # from None: в цепочке исключений Pydantic AI лежит тело ответа провайдера,
+        # а там бывают куски запроса. Код и статус и так в журнале
+        except ProviderError as error:
+            raise AiCallFailed(error.code) from None
+        except UsageLimitExceeded:
             log.warning("ai.call.step_limit", purpose=purpose, steps=steps)
-            raise AiCallFailed(STEP_LIMIT) from exc
-        except UnexpectedModelBehavior as exc:
+            raise AiCallFailed(STEP_LIMIT) from None
+        except UnexpectedModelBehavior:
             # модель упорно отвечает не по схеме: подключение тут ни при чём
             log.warning("ai.call.bad_output", purpose=purpose, model=target.model)
-            raise AiCallFailed(BAD_OUTPUT) from exc
-        except Exception as exc:
-            error = target.provider.error_from(exc)
-            if error is None:
-                raise
-            raise AiCallFailed(error.code) from exc
+            raise AiCallFailed(BAD_OUTPUT) from None
+        # остальное летит как есть: это ошибка в инструменте вызывающего, а не
+        # сбой провайдера, прятать её под AiCallFailed нельзя
 
 
 async def _target(make_session: MakeSession, purpose: str, scope: str | None) -> _Target:
@@ -178,8 +175,7 @@ class _Journaled(WrapperModel):
         try:
             response = await super().request(messages, model_settings, model_request_parameters)
         except Exception as exc:
-            await self._failed(exc, started, clock)
-            raise
+            raise await self._failed(exc, started, clock) from None
         await _record(self.make_session, self.target, started, clock, response.usage, None)
         return response
 
@@ -198,14 +194,16 @@ class _Journaled(WrapperModel):
             ) as stream:
                 yield stream
         except Exception as exc:
-            await self._failed(exc, started, clock)
-            raise
+            raise await self._failed(exc, started, clock) from None
         await _record(self.make_session, self.target, started, clock, stream.usage, None)
 
-    async def _failed(self, exc: BaseException, started: datetime, clock: float) -> None:
-        error = self.target.provider.error_from(exc)
-        if error is not None:
-            await _record(self.make_session, self.target, started, clock, None, error)
+    async def _failed(self, exc: BaseException, started: datetime, clock: float) -> ProviderError:
+        """Любая ошибка запроса к модели: строка в журнал и наш код. Неопознанное
+        (пустой ответ, чужой формат) это bad_response: токены могли списать, и
+        предохранитель должен этот вызов увидеть."""
+        error = self.target.provider.error_from(exc) or ProviderError(BAD_RESPONSE)
+        await _record(self.make_session, self.target, started, clock, None, error)
+        return error
 
 
 async def _record(
