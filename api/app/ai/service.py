@@ -20,6 +20,7 @@ from app.ai.exceptions import (
     ConnectionNotFound,
     KeyRejected,
     KeyTooShort,
+    ModelRequired,
     UnknownProvider,
 )
 from app.ai.models import Connection
@@ -256,7 +257,10 @@ async def set_binding(
 ) -> None:
     """Через какое подключение и модель идёт задача. Без commit: зовёт модуль
     задачи в своей транзакции, вместе со своими настройками."""
+    model = model.strip()
+    if not model:
+        raise ModelRequired
     await _get(session, connection_id)
     await repository.upsert_binding(
-        session, purpose=purpose, scope=scope, connection_id=connection_id, model=model.strip()
+        session, purpose=purpose, scope=scope, connection_id=connection_id, model=model
     )

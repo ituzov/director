@@ -85,8 +85,8 @@ class Provider(ABC):
         self, http: httpx2.AsyncClient, *, key: str, base_url: str | None, model_id: str
     ) -> Model:
         """Модель Pydantic AI поверх нашего клиента. В сеть не ходит. SDK
-        собирается без своих повторов: повторяет сервис ai, и каждый запрос
-        должен попасть в журнал."""
+        собирается без своих повторов: каждый запрос должен попасть в журнал,
+        а повторять или нет, решает тот, кто зовёт ai.run."""
 
     @abstractmethod
     async def models(

@@ -25,6 +25,10 @@ class KeyRejected(AiError):
     """Провайдер не принял ключ при проверке: такой не сохраняем, он не заработает."""
 
 
+class ModelRequired(AiError):
+    """Задаче не выбрали модель."""
+
+
 class ConnectionNotFound(AiError):
     """Такого подключения нет: удалили или не было."""
 

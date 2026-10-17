@@ -17,7 +17,7 @@ from structlog.testing import capture_logs
 
 from app import ai
 from app.ai import calls
-from app.ai.exceptions import ConnectionNotFound
+from app.ai.exceptions import ConnectionNotFound, ModelRequired
 from app.ai.models import Binding, Call, Connection
 from app.core import crypto
 from tests.ai.test_anthropic import answer as anthropic_answer
@@ -522,3 +522,11 @@ async def test_failure_without_provider_body(session, make_session, net, connect
     error = caught.value
     assert error.__cause__ is None and error.__suppress_context__
     assert "секретный" not in repr(error) and "секретный" not in str(error)
+
+
+async def test_set_binding_needs_model(session, connection):
+    # пустая модель дала бы 404 на первом вызове и пометку «модели нет»
+    with pytest.raises(ModelRequired):
+        await ai.set_binding(
+            session, purpose=PURPOSE, scope=SCOPE, connection_id=connection.id, model="  "
+        )
