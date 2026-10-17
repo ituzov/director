@@ -19,6 +19,7 @@ from app.ai.exceptions import (
     BaseUrlNotAllowed,
     BaseUrlRequired,
     ConnectionNotFound,
+    KeyInvalidChars,
     KeyRejected,
     KeyTooShort,
     ModelRequired,
@@ -91,6 +92,9 @@ def _key(key: str) -> str:
     key = key.strip()
     if len(key) < MIN_KEY:
         raise KeyTooShort
+    # настоящие ключи из латиницы, цифр и знаков; иное уронило бы сборку заголовка
+    if not all("!" <= c <= "~" for c in key):
+        raise KeyInvalidChars
     return key
 
 
@@ -264,7 +268,8 @@ async def recheck(session: AsyncSession, connection_id: uuid.UUID) -> Checked:
 
 
 async def rename(session: AsyncSession, connection_id: uuid.UUID, *, name: str) -> Connection:
-    connection = await _get(session, connection_id)
+    # под замком: удаление между чтением и записью дало бы StaleDataError и 500
+    connection = await _get(session, connection_id, lock=True)
     connection.name = name.strip() or connection.provider
     await session.commit()
     log.info("ai.connection.renamed", connection_id=str(connection_id))

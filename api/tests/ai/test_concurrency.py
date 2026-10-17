@@ -352,3 +352,35 @@ async def test_set_binding_vs_delete(sessions, monkeypatch):
     async with sessions() as session:
         [binding] = list(await session.scalars(select(Binding)))
     assert (binding.model, binding.connection_id) == ("m", None)
+
+
+async def test_rename_vs_delete(sessions, monkeypatch):
+    # подключение удаляют, пока его переименовывают. Без замка запись имени
+    # не нашла бы строку: StaleDataError и 500. С замком удаление ждёт
+    # переименования и проходит после него
+    connection_id = await add_connection(sessions)
+    get = service._get
+    armed = [True]
+
+    async def get_then_delete(session, connection_id, *, lock=False):
+        connection = await get(session, connection_id, lock=lock)
+        if not armed[0]:
+            return connection
+        armed[0] = False
+
+        async def delete():
+            async with sessions() as other:
+                await service.delete_connection(other, connection_id)
+
+        get_then_delete.deleting = asyncio.create_task(delete())
+        with contextlib.suppress(TimeoutError):
+            await asyncio.wait_for(asyncio.shield(get_then_delete.deleting), 0.5)
+        return connection
+
+    monkeypatch.setattr(service, "_get", get_then_delete)
+    async with sessions() as session:
+        renamed = await service.rename(session, connection_id, name="новое")
+    assert renamed.name == "новое"
+    await get_then_delete.deleting
+    async with sessions() as session:
+        assert await session.get(Connection, connection_id) is None

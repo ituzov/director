@@ -15,6 +15,7 @@ from app.ai.exceptions import (
     BaseUrlNotAllowed,
     BaseUrlRequired,
     ConnectionNotFound,
+    KeyInvalidChars,
     KeyRejected,
     KeyTooShort,
     ModelRequired,
@@ -39,6 +40,7 @@ _STATUS = {
     BaseUrlRequired: status.HTTP_422_UNPROCESSABLE_CONTENT,
     BaseUrlNotAllowed: status.HTTP_422_UNPROCESSABLE_CONTENT,
     KeyTooShort: status.HTTP_422_UNPROCESSABLE_CONTENT,
+    KeyInvalidChars: status.HTTP_422_UNPROCESSABLE_CONTENT,
     # ничего не сохранено: владелец скорее скопировал ключ не целиком
     KeyRejected: status.HTTP_422_UNPROCESSABLE_CONTENT,
     ModelRequired: status.HTTP_422_UNPROCESSABLE_CONTENT,

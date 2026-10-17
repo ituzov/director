@@ -54,16 +54,36 @@ async def count(session) -> int:
     return await session.scalar(select(func.count()).select_from(Connection))
 
 
-async def test_create_and_list(client, owner, net):
+CARD = {
+    "id",
+    "provider",
+    "name",
+    "key_hint",
+    "base_url",
+    "checked_at",
+    "error_code",
+    "error_at",
+    "created_at",
+    "tasks",
+}
+
+
+async def test_create_and_list(client, owner, net, session):
     r = await create(client, owner)
     assert r.status_code == 201
     body = r.json()
     assert body["check"] == "ok"
     card = body["connection"]
+    # точный набор полей: новое поле в карточке (а с ним и шифротекст ключа)
+    # должно пройти через этот тест
+    assert set(card) == CARD
     assert (card["provider"], card["name"], card["key_hint"]) == ("anthropic", "Основной", "WXYZ")
     assert card["checked_at"] is not None and card["error_code"] is None
     assert card["tasks"] == []
-    assert (await client.get("/ai/connections", headers=owner)).json() == [card]
+    r = await client.get("/ai/connections", headers=owner)
+    assert r.json() == [card]
+    encrypted = await session.scalar(select(Connection.key_encrypted))
+    assert encrypted not in body and encrypted not in r.text
 
 
 async def test_providers(client, owner):
@@ -82,11 +102,31 @@ async def test_key_never_leaves(client, owner, net, real_logging, capsys):
         await client.post(f"/ai/connections/{card['id']}/check", headers=owner),
         await client.patch(f"/ai/connections/{card['id']}", headers=owner, json={"name": "x"}),
     ]
-    logs = capsys.readouterr().err
-    assert "ai.connection.created" in logs
+    assert_no_key(capsys.readouterr().err, responses, "ai.connection.created")
+
+
+def assert_no_key(logs, responses, event):
+    assert event in logs
     for secret in (KEY, NEW_KEY, KEY[:-4], NEW_KEY[:-4]):
         assert secret not in logs
         assert all(secret not in r.text for r in responses)
+    # в логах ключа нет даже последними символами, они только на карточке
+    assert "WXYZ" not in logs and "QRST" not in logs
+
+
+async def test_key_never_leaves_on_failed_check(client, owner, net, real_logging, capsys):
+    # путь ошибки: провайдер ответил отказом, в лог пишется код и статус
+    card = (await create(client, owner)).json()["connection"]
+    real_logging()
+    net.answer = status(401)
+    responses = [await client.post(f"/ai/connections/{card['id']}/check", headers=owner)]
+    net.answer = status(402)
+    url = f"/ai/connections/{card['id']}/key"
+    responses.append(await client.put(url, headers=owner, json={"key": NEW_KEY}))
+    net.answer = status(401)
+    responses.append(await client.put(url, headers=owner, json={"key": KEY}))
+    assert [r.status_code for r in responses] == [200, 200, 422]
+    assert_no_key(capsys.readouterr().err, responses, "ai.connection.check_failed")
 
 
 @pytest.mark.parametrize(
@@ -95,7 +135,12 @@ async def test_key_never_leaves(client, owner, net, real_logging, capsys):
         ({"provider": "openai"}, "UnknownProvider"),
         ({"base_url": "https://evil.example/v1"}, "BaseUrlNotAllowed"),
         ({"key": "short"}, "KeyTooShort"),
+        # из копирования: кириллица, неразрывный пробел, символ нулевой ширины
+        ({"key": KEY[:-1] + "Ж"}, "KeyInvalidChars"),
+        ({"key": KEY[:10] + "\u00a0" + KEY[10:]}, "KeyInvalidChars"),
+        ({"key": KEY + "\u200b"}, "KeyInvalidChars"),
     ],
+    ids=["provider", "base_url", "short", "cyrillic", "nbsp", "zero_width"],
 )
 async def test_form_errors(client, owner, net, session, kw, detail):
     r = await create(client, owner, **kw)
@@ -238,3 +283,27 @@ async def test_tasks_on_card(client, owner, net, session):
         },
         {"purpose": "assistant.topic", "scopes": 1, "models": ["m1"], "model_missing": False},
     ]
+
+
+async def test_tasks_on_several_cards(client, owner, net, session):
+    # задачи каждого подключения на своей карточке; подключение без задач пустое
+    ids = []
+    for name in ("a", "b", "c"):
+        card = (await create(client, owner, name=name)).json()["connection"]
+        ids.append(uuid.UUID(card["id"]))
+    session.add_all(
+        [
+            Binding(purpose="assistant.answer", scope=None, connection_id=ids[0], model="m1"),
+            Binding(purpose="assistant.topic", scope=None, connection_id=ids[1], model="m2"),
+        ]
+    )
+    await session.commit()
+    cards = {
+        c["name"]: c["tasks"] for c in (await client.get("/ai/connections", headers=owner)).json()
+    }
+    assert [t["purpose"] for t in cards["a"]] == ["assistant.answer"]
+    assert [t["purpose"] for t in cards["b"]] == ["assistant.topic"]
+    assert cards["c"] == []
+    # карточка одного подключения (ответ переименования) без задач соседей
+    r = await client.patch(f"/ai/connections/{ids[2]}", headers=owner, json={"name": "c"})
+    assert r.json()["tasks"] == []
