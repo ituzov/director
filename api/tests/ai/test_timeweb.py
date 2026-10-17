@@ -78,8 +78,10 @@ async def test_not_text_models_hidden(model_id):
         # прокси отдал свою страницу вместо списка
         (lambda r: httpx2.Response(200, text="<html>oops</html>"), base.SERVER, 200),
         (lambda r: httpx2.Response(200, json={"models": []}), base.SERVER, 200),
+        # элемент списка не объект: формат другой, а не 500 в ручке
+        (lambda r: httpx2.Response(200, json={"data": ["gpt"]}), base.SERVER, 200),
     ],
-    ids=["403", "502", "html", "other-format"],
+    ids=["403", "502", "html", "other-format", "item-not-object"],
 )
 async def test_models_errors(respond, code, status):
     with pytest.raises(ProviderError) as caught:

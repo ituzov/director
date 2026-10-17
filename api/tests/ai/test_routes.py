@@ -362,6 +362,20 @@ async def test_models_unreadable_key(client, owner, net, session):
     await session.execute(update(Connection).values(key_encrypted="not-a-fernet-token"))
     await session.commit()
     assert await models(client, owner, card) == {"models": [], "error": "key_unreadable"}
+    [after] = (await client.get("/ai/connections", headers=owner)).json()
+    assert after["error_code"] == "key_unreadable"
+
+
+async def test_models_clear_card_error(client, owner, net):
+    # не было денег, владелец пополнил баланс и открыл список моделей: список
+    # пришёл, значит, ключ работает, и карточка зелёная без «Проверить ещё раз»
+    net.answer = status(402)
+    card = (await create(client, owner)).json()["connection"]
+    assert card["error_code"] == "no_funds"
+    net.answer = models_page("m")
+    await models(client, owner, card)
+    [after] = (await client.get("/ai/connections", headers=owner)).json()
+    assert (after["error_code"], after["checked_at"] is not None) == (None, True)
 
 
 async def test_models_not_found(client, owner, net):

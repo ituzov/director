@@ -43,8 +43,8 @@ class OpenAICompatible(Provider):
         )
         try:
             return [ModelInfo(str(raw["id"])) for raw in body["data"] if self.keep(raw)]
-        except (KeyError, TypeError) as exc:
-            # JSON, но не список моделей: формат другой
+        except (KeyError, TypeError, AttributeError) as exc:
+            # JSON, но не список моделей: формат другой (элемент не объект тоже)
             raise ProviderError(SERVER, 200) from exc
 
     def keep(self, raw: dict[str, Any]) -> bool:

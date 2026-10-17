@@ -67,17 +67,19 @@ class AnthropicProvider(Provider):
                 if not body.get("has_more"):
                     return listed
                 after = str(body["last_id"])
-            except (KeyError, TypeError) as exc:
+            except (KeyError, TypeError, AttributeError) as exc:
                 raise ProviderError(SERVER, 200) from exc
         raise ProviderError(SERVER, 200)
 
 
 def _info(raw: dict[str, Any]) -> ModelInfo:
     # возможности приходят у каждой модели: строгий JSON берём, остальное пока не нужно
-    strict = (raw.get("capabilities") or {}).get("structured_outputs") or {}
-    supported = strict.get("supported")
+    capabilities = raw.get("capabilities")
+    strict = capabilities.get("structured_outputs") if isinstance(capabilities, dict) else None
+    supported = strict.get("supported") if isinstance(strict, dict) else None
     return ModelInfo(
         str(raw["id"]),
-        raw.get("display_name"),
+        # имя только строкой: иначе ответ ручки не соберётся
+        name if isinstance(name := raw.get("display_name"), str) else None,
         supported if isinstance(supported, bool) else None,
     )

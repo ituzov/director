@@ -54,14 +54,25 @@ async def test_models_with_names_and_strict_json():
         ({}, None),
         (None, None),
         ({"structured_outputs": {"supported": "yes"}}, None),
+        # не того вида: про строгий JSON не знаем, но список не роняем
+        ("?", None),
+        ({"structured_outputs": "?"}, None),
     ],
-    ids=["no", "unknown", "no-capabilities", "not-bool"],
+    ids=["no", "unknown", "no-capabilities", "not-bool", "odd", "odd-inside"],
 )
 async def test_strict_json_unknown_is_none(capabilities, strict):
     # возможностей нет или они непонятные: не знаем, а не «умеет»
     raw = {"id": "m", "display_name": "M", "capabilities": capabilities}
     [model] = await listed(lambda r: httpx2.Response(200, json={"data": [raw], "has_more": False}))
     assert model.strict_json is strict
+
+
+@pytest.mark.parametrize("name", [None, 5, {"ru": "x"}], ids=["none", "number", "object"])
+async def test_name_only_string(name):
+    # имя не строкой: модель остаётся, имя нет, иначе ответ ручки не соберётся
+    raw = {"id": "m", "display_name": name}
+    [model] = await listed(lambda r: httpx2.Response(200, json={"data": [raw], "has_more": False}))
+    assert (model.id, model.name) == ("m", None)
 
 
 async def test_models_pages():
@@ -109,8 +120,9 @@ async def test_endless_pages_stop():
         (lambda r: httpx2.Response(200, text="<html>oops</html>"), base.SERVER, 200),
         (lambda r: httpx2.Response(200, json={"models": []}), base.SERVER, 200),
         (lambda r: httpx2.Response(200, json={"data": [], "has_more": True}), base.SERVER, 200),
+        (lambda r: httpx2.Response(200, json={"data": ["m"], "has_more": False}), base.SERVER, 200),
     ],
-    ids=["401", "529", "html", "other-format", "no-last-id"],
+    ids=["401", "529", "html", "other-format", "no-last-id", "item-not-object"],
 )
 async def test_models_errors(respond, code, status):
     with pytest.raises(ProviderError) as caught:
