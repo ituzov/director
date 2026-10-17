@@ -68,6 +68,17 @@ async def get_binding(
     return await session.scalar(query)
 
 
+async def bindings_for(session: AsyncSession, *, purpose: str, scopes: list[str]) -> list[Binding]:
+    """Настройки задачи в этих областях одним запросом: список ассистентов."""
+    if not scopes:
+        return []
+    return list(
+        await session.scalars(
+            select(Binding).where(Binding.purpose == purpose, Binding.scope.in_(scopes))
+        )
+    )
+
+
 async def list_bindings(session: AsyncSession, connection_ids: list[uuid.UUID]) -> list[Binding]:
     """Настройки задач на этих подключениях, одним запросом на весь список."""
     if not connection_ids:

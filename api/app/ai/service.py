@@ -16,6 +16,7 @@ import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai import providers, repository
+from app.ai.contracts import BindingRef
 from app.ai.exceptions import (
     BaseUrlNotAllowed,
     BaseUrlRequired,
@@ -356,3 +357,15 @@ async def set_binding(
     await repository.upsert_binding(
         session, purpose=purpose, scope=scope, connection_id=connection_id, model=model
     )
+
+
+async def bindings(
+    session: AsyncSession, *, purpose: str, scopes: list[str]
+) -> dict[str, BindingRef]:
+    """Через что идёт задача в каждой из областей, без commit. Области без
+    настройки в словаре нет."""
+    return {
+        b.scope: BindingRef(b.scope, b.connection_id, b.model, b.model_missing_at is not None)
+        for b in await repository.bindings_for(session, purpose=purpose, scopes=scopes)
+        if b.scope is not None
+    }
